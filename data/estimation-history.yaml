@@ -1,0 +1,48 @@
+# PSP/TSP Estimation History
+# Auto-populated by PROBE estimation task
+# DO NOT EDIT MANUALLY - Updated automatically when stories complete
+
+estimation_metrics:
+  total_stories: 0
+  average_accuracy: null
+  last_updated: null
+  
+  size_distribution:
+    very_small:
+      count: 0
+      stories: []
+      avg_hours: null
+      std_dev: null
+    small:
+      count: 0
+      stories: []
+      avg_hours: null
+      std_dev: null
+    medium:
+      count: 0
+      stories: []
+      avg_hours: null
+      std_dev: null
+    large:
+      count: 0
+      stories: []
+      avg_hours: null
+      std_dev: null
+    very_large:
+      count: 0
+      stories: []
+      avg_hours: null
+      std_dev: null
+  
+  regression_parameters:
+    beta0: null  # Intercept
+    beta1: null  # Slope
+    r_squared: null
+    last_calculated: null
+    min_stories_required: 10
+  
+  improvement_trend: "insufficient_data"
+  
+historical_data:
+  # Format: story_id: {size, estimated_hours, actual_hours, variance, date_completed}
+  # Auto-populated as stories complete
