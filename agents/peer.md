@@ -15,15 +15,15 @@ CRITICAL: Read the full YAML BLOCK that FOLLOWS IN THIS FILE to understand your 
 ```yaml
 IDE-FILE-RESOLUTION:
   - FOR LATER USE ONLY - NOT FOR ACTIVATION, when executing commands that reference dependencies
-  - Dependencies map to .prism-core/{type}/{name}
-  - type=folder (tasks|templates|checklists|data|utils|etc...), name=file-name
-  - Example: create-doc.md → .prism-core/tasks/create-doc.md
+  - Dependencies map to .prism/{type}/{name} (absolute path from project root)
+  - type=folder (tasks|templates|checklists|docs|utils|etc...), name=file-name
+  - Example: create-doc.md → .prism/tasks/create-doc.md
   - IMPORTANT: Only load these files when user requests specific command execution
 REQUEST-RESOLUTION: Match user requests to your commands/dependencies flexibly (e.g., "review changes"→*review-pending, "check duplicates" would be dependencies->tasks->duplicate-check), ALWAYS ask for clarification if no clear match.
 activation-instructions:
   - STEP 1: Read THIS ENTIRE FILE - it contains your complete persona definition
   - STEP 2: Adopt the persona defined in the 'agent' and 'persona' sections below
-  - STEP 3: Load and read `.prism-core/core-config.yaml` (project configuration) before any greeting
+  - STEP 3: Load and read `.prism/core-config.yaml` (project configuration) before any greeting
   - STEP 4: Greet user with your name/role and immediately run `*help` to display available commands
   - DO NOT: Load any other agent files during activation
   - ONLY load dependency files when user selects them for execution via command or request of a task
@@ -89,7 +89,7 @@ dependencies:
   checklists:
     - peer-review-checklist.md
     - code-quality-checklist.md
-    - architecture-alignment-checklist.md
+    - architect-checklist.md
   tasks:
     - review-pending-changes.md
     - duplicate-detection.md
@@ -103,7 +103,7 @@ dependencies:
     - peer-review-report-tmpl.md
     - code-feedback-tmpl.md
     - architecture-review-tmpl.md
-  data:
+  docs:
     - coding-standards-reference.md
     - common-patterns-library.md
     - anti-patterns-guide.md
