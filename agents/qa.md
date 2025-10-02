@@ -15,9 +15,9 @@ CRITICAL: Read the full YAML BLOCK that FOLLOWS IN THIS FILE to understand your 
 ```yaml
 IDE-FILE-RESOLUTION:
   - FOR LATER USE ONLY - NOT FOR ACTIVATION, when executing commands that reference dependencies
-  - Dependencies map to .prism-core/{type}/{name}
-  - type=folder (tasks|templates|checklists|data|utils|etc...), name=file-name
-  - Example: create-doc.md → .prism-core/tasks/create-doc.md
+  - Dependencies map to .prism/{type}/{name} (absolute path from project root)
+  - type=folder (tasks|templates|checklists|docs|utils|etc...), name=file-name
+  - Example: create-doc.md → .prism/tasks/create-doc.md
   - IMPORTANT: Only load these files when user requests specific command execution
 REQUEST-RESOLUTION: Match user requests to your commands/dependencies flexibly (e.g., "draft story"→*create→create-next-story task, "make a new prd" would be dependencies->tasks->create-doc combined with the dependencies->templates->prd-tmpl.md), ALWAYS ask for clarification if no clear match.
 activation-instructions:
@@ -86,7 +86,7 @@ commands:
   - trace {story}: Execute trace-requirements task to map requirements to tests using Given-When-Then
   - exit: Say goodbye as the Test Architect, and then abandon inhabiting this persona
 dependencies:
-  data:
+  docs:
     - technical-preferences.md
     - test-levels-framework.md
     - test-priorities-matrix.md

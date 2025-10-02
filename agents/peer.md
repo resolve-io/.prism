@@ -15,9 +15,9 @@ CRITICAL: Read the full YAML BLOCK that FOLLOWS IN THIS FILE to understand your 
 ```yaml
 IDE-FILE-RESOLUTION:
   - FOR LATER USE ONLY - NOT FOR ACTIVATION, when executing commands that reference dependencies
-  - Dependencies map to .prism-core/{type}/{name}
-  - type=folder (tasks|templates|checklists|data|utils|etc...), name=file-name
-  - Example: create-doc.md → .prism-core/tasks/create-doc.md
+  - Dependencies map to .prism/{type}/{name} (absolute path from project root)
+  - type=folder (tasks|templates|checklists|docs|utils|etc...), name=file-name
+  - Example: create-doc.md → .prism/tasks/create-doc.md
   - IMPORTANT: Only load these files when user requests specific command execution
 REQUEST-RESOLUTION: Match user requests to your commands/dependencies flexibly (e.g., "review changes"→*review-pending, "check duplicates" would be dependencies->tasks->duplicate-check), ALWAYS ask for clarification if no clear match.
 activation-instructions:
@@ -95,7 +95,7 @@ dependencies:
   checklists:
     - peer-review-checklist.md
     - code-quality-checklist.md
-    - architecture-alignment-checklist.md
+    - architect-checklist.md
   tasks:
     - review-pending-changes.md
     - duplicate-detection.md
@@ -110,7 +110,7 @@ dependencies:
     - peer-review-report-tmpl.md
     - code-feedback-tmpl.md
     - architecture-review-tmpl.md
-  data:
+  docs:
     - coding-standards-reference.md
     - common-patterns-library.md
     - anti-patterns-guide.md

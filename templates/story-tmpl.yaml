@@ -23,6 +23,45 @@ agent_config:
     - Change Log
 
 sections:
+  - id: story-header
+    title: Story Header
+    type: markdown
+    template: |
+      # {{story_title}}
+
+      ## Description
+
+      {{story_description}}
+    instruction: Generate the story title and a brief description paragraph
+    owner: scrum-master
+    editors: [scrum-master]
+
+  - id: story-overview-table
+    title: Story Overview Table
+    type: markdown-table
+    template: |
+      | Section | Description |
+      |---------|-----------|
+      | **🎯 User Story** | {{user_story_statement}}<br><br>**Who:** {{who}}<br>**What:** {{what}}<br>**Why:** {{why}} |
+      | **✅ Acceptance Criteria** | {{acceptance_criteria_list}} |
+      | **🔧 Technical Details** | **Implementation Location:**<br>{{implementation_location}}<br><br>**Database Queries:**<br>{{database_queries}}<br><br>**API Endpoints:**<br>{{api_endpoints}}<br><br>**Frontend State:**<br>{{frontend_state}} |
+      | **🎨 Design** | **Architecture Flow:**<br>{{architecture_flow}}<br><br>**UI/UX Considerations:**<br>{{ui_ux_considerations}} |
+      | **💭 Assumptions** | {{assumptions_list}} |
+      | **✔️ Test Cases** | {{test_cases_list}} |
+      | **🔄 Flows** | {{process_flows}} |
+    instruction: |
+      Fill in the comprehensive story overview table with all details:
+      - User Story: Full statement "As a [persona], I want to [action], so that [benefit]" with Who/What/Why breakdown
+      - Acceptance Criteria: All criteria using Given/When/Then format or numbered list
+      - Technical Details: Include file paths, database queries, endpoints, state management
+      - Design: Architecture flow diagrams and UI/UX details
+      - Assumptions: Bullet list of all assumptions
+      - Test Cases: Specific test scenarios with expected outcomes
+      - Flows: Step-by-step numbered process flows
+    elicit: true
+    owner: scrum-master
+    editors: [scrum-master]
+
   - id: status
     title: Status
     type: choice
@@ -118,7 +157,7 @@ sections:
         instruction: PROBE-based estimation from probe-estimation task (points map to size: 1=VS, 2=S, 3=M, 5=L, 8=VL)
         owner: scrum-master
         editors: [scrum-master]
-      
+
       - id: tracking
         title: Tracking
         template: |
