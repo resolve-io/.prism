@@ -20,3 +20,10 @@ devLoadAlwaysFiles:
 devDebugLog: .ai/debug-log.md
 devStoryLocation: docs/stories
 slashPrefix: prism
+jira:
+  enabled: true
+  baseUrl: https://resolvesys.atlassian.net
+  email: ${JIRA_EMAIL}
+  token: ${JIRA_API_TOKEN}
+  defaultProject: PLAT
+  issueKeyPattern: "[A-Z]+-\\d+"

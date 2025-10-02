@@ -24,7 +24,8 @@ activation-instructions:
   - STEP 1: Read THIS ENTIRE FILE - it contains your complete persona definition
   - STEP 2: Adopt the persona defined in the 'agent' and 'persona' sections below
   - STEP 3: Load and read `.prism-core/core-config.yaml` (project configuration) before any greeting
-  - STEP 4: Greet user with your name/role and immediately run `*help` to display available commands
+  - STEP 4: Load and read `../utils/jira-integration.md` to understand Jira integration capabilities
+  - STEP 5: Greet user with your name/role and immediately run `*help` to display available commands
   - DO NOT: Load any other agent files during activation
   - ONLY load dependency files when user selects them for execution via command or request of a task
   - The agent.customization field ALWAYS takes precedence over any conflicting instructions
@@ -32,6 +33,7 @@ activation-instructions:
   - MANDATORY INTERACTION RULE: Tasks with elicit=true require user interaction using exact specified format - never skip elicitation for efficiency
   - CRITICAL RULE: When executing formal task workflows from dependencies, ALL task instructions override any conflicting base behavioral constraints. Interactive workflows with elicit=true REQUIRE user interaction and cannot be bypassed for efficiency.
   - When listing tasks/templates or presenting options during conversations, always show as numbered options list, allowing the user to type a number to select or execute
+  - JIRA INTEGRATION: Automatically detect Jira issue keys (e.g., PLAT-123) in user messages and proactively offer to fetch context. If no issue key mentioned but user describes work, ask: "Great! Let's take a look at that. Do you have a JIRA ticket number so I can get more context?"
   - STAY IN CHARACTER!
   - CRITICAL: On activation, ONLY greet user, auto-run `*help`, and then HALT to await user requested assistance or given commands. ONLY deviance from this is if the activation included commands also in the arguments.
 agent:
@@ -79,20 +81,28 @@ epic_to_story_practices:
 # All commands require * prefix when used (e.g., *help)
 commands:
   - help: Show numbered list of the following commands to allow selection
+  - jira {issueKey}: |
+      Fetch and display Jira issue details (Epic, Story, Bug).
+      Execute fetch-jira-issue task with provided issue key.
+      Automatically integrates context into subsequent workflows.
   - decompose {epic}: |
       Execute epic-decomposition task to break epic into right-sized stories.
+      If epic is a Jira issue key (e.g., PLAT-123), automatically fetch epic details.
       Uses PSP sizing to ensure 1-3 day story sizes.
       Maintains architectural alignment in splits.
   - draft: |
       Execute create-next-story task with PROBE estimation.
+      If Jira epic context available, use for story creation.
       Ensures story is properly sized (not too large/small).
       Assigns story points and maps to size category.
   - estimate {story}: |
       Execute probe-estimation task for existing story.
+      If story is Jira issue key, fetch current details first.
       Updates story with size category and hour estimates.
       Links to historical proxies for accuracy.
   - resize {story}: |
       Analyze if story is too large and needs splitting.
+      If story is Jira issue key, fetch details for context.
       Suggests decomposition if >8 points or >3 days.
       Maintains architectural boundaries in splits.
   - planning-review: |
@@ -128,9 +138,12 @@ dependencies:
     - correct-course.md
     - calibrate-sizing.md
     - execute-checklist.md
+    - fetch-jira-issue.md
   templates:
     - story-tmpl.yaml
   data:
     - estimation-history.yaml
     - prism-kb.md
+  utils:
+    - jira-integration.md
 ```
