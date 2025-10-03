@@ -1,12 +1,12 @@
 # <!-- Powered by PRISM™ System -->
 template:
-  id: story-template-v2
-  name: Story Document
-  version: 2.0
+  id: user-story-template-v1
+  name: User Story Document
+  version: 1.0
   output:
     format: markdown
-    filename: docs/stories/{{epic_num}}.{{story_num}}.{{story_title_short}}.md
-    title: "Story {{epic_num}}.{{story_num}}: {{story_title_short}}"
+    filename: docs/stories/{{story_id}}-{{story_slug}}.md
+    title: "Story {{story_id}}: {{story_title}}"
 
 workflow:
   mode: interactive
@@ -15,11 +15,10 @@ workflow:
 agent_config:
   editable_sections:
     - Status
-    - Story
+    - User Story
     - Acceptance Criteria
-    - Tasks / Subtasks
+    - Tasks
     - Dev Notes
-    - Testing
     - Change Log
 
 sections:
@@ -33,111 +32,131 @@ sections:
 
       {{story_description}}
     instruction: Generate the story title and a brief description paragraph
-    owner: scrum-master
-    editors: [scrum-master]
+    owner: product-owner
+    editors: [product-owner, scrum-master]
 
-  - id: story-overview-table
-    title: Story Overview Table
+  - id: story-metadata
+    title: Metadata
     type: markdown-table
     template: |
-      | Section | Description |
-      |---------|-----------|
-      | **🎯 User Story** | {{user_story_statement}}<br><br>**Who:** {{who}}<br>**What:** {{what}}<br>**Why:** {{why}} |
-      | **✅ Acceptance Criteria** | {{acceptance_criteria_list}} |
-      | **🔧 Technical Details** | **Implementation Location:**<br>{{implementation_location}}<br><br>**Database Queries:**<br>{{database_queries}}<br><br>**API Endpoints:**<br>{{api_endpoints}}<br><br>**Frontend State:**<br>{{frontend_state}} |
-      | **🎨 Design** | **Architecture Flow:**<br>{{architecture_flow}}<br><br>**UI/UX Considerations:**<br>{{ui_ux_considerations}} |
-      | **💭 Assumptions** | {{assumptions_list}} |
-      | **✔️ Test Cases** | {{test_cases_list}} |
-      | **🔄 Flows** | {{process_flows}} |
-    instruction: |
-      Fill in the comprehensive story overview table with all details:
-      - User Story: Full statement "As a [persona], I want to [action], so that [benefit]" with Who/What/Why breakdown
-      - Acceptance Criteria: All criteria using Given/When/Then format or numbered list
-      - Technical Details: Include file paths, database queries, endpoints, state management
-      - Design: Architecture flow diagrams and UI/UX details
-      - Assumptions: Bullet list of all assumptions
-      - Test Cases: Specific test scenarios with expected outcomes
-      - Flows: Step-by-step numbered process flows
-    elicit: true
-    owner: scrum-master
-    editors: [scrum-master]
+      | Field | Value |
+      |-------|-------|
+      | **Story ID** | {{story_id}} |
+      | **Status** | {{status}} |
+      | **Priority** | {{priority}} |
+      | **Story Points** | {{story_points}} |
+      | **Sprint** | {{sprint}} |
+      | **Created** | {{created_date}} |
+      | **Owner** | {{owner}} |
+    instruction: Fill in story metadata
+    owner: product-owner
+    editors: [product-owner, scrum-master]
 
   - id: status
     title: Status
     type: choice
-    choices: [Draft, Approved, InProgress, Review, Done]
+    choices: [Backlog, Ready, InProgress, Review, Testing, Done]
     instruction: Select the current status of the story
     owner: scrum-master
     editors: [scrum-master, dev-agent]
 
-  - id: story
-    title: Story
+  - id: user-story
+    title: User Story
     type: template-text
     template: |
-      **As a** {{role}},
-      **I want** {{action}},
-      **so that** {{benefit}}
-    instruction: Define the user story using the standard format with role, action, and benefit
+      **As a** {{persona}},
+      **I want to** {{action}},
+      **so that** {{benefit}}.
+    instruction: Define the user story using the standard format with persona, action, and benefit
     elicit: true
-    owner: scrum-master
-    editors: [scrum-master]
+    owner: product-owner
+    editors: [product-owner]
 
   - id: acceptance-criteria
     title: Acceptance Criteria
     type: numbered-list
-    instruction: Copy the acceptance criteria numbered list from the epic file
+    instruction: |
+      Define acceptance criteria using Given/When/Then format or clear numbered criteria:
+      1. Given [context], When [action], Then [expected outcome]
+      2. [Specific measurable criteria]
     elicit: true
-    owner: scrum-master
-    editors: [scrum-master]
+    owner: product-owner
+    editors: [product-owner, scrum-master]
 
-  - id: tasks-subtasks
-    title: Tasks / Subtasks
+  - id: assumptions
+    title: Assumptions
+    type: bullet-list
+    instruction: List any assumptions made about the story
+    elicit: true
+    owner: product-owner
+    editors: [product-owner, scrum-master]
+
+  - id: dependencies
+    title: Dependencies
+    type: bullet-list
+    instruction: List any dependencies (other stories, technical requirements, etc.)
+    owner: product-owner
+    editors: [product-owner, scrum-master]
+
+  - id: definition-of-done
+    title: Definition of Done
+    type: checklist
+    instruction: |
+      Standard DoD criteria that must be met before story is considered complete.
+      All items must be checked before moving story to Done status.
+    template: |
+      - [ ] All acceptance criteria met and validated
+      - [ ] All tasks completed
+      - [ ] Code implemented following PRISM principles
+      - [ ] Unit tests written and passing
+      - [ ] Integration tests passing
+      - [ ] Code reviewed and approved
+      - [ ] QA testing completed and passed
+      - [ ] Documentation updated
+      - [ ] No regression in existing functionality
+      - [ ] Performance requirements met
+      - [ ] Security requirements validated
+      - [ ] Deployed to staging/production
+    owner: scrum-master
+    editors: [scrum-master, dev-agent, qa-agent]
+
+  - id: tasks
+    title: Tasks
     type: bullet-list
     instruction: |
-      Break down the story into specific tasks and subtasks needed for implementation.
-      Reference applicable acceptance criteria numbers where relevant.
+      Break down the story into specific implementation tasks.
+      Each task should reference applicable acceptance criteria.
+      Tasks will be created as separate task documents.
     template: |
-      - [ ] Task 1 (AC: # if applicable)
-        - [ ] Subtask1.1...
-      - [ ] Task 2 (AC: # if applicable)
-        - [ ] Subtask 2.1...
-      - [ ] Task 3 (AC: # if applicable)
-        - [ ] Subtask 3.1...
+      - [ ] Task 1: {{task_description}} (AC: #)
+      - [ ] Task 2: {{task_description}} (AC: #)
+      - [ ] Task 3: {{task_description}} (AC: #)
     elicit: true
     owner: scrum-master
     editors: [scrum-master, dev-agent]
 
-  - id: dev-notes
-    title: Dev Notes
+  - id: technical-notes
+    title: Technical Notes
     instruction: |
-      Populate relevant information, only what was pulled from actual artifacts from docs folder, relevant to this story:
-      - Do not invent information
-      - If known add Relevant Source Tree info that relates to this story
-      - If there were important notes from previous story that are relevant to this one, include them here
-      - Put enough information in this section so that the dev agent should NEVER need to read the architecture documents, these notes along with the tasks and subtasks must give the Dev Agent the complete context it needs to comprehend with the least amount of overhead the information to complete the story, meeting all AC and completing all tasks+subtasks
+      Relevant technical information for implementation:
+      - Architecture patterns to follow
+      - APIs/services involved
+      - Database changes needed
+      - Security considerations
+      - Performance requirements
     elicit: true
     owner: scrum-master
-    editors: [scrum-master]
-    sections:
-      - id: testing-standards
-        title: Testing
-        instruction: |
-          List Relevant Testing Standards from Architecture the Developer needs to conform to:
-          - Test file location
-          - Test standards
-          - Testing frameworks and patterns to use
-          - Any specific testing requirements for this story
-        elicit: true
-        owner: scrum-master
-        editors: [scrum-master]
+    editors: [scrum-master, dev-agent]
 
-  - id: change-log
-    title: Change Log
-    type: table
-    columns: [Date, Version, Description, Author]
-    instruction: Track changes made to this story document
-    owner: scrum-master
-    editors: [scrum-master, dev-agent, qa-agent]
+  - id: testing-requirements
+    title: Testing Requirements
+    instruction: |
+      - Test types needed (unit, integration, e2e)
+      - Test coverage expectations
+      - Performance testing needs
+      - Security testing needs
+    owner: qa-agent
+    editors: [qa-agent, scrum-master]
 
   - id: psp-estimation
     title: PSP Estimation (PROBE Method)
@@ -148,13 +167,13 @@ sections:
       - id: estimation
         title: Estimation
         template: |
-          - Story Points: {{1|2|3|5|8}}
+          - Story Points: {{1|2|3|5|8|13}}
           - Size Category: {{very_small|small|medium|large|very_large}}
           - Similar Stories: {{list_of_proxies}}
           - Estimated Hours: {{optimistic}}-{{likely}}-{{pessimistic}}
           - Confidence: {{high|medium|low}}
           - Estimation Date: {{date}}
-        instruction: PROBE-based estimation from probe-estimation task (points map to size: 1=VS, 2=S, 3=M, 5=L, 8=VL)
+        instruction: PROBE-based estimation (points map: 1=VS, 2=S, 3=M, 5=L, 8=VL, 13=VL+)
         owner: scrum-master
         editors: [scrum-master]
 
@@ -169,39 +188,40 @@ sections:
         owner: dev-agent
         editors: [dev-agent]
 
-  - id: dev-agent-record
-    title: Dev Agent Record
-    instruction: This section is populated by the development agent during implementation
+  - id: change-log
+    title: Change Log
+    type: table
+    columns: [Date, Version, Description, Author]
+    instruction: Track changes made to this story document
+    owner: scrum-master
+    editors: [scrum-master, dev-agent, qa-agent, product-owner]
+
+  - id: implementation-record
+    title: Implementation Record
+    instruction: Populated by dev agent during implementation
     owner: dev-agent
     editors: [dev-agent]
     sections:
-      - id: agent-model
-        title: Agent Model Used
-        template: "{{agent_model_name_version}}"
-        instruction: Record the specific AI agent model and version used for development
+      - id: tasks-created
+        title: Tasks Created
+        instruction: List all task documents created from this story
         owner: dev-agent
         editors: [dev-agent]
 
-      - id: debug-log-references
-        title: Debug Log References
-        instruction: Reference any debug logs or traces generated during development
+      - id: files-modified
+        title: Files Modified
+        instruction: List all files created or modified during implementation
         owner: dev-agent
         editors: [dev-agent]
 
       - id: completion-notes
-        title: Completion Notes List
-        instruction: Notes about the completion of tasks and any issues encountered
-        owner: dev-agent
-        editors: [dev-agent]
-
-      - id: file-list
-        title: File List
-        instruction: List all files created, modified, or affected during story implementation
+        title: Completion Notes
+        instruction: Notes about implementation, challenges, decisions
         owner: dev-agent
         editors: [dev-agent]
 
   - id: qa-results
     title: QA Results
-    instruction: Results from QA Agent QA review of the completed story implementation
+    instruction: Results from QA review of the completed story
     owner: qa-agent
     editors: [qa-agent]

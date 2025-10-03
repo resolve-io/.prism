@@ -68,7 +68,7 @@ commands:
       Automatically integrates context into subsequent workflows.
   - correct-course: execute the correct-course task
   - create-epic: Create epic for brownfield projects (task brownfield-create-epic)
-  - create-story: Create user story from requirements (task brownfield-create-story)
+  - create-story: Create task from requirements (task brownfield-create-story)
   - doc-out: Output full document to current destination file
   - execute-checklist-po: Run task execute-checklist (checklist po-master-checklist)
   - shard-doc {document} {destination}: run the task shard-doc against the optionally provided document to the specified destination

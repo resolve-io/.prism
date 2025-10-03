@@ -126,10 +126,10 @@ notes: |
   **Example Story Structure:**
   
   # [Controller] Strangler Pattern Migration Story
-  
-  ## 🎯 User Story:
-  **As a** [stakeholder role]  
-  **I want to** migrate the [Controller] [endpoint] from express-web-api to actions.api using the strangler pattern  
+
+  ## 🎯 Task:
+  **As a** [stakeholder role]
+  **I want to** migrate the [Controller] [endpoint] from express-web-api to actions.api using the strangler pattern
   **So that** we can modernize our [domain] infrastructure while maintaining zero downtime and preserving existing functionality
   
   ## ✅ Acceptance Criteria:

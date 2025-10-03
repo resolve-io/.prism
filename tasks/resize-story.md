@@ -19,7 +19,7 @@ Load story and assess size:
 
 ```yaml
 story_analysis:
-  id: "{epic}.{story}"
+  id: "{story}.{story}"
   current_estimation:
     story_points: X
     size_category: "{VS|S|M|L|VL}"

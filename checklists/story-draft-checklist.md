@@ -6,8 +6,8 @@
 Validate that a draft story is complete, estimable, and ready for development.
 
 ## Required Artifacts
-- Story file: {epic}.{story}.*.md
-- Epic definition (if available)
+- Story file: {story}.{story}.*.md
+- Story definition (if available)
 - Architecture documents (referenced sections)
 - PRD (if applicable)
 
@@ -118,7 +118,7 @@ Each section worth 10 points:
 ## Output Format
 
 ```markdown
-Story Draft Validation: {epic}.{story}
+Story Draft Validation: {story}.{story}
 Status: PASS | CONDITIONAL | FAIL
 Score: X/Y (Z%)
 

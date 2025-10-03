@@ -8,8 +8,8 @@ Perform a comprehensive test architecture review with quality gate decision. Thi
 
 ```yaml
 required:
-  - story_id: '{epic}.{story}' # e.g., "1.3"
-  - story_path: '{devStoryLocation}/{epic}.{story}.*.md' # Path from core-config.yaml
+  - story_id: '{story}.{story}' # e.g., "1.3"
+  - story_path: '{devStoryLocation}/{story}.{story}.*.md' # Path from core-config.yaml
   - story_title: '{title}' # If missing, derive from story file H1
   - story_slug: '{slug}' # If missing, derive from title (lowercase, hyphenated)
 ```
@@ -169,9 +169,9 @@ After review and any refactoring, append your results to the story file in the Q
 
 ### Gate Status
 
-Gate: {STATUS} → qa.qaLocation/gates/{epic}.{story}-{slug}.yml
-Risk profile: qa.qaLocation/assessments/{epic}.{story}-risk-{YYYYMMDD}.md
-NFR assessment: qa.qaLocation/assessments/{epic}.{story}-nfr-{YYYYMMDD}.md
+Gate: {STATUS} → qa.qaLocation/gates/{story}.{story}-{slug}.yml
+Risk profile: qa.qaLocation/assessments/{story}.{story}-risk-{YYYYMMDD}.md
+NFR assessment: qa.qaLocation/assessments/{story}.{story}-nfr-{YYYYMMDD}.md
 
 # Note: Paths should reference core-config.yaml for custom configurations
 
@@ -187,13 +187,13 @@ NFR assessment: qa.qaLocation/assessments/{epic}.{story}-nfr-{YYYYMMDD}.md
 
 - Render from `../templates/qa-gate-tmpl.yaml`
 - Create directory defined in `qa.qaLocation/gates` (see `prism-core/core-config.yaml`) if missing
-- Save to: `qa.qaLocation/gates/{epic}.{story}-{slug}.yml`
+- Save to: `qa.qaLocation/gates/{story}.{story}-{slug}.yml`
 
 Gate file structure:
 
 ```yaml
 schema: 1
-story: '{epic}.{story}'
+story: '{story}.{story}'
 story_title: '{story title}'
 gate: PASS|CONCERNS|FAIL|WAIVED
 status_reason: '1-2 sentence explanation of gate decision'

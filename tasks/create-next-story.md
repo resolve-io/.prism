@@ -4,7 +4,7 @@
 
 ## Purpose
 
-To identify the next logical story based on project progress and epic definitions, and then to prepare a comprehensive, self-contained, and actionable story file using the `Story Template`. This task ensures the story is enriched with all necessary technical context, requirements, and acceptance criteria, making it ready for efficient implementation by a Developer Agent with minimal need for additional research or finding its own context.
+To identify the next logical story based on project progress and task definitions, and then to prepare a comprehensive, self-contained, and actionable story file using the `Story Template`. This task ensures the story is enriched with all necessary technical context, requirements, and acceptance criteria, making it ready for efficient implementation by a Developer Agent with minimal need for additional research or finding its own context.
 
 ## SEQUENTIAL Task Execution (Do not proceed until current Task is complete)
 
@@ -16,21 +16,21 @@ To identify the next logical story based on project progress and epic definition
 
 ### 1. Identify Next Story for Preparation
 
-#### 1.1 Locate Epic Files and Review Existing Stories
+#### 1.1 Locate Task Files and Review Existing Stories
 
-- Based on `prdSharded` from config, locate epic files (sharded location/pattern or monolithic PRD sections)
-- If `devStoryLocation` has story files, load the highest `{epicNum}.{storyNum}.story.md` file
+- Based on `prdSharded` from config, locate task files (sharded location/pattern or monolithic PRD sections)
+- If `devStoryLocation` has story files, load the highest `{storyNum}.{taskNum}.story.md` file
 - **If highest story exists:**
-  - Verify status is 'Done'. If not, alert user: "ALERT: Found incomplete story! File: {lastEpicNum}.{lastStoryNum}.story.md Status: [current status] You should fix this story first, but would you like to accept risk & override to create the next story in draft?"
-  - If proceeding, select next sequential story in the current epic
-  - If epic is complete, prompt user: "Epic {epicNum} Complete: All stories in Epic {epicNum} have been completed. Would you like to: 1) Begin Epic {epicNum + 1} with story 1 2) Select a specific story to work on 3) Cancel story creation"
-  - **CRITICAL**: NEVER automatically skip to another epic. User MUST explicitly instruct which story to create.
-- **If no story files exist:** The next story is ALWAYS 1.1 (first story of first epic)
-- Announce the identified story to the user: "Identified next story for preparation: {epicNum}.{storyNum} - {Story Title}"
+  - Verify status is 'Done'. If not, alert user: "ALERT: Found incomplete story! File: {lastStoryNum}.{lastTaskNum}.story.md Status: [current status] You should fix this story first, but would you like to accept risk & override to create the next story in draft?"
+  - If proceeding, select next sequential task in the current story
+  - If story is complete, prompt user: "Story {storyNum} Complete: All tasks in Story {storyNum} have been completed. Would you like to: 1) Begin Story {storyNum + 1} with task 1 2) Select a specific task to work on 3) Cancel story creation"
+  - **CRITICAL**: NEVER automatically skip to another story. User MUST explicitly instruct which story to create.
+- **If no story files exist:** The next story is ALWAYS 1.1 (first task of first story)
+- Announce the identified story to the user: "Identified next story for preparation: {storyNum}.{taskNum} - {Story Title}"
 
 ### 2. Gather Story Requirements and Previous Story Context
 
-- Extract story requirements from the identified epic file
+- Extract story requirements from the identified task file
 - If previous story exists, review Dev Agent Record sections for:
   - Completion Notes and Debug Log References
   - Implementation deviations and technical decisions
@@ -85,8 +85,8 @@ ALWAYS cite source documents: `[Source: architecture/{filename}.md#{section}]`
 
 ### 6. Populate Story Template with Full Context
 
-- Create new story file: `{devStoryLocation}/{epicNum}.{storyNum}.story.md` using Story Template
-- Fill in basic story information: Title, Status (Draft), Story statement, Acceptance Criteria from Epic
+- Create new story file: `{devStoryLocation}/{storyNum}.{storyNum}.story.md` using Story Template
+- Fill in basic story information: Title, Status (Draft), Story statement, Acceptance Criteria from Story
 - **`PSP Estimation` section:**
   - Include PROBE estimation results from Step 5
   - Set tracking fields to null (to be filled during execution)
@@ -103,7 +103,7 @@ ALWAYS cite source documents: `[Source: architecture/{filename}.md#{section}]`
   - Every technical detail MUST include its source reference: `[Source: architecture/{filename}.md#{section}]`
   - If information for a category is not found in the architecture docs, explicitly state: "No specific guidance found in architecture docs"
 - **`Tasks / Subtasks` section:**
-  - Generate detailed, sequential list of technical tasks based ONLY on: Epic Requirements, Story AC, Reviewed Architecture Information
+  - Generate detailed, sequential list of technical tasks based ONLY on: Story Requirements, Story AC, Reviewed Architecture Information
   - Each task must reference relevant architecture documentation
   - Include unit testing as explicit subtasks based on the Testing Strategy
   - Link tasks to ACs where applicable (e.g., `Task 1 (AC: 1, 3)`)
@@ -113,13 +113,13 @@ ALWAYS cite source documents: `[Source: architecture/{filename}.md#{section}]`
 
 - Review all sections for completeness and accuracy
 - Verify all source references are included for technical details
-- Ensure tasks align with both epic requirements and architecture constraints
+- Ensure tasks align with both story requirements and architecture constraints
 - Update status to "Draft" and save the story file
 - Execute `.prism-core/tasks/execute-checklist` `.prism-core/checklists/story-draft-checklist`
 - Provide summary to user including:
-  - Story created: `{devStoryLocation}/{epicNum}.{storyNum}.story.md`
+  - Story created: `{devStoryLocation}/{storyNum}.{storyNum}.story.md`
   - Status: Draft
   - Key technical components included from architecture docs
-  - Any deviations or conflicts noted between epic and architecture
+  - Any deviations or conflicts noted between story and architecture
   - Checklist Results
   - Next steps: For Complex stories, suggest the user carefully review the story draft and also optionally have the PO run the task `.prism-core/tasks/validate-next-story`

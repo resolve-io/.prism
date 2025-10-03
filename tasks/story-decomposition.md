@@ -1,10 +1,10 @@
 <!-- Powered by PRISM™ Core -->
 
-# Epic Decomposition Task
+# Story Decomposition Task
 
 ## Purpose
 
-Break down epics into optimally-sized stories using PSP measurement discipline:
+Break down stories into optimally-sized stories using PSP measurement discipline:
 - Target 1-3 day stories based on historical data
 - Maintain architectural alignment in decomposition
 - Ensure each story is independently valuable
@@ -13,13 +13,13 @@ Break down epics into optimally-sized stories using PSP measurement discipline:
 
 ## SEQUENTIAL Task Execution
 
-### 1. Load Epic and Context
+### 1. Load Story and Context
 
-**Gather Epic Information:**
+**Gather Story Information:**
 ```yaml
-epic_context:
-  epic_number: X
-  epic_title: "{title}"
+story_context:
+  story_number: X
+  story_title: "{title}"
   business_goal: "{goal}"
   acceptance_criteria: 
     - AC1: "{criterion}"
@@ -30,7 +30,7 @@ epic_context:
     - database: ["models"]
   dependencies:
     external: ["third-party APIs"]
-    internal: ["other epics/stories"]
+    internal: ["other stories/stories"]
 ```
 
 ### 2. Analyze Historical Sizing Data
@@ -108,7 +108,7 @@ story_candidate:
     technical_value: "What it enables"
     
   testability:
-    acceptance_criteria: ["specific ACs from epic"]
+    acceptance_criteria: ["specific ACs from story"]
     independent_testing: true/false
     
   initial_sizing:
@@ -218,7 +218,7 @@ story_sequence:
 validation:
   coverage:
     all_acs_covered: true/false
-    epic_goal_achievable: true/false
+    story_goal_achievable: true/false
     
   sizing:
     all_within_target: X/Y stories
@@ -256,10 +256,10 @@ For each story, generate story file with:
 ### 10. Generate Decomposition Report
 
 ```markdown
-# Epic X Decomposition Report
+# Story X Decomposition Report
 
 ## Summary
-- Epic: {title}
+- Story: {title}
 - Total Stories: N
 - Total Estimated Hours: X
 - Average Story Size: Y hours
@@ -296,7 +296,7 @@ For each story, generate story file with:
 
 ## Success Criteria
 
-- [ ] All epic ACs covered by stories
+- [ ] All story ACs covered by stories
 - [ ] No story larger than 3 days (24 hours)
 - [ ] Few stories smaller than 0.5 days (4 hours)
 - [ ] Each story independently valuable
@@ -308,7 +308,7 @@ For each story, generate story file with:
 ## Output
 
 - Individual story files created
-- Epic decomposition report
+- Story decomposition report
 - Updated estimation history
 - Story dependency map
 - Ready for continuous development flow
