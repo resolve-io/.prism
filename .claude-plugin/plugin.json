@@ -1,0 +1,26 @@
+{
+  "name": "prism-devtools",
+  "description": "Comprehensive development toolkit for building Claude Code plugins and skills with progressive disclosure patterns, validation tools, and PRISM methodology agents",
+  "version": "1.0.0",
+  "author": {
+    "name": "PRISM Development Team"
+  },
+  "homepage": "https://github.com/resolve-io/.prism",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/resolve-io/.prism.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "skill-builder",
+    "validation",
+    "progressive-disclosure",
+    "prism",
+    "development",
+    "agents",
+    "methodology",
+    "tdd",
+    "agile",
+    "psp"
+  ]
+}

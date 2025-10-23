@@ -98,12 +98,21 @@ Header: Authorization: Basic base64(email:token)
 ```
 
 ### WebFetch Implementation
-Since WebFetch handles fetching, construct the URL with basic auth:
+Claude Code's WebFetch tool automatically handles authentication headers. Construct the API URL:
 ```
-https://{email}:{token}@resolvesys.atlassian.net/rest/api/3/issue/{issueKey}
+https://resolvesys.atlassian.net/rest/api/3/issue/{issueKey}
 ```
 
-**Note**: For security, credentials are read from environment variables (JIRA_EMAIL, JIRA_API_TOKEN) via core-config.yaml. Never hardcode credentials.
+Pass credentials via Authorization header (WebFetch handles this internally):
+```
+Authorization: Basic base64(email:token)
+```
+
+**Security Note**:
+- Credentials are read from environment variables (JIRA_EMAIL, JIRA_API_TOKEN) via core-config.yaml
+- Never hardcode credentials in URLs or code
+- Never embed credentials in URLs (e.g., `https://user:pass@domain.com`) as they may be logged
+- WebFetch will securely read credentials from your `.env` file via the config placeholders
 
 ## Error Handling
 
