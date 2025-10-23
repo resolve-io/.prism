@@ -6,10 +6,7 @@
     "name": "PRISM Development Team"
   },
   "homepage": "https://github.com/resolve-io/.prism",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/resolve-io/.prism.git"
-  },
+  "repository": "https://github.com/resolve-io/.prism.git",
   "license": "MIT",
   "keywords": [
     "skill-builder",
