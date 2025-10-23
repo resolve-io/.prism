@@ -9,17 +9,19 @@ This guide is for Resolve team members to install the PRISM Development System p
 
 ## Installation Steps
 
-### Option 1: Install from GitHub (Recommended)
+### Option 1: Via Marketplace (Recommended)
 
 1. Open Claude Code
-2. Go to **Settings** → **Plugins**
-3. Click **"Install from Git"**
-4. Enter the repository URL:
+2. Add the PRISM marketplace by typing:
    ```
-   https://github.com/resolve-io/.prism.git
+   /plugin marketplace add resolve-io/.prism
    ```
-5. Click **Install**
-6. Restart Claude Code
+3. Install the plugin:
+   ```
+   /plugin install prism-devtools
+   ```
+   Or use the interactive menu: `/plugin` → Browse Plugins → Install prism-devtools
+4. Restart Claude Code
 
 The plugin will be installed and automatically activated.
 

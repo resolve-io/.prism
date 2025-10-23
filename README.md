@@ -4,15 +4,21 @@ A comprehensive Claude Code plugin that implements the PRISM software engineerin
 
 ## Installation
 
-### From Claude Code Settings
+### Via Marketplace (Recommended)
 
 1. Open Claude Code
-2. Go to Settings → Plugins
-3. Click "Install from Git"
-4. Enter: `https://github.com/resolve-io/.prism.git`
-5. Click Install
+2. Add the PRISM marketplace:
+   ```
+   /plugin marketplace add resolve-io/.prism
+   ```
+3. Install the plugin:
+   ```
+   /plugin install prism-devtools
+   ```
+   Or interactively: `/plugin` → Browse Plugins → prism-devtools
+4. Restart Claude Code
 
-### Manual Installation
+### Manual Installation (For Development)
 
 ```bash
 # Clone to your Claude Code plugins directory
