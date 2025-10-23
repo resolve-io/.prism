@@ -1,6 +1,10 @@
 {
   "name": "prism",
   "description": "Claude Code plugins for the PRISM development methodology",
+  "owner": {
+    "name": "Resolve",
+    "email": "jesse@resolve.io"
+  },
   "plugins": [
     {
       "name": "prism-devtools",
