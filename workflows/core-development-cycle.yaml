@@ -9,7 +9,7 @@ workflow:
     Complete development workflow supporting both greenfield (new) and brownfield (existing codebase)
     projects. Follows PRISM methodology: Predictability (PSP/TSP), Resilience (TDD/XP),
     Intentionality (Clean Code), Sustainability (Agile), and Maintainability (DDD).
-  version: 1.0.0
+  version: 1.1.0
   type: universal  # Supports both greenfield and brownfield
 
   # Companion documentation with visual diagrams, scenarios, and decision trees
@@ -454,4 +454,4 @@ notes: |
   Use this workflow as the foundation for all PRISM development, adapting the
   optional steps based on project needs and risk assessment.
 
-version: 1.0.0
+version: 1.1.0
