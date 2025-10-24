@@ -1,6 +1,31 @@
 # PRISM Development System
 
+**Version 1.3.0** - Complete Token Consistency & Workflow Validation
+
 A comprehensive Claude Code plugin that implements the PRISM software engineering methodology with specialized agents, progressive disclosure patterns, and integrated workflows.
+
+## What's New in 1.3.0
+
+🎯 **Complete Token Documentation** - Runtime tokens vs template placeholders clearly distinguished
+✅ **Command Parameter Consistency** - All token naming drift fixed across workflows and skills
+✅ **100% Token Accountability** - Every token traced from source to consumers
+✅ **Strangler Workflow Fixed** - Now uses actual dev commands (strangler, run-tests)
+✅ **Enhanced Artifacts Documentation** - Shows both template patterns and actual examples
+
+### Key Improvements
+- **Token Flow**: Single runtime token (story_file) properly flows through all 7 dependent steps
+- **Command Signatures**: All commands use consistent parameter naming: `{story}` not `{story_file}`
+- **Template Clarity**: {epic}, {story}, {YYYYMMDD}, {slug} documented as patterns, not runtime variables
+- **Workflow Validation**: Both core-development-cycle (v1.3.0) and strangler-pattern-migration (v1.1.0) fully validated
+
+### Recent Updates (1.2.0 - 1.1.0)
+✅ **Story Context Pattern** - Story file explicitly flows through all workflow steps
+✅ **Workflow Validation** - Core development cycle completely audited
+✅ **Command Mapping Fixes** - All workflow actions map to correct skill commands
+✅ **Progressive Disclosure** - All reference chains verified and cleaned up
+✅ **Streamlined Brownfield** - Removed early validation steps (trace, nfr-assess)
+
+See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
 ## Installation
 

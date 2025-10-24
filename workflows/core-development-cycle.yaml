@@ -2,6 +2,34 @@
 # Complete workflow from planning through deployment
 # Supports both greenfield and brownfield projects
 
+# ============================================================================
+# STORY CONTEXT PATTERN
+# ============================================================================
+#
+# This workflow creates a story file in the draft_story step and ALL subsequent
+# steps work on that SAME story file throughout the entire lifecycle:
+#
+#   draft_story → Creates story file with SM-determined naming
+#                 Example: docs/stories/platform-1.auth-improvements-2.md
+#                 └─ Output: story_file = actual path to created file
+#                     ↓
+#   All subsequent steps → Use: $draft_story.output.story_file
+#                           (risk_assessment, test_design, validate_story,
+#                            implement_tasks, qa_review, address_review_issues,
+#                            update_gate)
+#
+# The story file is the SINGLE SOURCE OF TRUTH that flows through all phases:
+# Planning → Development → Review → Completion
+#
+# TOKEN RESOLUTION:
+# - {epic} and {story} in documentation are TEMPLATE PLACEHOLDERS showing
+#   the file naming pattern, NOT runtime variables
+# - The SM agent determines actual epic/story identifiers during draft execution
+# - The actual file path is captured in draft_story.output.story_file
+# - All subsequent steps receive the concrete path via $draft_story.output.story_file
+#
+# ============================================================================
+
 workflow:
   id: core-development-cycle
   name: PRISM Core Development Cycle
@@ -9,7 +37,7 @@ workflow:
     Complete development workflow supporting both greenfield (new) and brownfield (existing codebase)
     projects. Follows PRISM methodology: Predictability (PSP/TSP), Resilience (TDD/XP),
     Intentionality (Clean Code), Sustainability (Agile), and Maintainability (DDD).
-  version: 1.1.0
+  version: 1.3.0
   type: universal  # Supports both greenfield and brownfield
 
   # Companion documentation with visual diagrams, scenarios, and decision trees
@@ -34,10 +62,25 @@ workflow:
       action: draft
       requires: review_previous_notes
       description: Draft next story from sharded epic + architecture
+      output:
+        story_file: "Path to created story file (e.g., docs/stories/epic-1.story-3.md)"
       notes: |
         Maps to draft command in skills/sm/SKILL.md
+        Command: *draft (no parameters)
+
         Creates story in docs/stories/ following template
         Applies PSP/PROBE sizing methodology
+
+        The SM agent determines the epic and story identifiers based on:
+        - Existing epic context from sharded epic document
+        - Next available story number in sequence
+        - Story naming convention: docs/stories/{epic-id}.{story-id}.md
+
+        CRITICAL: The actual story file path is returned in output.story_file
+        and ALL subsequent steps reference this via $draft_story.output.story_file
+
+        Example: If SM creates "docs/stories/platform-1.auth-improvements-2.md"
+        then story_file = "docs/stories/platform-1.auth-improvements-2.md"
 
     - step: risk_assessment
       agent: qa
@@ -45,11 +88,17 @@ workflow:
       optional: true
       condition: high_risk_story
       requires: draft_story
+      input:
+        story_file: $draft_story.output.story_file
       description: Assess risk for high-risk stories (brownfield focus)
       notes: |
         OPTIONAL: Run for high-risk stories (legacy code, complex integrations)
         Maps to risk-profile command (short: *risk) in skills/qa/SKILL.md
+        Command: *risk {story}
+        - Parameter {story} receives value from: $draft_story.output.story_file
         Output: docs/qa/assessments/{epic}.{story}-risk-{YYYYMMDD}.md
+
+        Uses story file from draft_story step as input.
 
         Brownfield Risk Analysis:
         - Regression probability × impact scoring
@@ -63,12 +112,18 @@ workflow:
       optional: true
       condition: high_risk_story
       requires: risk_assessment
+      input:
+        story_file: $draft_story.output.story_file
       description: Create test strategy for high-risk stories
       notes: |
         OPTIONAL: Run after risk assessment for high-risk stories
         Maps to test-design command in skills/qa/SKILL.md
+        Command: *design {story}
+        - Parameter {story} receives value from: $draft_story.output.story_file
         References skills/qa/reference/test-framework.md for test levels
         Output: docs/qa/assessments/{epic}.{story}-test-design-{YYYYMMDD}.md
+
+        Uses story file from draft_story step as input.
 
         Creates test strategy:
         - Regression test requirements
@@ -81,11 +136,17 @@ workflow:
       action: validate-story-draft
       optional: true
       requires: draft_story
+      input:
+        story_file: $draft_story.output.story_file
       description: PO validates story against artifacts (optional)
       notes: |
         OPTIONAL: User can request PO validation before approval
         Maps to validate-story-draft command in skills/po/SKILL.md
+        Command: *validate-story-draft {story}
+        - Parameter {story} receives value from: $draft_story.output.story_file
         Validates against PRD, architecture, acceptance criteria
+
+        Uses story file from draft_story step as input.
 
     - step: user_approval
       description: User reviews and approves story draft
@@ -104,20 +165,27 @@ workflow:
       agent: dev
       action: develop-story
       requires: user_approval
+      input:
+        story_file: $draft_story.output.story_file
       description: Sequential task execution with TDD
       notes: |
         Maps to develop-story command in skills/dev/SKILL.md
+        Command: *develop-story (works on current story file in context)
         References skills/dev/reference/development-workflow.md for process
 
+        CRITICAL: Developer works on the story file created in draft_story step.
+        The story file is provided via input.story_file variable.
+
         Development Process (all handled by develop-story):
-        1. Set PSP tracking Started timestamp
-        2. For each task: Read → Implement → Test → Validate → Mark complete
-        3. Run all validations (tests, linting, type checking)
-        4. Update story File List with all changes
-        5. Mark story as 'Ready for Review' with completion notes
-        6. Follow PRISM principles (Predictability, Resilience, Intentionality,
+        1. Read story file from docs/stories/ directory
+        2. Set PSP tracking Started timestamp
+        3. For each task: Read → Implement → Test → Validate → Mark complete
+        4. Run all validations (tests, linting, type checking)
+        5. Update story File List with all changes
+        6. Mark story as 'Ready for Review' with completion notes
+        7. Follow PRISM principles (Predictability, Resilience, Intentionality,
            Sustainability, Maintainability)
-        7. Apply TDD: Write tests first, make them pass, refactor
+        8. Apply TDD: Write tests first, make them pass, refactor
 
         The develop-story command is comprehensive and handles validation
         and marking ready for review as part of its workflow.
@@ -142,10 +210,16 @@ workflow:
       action: review
       optional: true
       requires: user_verification
+      input:
+        story_file: $draft_story.output.story_file
       description: Comprehensive quality review with gate decision
       notes: |
         OPTIONAL: User can request comprehensive QA review
         Maps to review command in skills/qa/SKILL.md
+        Command: *review {story}
+        - Parameter {story} receives value from: $draft_story.output.story_file
+
+        Reviews the story file created in draft_story step.
 
         Outputs:
         - Updates QA Results section in story file
@@ -164,11 +238,16 @@ workflow:
       action: review-qa
       optional: true
       requires: qa_review
+      input:
+        story_file: $draft_story.output.story_file
       description: Fix issues identified in QA review
       notes: |
         OPTIONAL: Only if QA review identified issues
         Maps to review-qa command in skills/dev/SKILL.md
-        Returns to qa_review after fixes
+        Command: *review-qa (works on current story file)
+
+        Continues working on the same story file from draft_story step.
+        Returns to qa_review after fixes.
 
     - step: verify_regression_and_lint
       description: CRITICAL - Verify all tests and linting pass
@@ -199,11 +278,17 @@ workflow:
       action: gate
       optional: true
       requires: commit_changes
+      input:
+        story_file: $draft_story.output.story_file
       description: Update gate status after fixes
       notes: |
         OPTIONAL: Update gate file with final decision
         Maps to gate command in skills/qa/SKILL.md
+        Command: *gate {story}
+        - Parameter {story} receives value from: $draft_story.output.story_file
         Updates: docs/qa/gates/{epic}.{story}-{slug}.yml
+
+        Updates gate for the story file created in draft_story step.
 
         Gate Decisions:
         - PASS: All criteria met, safe to merge
@@ -226,27 +311,43 @@ workflow:
 
 artifacts:
   created:
-    - location: docs/stories/{epic}.{story}.md
+    - location: "docs/stories/{epic}.{story}.md (template pattern)"
+      actual: "Determined by SM agent during draft, e.g., docs/stories/platform-1.auth-2.md"
       template: story-template.md
       description: User story with tasks, acceptance criteria, dev notes
       agent: sm
+      notes: |
+        {epic} and {story} are template placeholders.
+        SM agent determines actual values during execution.
 
-    - location: docs/qa/assessments/{epic}.{story}-risk-{YYYYMMDD}.md
+    - location: "docs/qa/assessments/{epic}.{story}-risk-{YYYYMMDD}.md (template pattern)"
+      actual: "Generated by QA agent, e.g., docs/qa/assessments/platform-1.auth-2-risk-20250124.md"
       template: risk-assessment-template.md
       description: Risk profile with probability × impact scoring
       agent: qa
       optional: true
+      notes: |
+        {epic}.{story} extracted from story file path.
+        {YYYYMMDD} generated by QA skill as current date.
 
-    - location: docs/qa/assessments/{epic}.{story}-test-design-{YYYYMMDD}.md
+    - location: "docs/qa/assessments/{epic}.{story}-test-design-{YYYYMMDD}.md (template pattern)"
+      actual: "Generated by QA agent, e.g., docs/qa/assessments/platform-1.auth-2-test-design-20250124.md"
       template: test-design-template.md
       description: Test strategy and coverage plan
       agent: qa
       optional: true
+      notes: |
+        {epic}.{story} extracted from story file path.
+        {YYYYMMDD} generated by QA skill as current date.
 
-    - location: docs/qa/gates/{epic}.{story}-{slug}.yml
+    - location: "docs/qa/gates/{epic}.{story}-{slug}.yml (template pattern)"
+      actual: "Generated by QA agent, e.g., docs/qa/gates/platform-1.auth-2-comprehensive-review.yml"
       description: Quality gate decision (PASS/CONCERNS/FAIL/WAIVED)
       agent: qa
       optional: true
+      notes: |
+        {epic}.{story} extracted from story file path.
+        {slug} generated by QA skill based on review type.
 
   required:
     - docs/prd.md (or equivalent requirements)
@@ -454,4 +555,8 @@ notes: |
   Use this workflow as the foundation for all PRISM development, adapting the
   optional steps based on project needs and risk assessment.
 
-version: 1.1.0
+  STORY CONTEXT: All steps after draft_story receive the story file path via
+  input.story_file parameter, ensuring the entire workflow works on the same
+  story file from creation through completion.
+
+version: 1.3.0

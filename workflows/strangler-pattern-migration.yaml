@@ -8,133 +8,79 @@ workflow:
     Predictability (structured process), Resilience (TDD), Intentionality (clean code),
     Sustainability (craftsmanship), and Maintainability (domain-driven design).
   type: brownfield
-  version: 1.0.0
+  version: 1.1.0
   project_types:
     - api-migration
     - legacy-modernization
     - strangler-pattern
 
   sequence:
-    - step: tdd_setup
+    - step: execute_migration
       agent: dev
-      action: task
-      uses: strangler-pattern
+      action: strangler
+      description: Execute complete strangler pattern migration
       notes: |
-        Execute TDD strangler pattern analysis:
-        Maps to task command in skills/dev/SKILL.md
-        Loads skills/dev/reference/tasks/strangler-pattern.md
+        Execute strangler pattern migration workflow:
+        Maps to strangler command in skills/dev/SKILL.md
+        Command: *strangler
+        Loads tasks/strangler-pattern.md
 
-        Process:
-        - Provide endpoint URL and test credentials
-        - Follow authentication discovery in guide
-        - Capture authenticated endpoint responses
-        - Record performance baseline
+        The strangler command handles the complete migration:
+        1. TDD behavior capture and authentication discovery
+        2. Integration test creation (RED state)
+        3. New endpoint implementation (GREEN state)
+        4. Feature flag strangler integration
+        5. Dual-path validation
+        6. Production readiness verification
 
-    - step: validation
+        The task file (tasks/strangler-pattern.md) contains:
+        - Complete implementation guide
+        - Authentication patterns
+        - Test patterns using ActionsApiFactory
+        - 4-line controller strangling pattern
+        - Feature flag configuration
+        - Validation procedures
+
+    - step: validate_migration
       agent: dev
-      action: execute-checklist
-      uses: strangler-migration-checklist
-      requires: tdd_setup
+      action: run-tests
+      requires: execute_migration
+      description: Validate all tests pass
       notes: |
-        Comprehensive migration validation:
-        Maps to execute-checklist command in skills/dev/SKILL.md
-        Uses strangler-migration-checklist from checklists/
-        Interactive or comprehensive mode
+        Run comprehensive test validation:
+        Maps to run-tests command in skills/dev/SKILL.md
+        Command: *run-tests
 
-    - step: integration_tests
-      agent: dev
-      action: develop
-      creates: endpoint_tests.cs
-      requires: validation
-      location: c:\Dev\actions.api\tests\Integration.Tests\Endpoints\
-      notes: |
-        Create actions.api integration tests (RED state):
-        Maps to develop command in skills/dev/SKILL.md
-        Loads skills/dev/reference/tdd-methodology.md
-
-        Implementation:
-        - Follow existing endpoint test patterns
-        - Use ActionsApiFactory, DatabaseFixture, SmtpFixture
-        - Test against captured response structure
-        - Tests must FAIL initially (RED state)
-
-    - step: implementation
-      agent: dev
-      action: develop
-      creates: new_endpoint_files
-      requires: integration_tests
-      notes: |
-        Implement new actions.api endpoint (GREEN state):
-        Maps to develop command in skills/dev/SKILL.md
-        Loads skills/dev/reference/coding-standards.md
-
-        Implementation:
-        - Follow Request/Handler/Service pattern from guide
-        - Use IDbContextResolver and AbstractValidator<T>
-        - Register in EndpointRegistrar.cs and ServiceRegistrar.cs
-        - Make tests pass (GREEN state)
-
-    - step: strangler_integration
-      agent: dev
-      action: develop
-      updates: express_web_api_controller
-      requires: implementation
-      notes: |
-        Set up strangler integration in express-web-api:
-        Maps to develop command in skills/dev/SKILL.md
-
-        Implementation:
-        - Follow 4-line controller pattern from guide
-        - Create lazy-loaded services in controller
-        - Configure feature flag routing
-
-    - step: dual_path_testing
-      agent: dev
-      action: validate
-      requires: strangler_integration
-      notes: |
-        Run comprehensive dual-path validation:
-        Maps to validate command in skills/dev/SKILL.md
-
-        Validation:
-        - Execute full Integration.Tests suite
-        - Compare legacy vs new endpoint responses
-        - Verify performance and behavior equivalence
-
-    - step: production_readiness
-      agent: dev
-      action: develop
-      requires: dual_path_testing
-      notes: |
-        Complete migration process:
-        Maps to develop command in skills/dev/SKILL.md
-
-        Final steps:
-        - Monitor production deployment
-        - Validate business metrics
-        - Plan legacy endpoint removal
+        Validates:
+        - All integration tests pass
+        - No regression in existing tests
+        - Legacy and new endpoints produce equivalent results
+        - Performance meets or exceeds baseline
 
 artifacts:
   created:
     - location: c:\Dev\actions.api\tests\Integration.Tests\Endpoints\[Controller]EndpointTests.cs
       description: Integration tests following actions.api patterns
-    - location: TestEnvironment/Data/[Controller]TestData.cs  
+    - location: TestEnvironment/Data/[Controller]TestData.cs
       description: Test data and captured response fixtures
     - location: actions.api endpoint files
       description: New minimal API endpoints with handlers and services
-    
+    - location: express-web-api controller modifications
+      description: Feature flag strangling in legacy controller
+
   required:
-    - strangler-pattern.md (implementation task)
-    - strangler-migration-checklist.md (validation checklist)
+    - tasks/strangler-pattern.md (implementation guide)
+    - checklists/strangler-migration-checklist.md (validation checklist)
     - Running legacy endpoint URL
     - actions.api test infrastructure
 
 validation:
-  checklist: strangler-migration-checklist
   success_criteria:
-    - All integration tests pass
+    - All integration tests pass (run-tests command)
     - Legacy behavior preserved exactly
     - No regression in existing tests
+    - Feature flags configured correctly
+    - Dual-path routing working
     - Production-ready strangled endpoint
 
 notes: |
