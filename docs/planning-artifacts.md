@@ -233,11 +233,12 @@ So that [benefit]
 #### Create Architecture
 ```bash
 /architect
-*create-backend-architecture
-# or
-*create-front-end-architecture
-# or
-*create-full-stack-architecture
+*create-architecture
+# Intelligently adapts to your project type:
+# - Analyzes your PRD
+# - Recommends fullstack or backend-focused template
+# - Gets your confirmation
+# - Creates comprehensive architecture doc
 ```
 
 #### Create Epic

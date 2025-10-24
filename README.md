@@ -13,6 +13,10 @@ A comprehensive Claude Code plugin that implements the PRISM software engineerin
    ```
 3. Install the plugin:
    ```
+   /plugin install prism-devtools@resolve-io
+   ```
+   Or with short form:
+   ```
    /plugin install prism-devtools
    ```
    Or interactively: `/plugin` → Browse Plugins → prism-devtools
@@ -164,8 +168,28 @@ Each skill contains:
 Main documentation:
 - `docs/prism-workflow.md` - Development process
 - `docs/prism-kb.md` - PRISM knowledge base
-- `docs/technical-preferences.md` - Coding standards
+- `docs/coding-standards-reference.md` - Coding standards and security practices
 - `docs/test-*.md` - Testing frameworks and strategies
+
+## Security
+
+PRISM follows secure development practices:
+- All credentials stored in environment variables (`.env` files, gitignored)
+- Read-only access to external APIs (Jira, etc.)
+- User permission controls for all network requests
+- No credentials in source code or documentation
+
+### Reporting Security Issues
+
+If you discover a security vulnerability:
+1. **Do NOT** open a public GitHub issue
+2. Email security concerns to the maintainers
+3. Include detailed reproduction steps
+4. Allow reasonable time for fixes before disclosure
+
+For detailed security practices, see:
+- `utils/jira-integration.md` - Credential management
+- `docs/coding-standards-reference.md` - Security standards
 
 ---
 

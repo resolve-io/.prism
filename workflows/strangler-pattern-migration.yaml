@@ -3,89 +3,113 @@ workflow:
   id: strangler-pattern-migration
   name: PRISM Strangler Pattern Controller Migration
   description: >-
-    Complete TDD-driven workflow for migrating controllers from express-web-api 
+    Complete TDD-driven workflow for migrating controllers from express-web-api
     to actions.api using the strangler pattern. Follows PRISM methodology:
     Predictability (structured process), Resilience (TDD), Intentionality (clean code),
     Sustainability (craftsmanship), and Maintainability (domain-driven design).
   type: brownfield
+  version: 1.0.0
   project_types:
     - api-migration
-    - legacy-modernization  
+    - legacy-modernization
     - strangler-pattern
 
   sequence:
     - step: tdd_setup
       agent: dev
-      action: execute_strangler_task
+      action: task
       uses: strangler-pattern
       notes: |
         Execute TDD strangler pattern analysis:
-        - Dev Agent: *task strangler-pattern
+        Maps to task command in skills/dev/SKILL.md
+        Loads skills/dev/reference/tasks/strangler-pattern.md
+
+        Process:
         - Provide endpoint URL and test credentials
         - Follow authentication discovery in guide
         - Capture authenticated endpoint responses
         - Record performance baseline
 
     - step: validation
-      agent: dev  
-      action: validate_migration
+      agent: dev
+      action: execute-checklist
       uses: strangler-migration-checklist
       requires: tdd_setup
       notes: |
         Comprehensive migration validation:
-        - Dev Agent: *execute-checklist strangler-migration-checklist
-        - Interactive or comprehensive mode
+        Maps to execute-checklist command in skills/dev/SKILL.md
+        Uses strangler-migration-checklist from checklists/
+        Interactive or comprehensive mode
 
     - step: integration_tests
       agent: dev
-      action: create_integration_tests
+      action: develop
       creates: endpoint_tests.cs
       requires: validation
       location: c:\Dev\actions.api\tests\Integration.Tests\Endpoints\
       notes: |
-        Create actions.api integration tests:
+        Create actions.api integration tests (RED state):
+        Maps to develop command in skills/dev/SKILL.md
+        Loads skills/dev/reference/tdd-methodology.md
+
+        Implementation:
         - Follow existing endpoint test patterns
         - Use ActionsApiFactory, DatabaseFixture, SmtpFixture
         - Test against captured response structure
+        - Tests must FAIL initially (RED state)
 
     - step: implementation
       agent: dev
-      action: implement_strangled_endpoint
+      action: develop
       creates: new_endpoint_files
       requires: integration_tests
       notes: |
-        Implement new actions.api endpoint:
+        Implement new actions.api endpoint (GREEN state):
+        Maps to develop command in skills/dev/SKILL.md
+        Loads skills/dev/reference/coding-standards.md
+
+        Implementation:
         - Follow Request/Handler/Service pattern from guide
         - Use IDbContextResolver and AbstractValidator<T>
         - Register in EndpointRegistrar.cs and ServiceRegistrar.cs
+        - Make tests pass (GREEN state)
 
     - step: strangler_integration
       agent: dev
-      action: setup_strangler_service
+      action: develop
       updates: express_web_api_controller
       requires: implementation
       notes: |
         Set up strangler integration in express-web-api:
+        Maps to develop command in skills/dev/SKILL.md
+
+        Implementation:
         - Follow 4-line controller pattern from guide
         - Create lazy-loaded services in controller
         - Configure feature flag routing
 
     - step: dual_path_testing
       agent: dev
-      action: validate_both_systems
+      action: validate
       requires: strangler_integration
       notes: |
         Run comprehensive dual-path validation:
+        Maps to validate command in skills/dev/SKILL.md
+
+        Validation:
         - Execute full Integration.Tests suite
         - Compare legacy vs new endpoint responses
         - Verify performance and behavior equivalence
 
     - step: production_readiness
       agent: dev
-      action: finalize_migration
+      action: develop
       requires: dual_path_testing
       notes: |
         Complete migration process:
+        Maps to develop command in skills/dev/SKILL.md
+
+        Final steps:
         - Monitor production deployment
         - Validate business metrics
         - Plan legacy endpoint removal

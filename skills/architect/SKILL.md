@@ -47,23 +47,29 @@ version: 1.0.0
 
 ### Create Architecture Document
 
-Choose your architecture type based on your needs:
+Use the **`*create-architecture`** command - it intelligently adapts to your project type:
 
-1. **Backend Architecture**: Server-side systems, APIs, databases, services
-   - Use `*create-backend-architecture` command
-   - Focus: Data models, API design, service architecture, database design
+**What it does:**
+- Analyzes your PRD and project requirements
+- Recommends the appropriate architecture template:
+  - **Full-Stack**: Frontend + backend + infrastructure (most common)
+  - **Backend/Services**: APIs, databases, services, microservices
+  - **Frontend Only**: UI architecture when backend is separate/existing
+- Explains the recommendation and gets your confirmation
+- Creates comprehensive, maintainable architecture documentation
 
-2. **Frontend Architecture**: Web/mobile UI, state management, routing, components
-   - Use `*create-frontend-architecture` command
-   - Focus: Component structure, state management, routing, UI patterns
+**Examples:**
+```
+*create-architecture
+→ Analyzes docs/prd.md
+→ Recommends fullstack template for web app with API
+→ Creates complete architecture covering both layers
 
-3. **Full-Stack Architecture**: Complete application systems (frontend + backend + infrastructure)
-   - Use `*create-fullstack-architecture` command
-   - Focus: End-to-end system design, integration points, deployment
-
-4. **Brownfield Assessment**: Existing systems needing modernization or redesign
-   - Use `*create-brownfield-architecture` command
-   - Focus: Current state analysis, migration strategy, phased approach
+*create-architecture
+→ Detects backend-only microservice project
+→ Recommends backend-focused template
+→ Creates service architecture with API specs
+```
 
 ### Architecture Workflow
 
@@ -84,10 +90,7 @@ All architect capabilities (when using this skill):
 | Command | Purpose |
 |---------|---------|
 | **Document Creation** | |
-| `create-backend-architecture` | Backend system architecture document |
-| `create-frontend-architecture` | Frontend application architecture |
-| `create-fullstack-architecture` | Complete application architecture |
-| `create-brownfield-architecture` | Existing system assessment & redesign |
+| `create-architecture` | Intelligent architecture document (adapts to your project type) |
 | **Analysis & Research** | |
 | `research {topic}` | Deep technical research on architecture topics |
 | `document-project` | Document existing project architecture |
@@ -96,6 +99,9 @@ All architect capabilities (when using this skill):
 | `shard-prd` | Break architecture into implementable pieces |
 | **Jira Integration** | |
 | `jira {issueKey}` | Fetch context from Jira ticket |
+| **Utilities** | |
+| `doc-out` | Output complete document to file |
+| `yolo` | Toggle Yolo Mode for rapid iteration |
 
 → [Command Reference](../../shared/reference/commands.md)
 

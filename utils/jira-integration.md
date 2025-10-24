@@ -108,11 +108,54 @@ Pass credentials via Authorization header (WebFetch handles this internally):
 Authorization: Basic base64(email:token)
 ```
 
-**Security Note**:
-- Credentials are read from environment variables (JIRA_EMAIL, JIRA_API_TOKEN) via core-config.yaml
-- Never hardcode credentials in URLs or code
-- Never embed credentials in URLs (e.g., `https://user:pass@domain.com`) as they may be logged
-- WebFetch will securely read credentials from your `.env` file via the config placeholders
+## Security
+
+### Credential Management
+
+**Where Credentials Are Stored:**
+- All Jira credentials are stored in your local `.env` file
+- The `.env` file is automatically excluded via `.gitignore`
+- Credentials never leave your local machine
+- No credentials are transmitted to the plugin repository
+
+**Environment Variable Pattern:**
+```yaml
+# core-config.yaml
+jira:
+  email: ${JIRA_EMAIL}      # Reads from .env
+  token: ${JIRA_API_TOKEN}  # Reads from .env
+```
+
+**Setup Security:**
+1. Copy `.env.example` to `.env` (gitignored)
+2. Add your personal API token from: https://id.atlassian.com/manage-profile/security/api-tokens
+3. Never commit `.env` file to git
+4. Never share `.env` file with others
+5. Use personal API tokens (not shared accounts)
+
+**Authentication Security:**
+- Uses Jira REST API with Basic Authentication
+- Credentials passed via secure Authorization headers
+- **Never embed credentials in URLs** (e.g., `https://user:pass@domain.com`) as they may be logged
+- WebFetch securely reads credentials from your `.env` file via config placeholders
+
+**Read-Only Access:**
+- Plugin only reads Jira data
+- No write, update, or delete operations
+- Minimal API surface area reduces risk
+
+**User Control:**
+- Optional feature (disabled by default)
+- Claude Code's permission system controls all network requests
+- Users must approve all API calls to Jira
+- Users can audit permissions with `/permissions`
+- Users can revoke access at any time
+
+**What NOT to Do:**
+- ❌ Never hardcode credentials in configuration files
+- ❌ Never include credentials in screenshots or logs
+- ❌ Never use production credentials in development
+- ❌ Never commit `.env` to version control
 
 ## Error Handling
 

@@ -55,7 +55,13 @@ version: 1.0.0
 5. **Validate Architecture**: Stories respect system boundaries
 6. **Document Dependencies**: Logical sequencing for implementation
 
-→ [Epic Decomposition Guide](./reference/epic-decomposition.md)
+**Epic Decomposition Process:**
+- Understand epic scope and boundaries
+- Identify natural story boundaries
+- Create story sequence (1-3 days each)
+- Size with PROBE methodology
+- Validate architecture alignment
+- Document dependencies
 
 ### Size a Story
 
@@ -67,8 +73,6 @@ version: 1.0.0
 4. **Assign Category**: VS (<2h), S (2-4h), M (4-8h), L (1-2d), VL (2-3d)
 5. **Document Confidence**: High/Medium/Low based on proxy quality
 
-→ [PSP Sizing Guide](./reference/psp-sizing.md)
-
 ### Calibrate Estimates
 
 **Improve accuracy:**
@@ -78,8 +82,6 @@ version: 1.0.0
 3. **Adjust Size Definitions**: Update category hour ranges
 4. **Update Proxies**: Use recent completions for future estimates
 5. **Track Improvement**: Measure accuracy trend over time
-
-→ [Calibration Guide](./reference/calibration.md)
 
 ## Available Commands
 
@@ -228,15 +230,12 @@ SM skill analysis:
 
 ## Reference Documentation
 
-All detailed content (loaded as needed):
+Shared references (all skills):
 
-- **[Epic Decomposition Guide](./reference/epic-decomposition.md)** - Breaking epics into stories
-- **[PSP Sizing Guide](./reference/psp-sizing.md)** - PROBE estimation method
-- **[Calibration Guide](./reference/calibration.md)** - Improving estimation accuracy
-- **[Commands Reference](./reference/commands.md)** - All available commands
-- **[Dependencies Reference](./reference/dependencies.md)** - Tasks, templates, integrations
-- **[Examples](./reference/examples.md)** - Real-world planning workflows
-- **[Best Practices](./reference/best-practices.md)** - Sizing and planning standards
+- **[Commands Reference](../../shared/reference/commands.md)** - All available commands
+- **[Dependencies Reference](../../shared/reference/dependencies.md)** - Tasks, templates, integrations
+- **[Examples](../../shared/reference/examples.md)** - Real-world planning workflows
+- **[Best Practices](../../shared/reference/best-practices.md)** - Sizing and planning standards
 
 ## Common Questions
 

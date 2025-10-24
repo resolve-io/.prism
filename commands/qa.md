@@ -74,13 +74,16 @@ commands:
       Fetch and display Jira issue details (Epic, Story, Bug).
       Execute fetch-jira-issue task with provided issue key.
       Automatically integrates context into subsequent workflows.
+  - design {story}: Alias for *test-design - Execute test-design task to create comprehensive test scenarios
   - gate {story}: Execute qa-gate task to write/update quality gate decision in directory from qa.qaLocation/gates/
+  - nfr {story}: Alias for *nfr-assess - Execute nfr-assess task to validate non-functional requirements
   - nfr-assess {story}: Execute nfr-assess task to validate non-functional requirements
   - review {story}: |
-      Adaptive, risk-aware comprehensive review. 
+      Adaptive, risk-aware comprehensive review.
       Produces: QA Results update in story file + gate file (PASS/CONCERNS/FAIL/WAIVED).
       Gate file location: qa.qaLocation/gates/{epic}.{story}-{slug}.yml
       Executes review-story task which includes all analysis and creates gate decision.
+  - risk {story}: Alias for *risk-profile - Execute risk-profile task to generate risk assessment matrix
   - risk-profile {story}: Execute risk-profile task to generate risk assessment matrix
   - test-design {story}: Execute test-design task to create comprehensive test scenarios
   - trace {story}: Execute trace-requirements task to map requirements to tests using Given-When-Then

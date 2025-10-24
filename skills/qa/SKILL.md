@@ -100,9 +100,7 @@ All test architect capabilities (when using this skill):
 | `review {story}` | Comprehensive adaptive review, produces QA Results + gate file |
 | `gate {story}` | Create/update quality gate decision |
 | **Analysis** | |
-| `nfr-assess {story}` | Validate non-functional requirements |
 | `risk-profile {story}` | Generate risk assessment matrix |
-| `trace {story}` | Map requirements to tests (Given-When-Then) |
 | **Test Design** | |
 | `test-design {story}` | Create comprehensive test scenarios |
 | **Integration** | |

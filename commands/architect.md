@@ -66,10 +66,19 @@ commands:
       Fetch and display Jira issue details (Epic, Story, Bug).
       Execute fetch-jira-issue task with provided issue key.
       Automatically integrates context into subsequent workflows.
-  - create-backend-architecture: use create-doc with architecture-tmpl.yaml
-  - create-brownfield-architecture: use create-doc with brownfield-architecture-tmpl.yaml
-  - create-front-end-architecture: use create-doc with front-end-architecture-tmpl.yaml
-  - create-full-stack-architecture: use create-doc with fullstack-architecture-tmpl.yaml
+  - create-architecture: |
+      Analyze project requirements and intelligently select the appropriate architecture template:
+
+      1. Review PRD (docs/prd.md) and project context to understand scope
+      2. Determine project type and recommend template:
+         - Fullstack (frontend + backend) → fullstack-architecture-tmpl.yaml
+         - Backend/Services only → architecture-tmpl.yaml
+         - Frontend only → discuss whether standalone frontend architecture is needed
+      3. Explain your recommendation with clear rationale
+      4. Get explicit user confirmation of template choice
+      5. Execute create-doc task with the confirmed template
+
+      This adaptive command handles all architecture scenarios intelligently.
   - doc-out: Output full document to current destination file
   - document-project: execute the task document-project.md
   - execute-checklist {checklist}: Run task execute-checklist (default->architect-checklist)
@@ -90,8 +99,6 @@ dependencies:
     - fetch-jira-issue.md
   templates:
     - architecture-tmpl.yaml
-    - brownfield-architecture-tmpl.yaml
-    - front-end-architecture-tmpl.yaml
     - fullstack-architecture-tmpl.yaml
   utils:
     - jira-integration.md

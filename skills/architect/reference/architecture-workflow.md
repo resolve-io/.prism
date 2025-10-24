@@ -521,17 +521,15 @@ We will use PostgreSQL...
 ### Creating Architecture Document
 
 ```
-# For backend system
-create-backend-architecture
+# Intelligent architecture creation - adapts to your project type
+create-architecture
 
-# For frontend app
-create-frontend-architecture
-
-# For complete system
-create-fullstack-architecture
-
-# For legacy system
-create-brownfield-architecture
+# The command will:
+# 1. Analyze your PRD (docs/prd.md)
+# 2. Determine if project is full-stack, backend-only, or frontend-only
+# 3. Recommend appropriate template
+# 4. Get your confirmation
+# 5. Create comprehensive architecture documentation
 ```
 
 ### Getting Jira Context

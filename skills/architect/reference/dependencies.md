@@ -42,10 +42,8 @@ Document templates used for creating architecture documentation.
 
 | Template | Purpose | Format | When Used |
 |----------|---------|--------|-----------|
-| `architecture-tmpl.yaml` | Backend architecture | YAML | Backend system design |
-| `front-end-architecture-tmpl.yaml` | Frontend architecture | YAML | Frontend application design |
-| `fullstack-architecture-tmpl.yaml` | Full-stack architecture | YAML | Complete system design |
-| `brownfield-architecture-tmpl.yaml` | Legacy assessment | YAML | Existing system modernization |
+| `architecture-tmpl.yaml` | Backend/services architecture | YAML | Backend system design, APIs, services |
+| `fullstack-architecture-tmpl.yaml` | Full-stack architecture | YAML | Complete system design (frontend + backend + infrastructure) |
 
 **Template Structure** (YAML):
 ```yaml
@@ -144,14 +142,15 @@ Reference documentation and preferences.
 
 ### 1. Command Invoked
 
-User triggers command (e.g., "create backend architecture")
+User triggers command (e.g., "create architecture")
 
 ### 2. Skill Maps to Task/Template
 
 Skill identifies required dependencies:
-- Command: `create-backend-architecture`
+- Command: `create-architecture`
 - Task: `.prism/tasks/create-doc.md`
-- Template: `.prism/templates/architecture-tmpl.yaml`
+- Analysis: Reviews PRD to determine project type
+- Template: `.prism/templates/fullstack-architecture-tmpl.yaml` OR `.prism/templates/architecture-tmpl.yaml`
 
 ### 3. Dependencies Loaded
 
@@ -321,22 +320,13 @@ Visual map of architect dependencies:
 ```
 architect skill
 ├── Commands (SKILL.md)
-│   └── create-backend-architecture
+│   └── create-architecture (intelligent adapter)
 │       ├── Task: create-doc.md
-│       │   └── Template: architecture-tmpl.yaml
+│       ├── Analysis: Review PRD to determine project type
+│       ├── Templates (selected based on project):
+│       │   ├── architecture-tmpl.yaml (backend/services)
+│       │   └── fullstack-architecture-tmpl.yaml (full-stack)
 │       └── Checklist: architect-checklist.md (optional)
-│
-├── create-frontend-architecture
-│   ├── Task: create-doc.md
-│   └── Template: front-end-architecture-tmpl.yaml
-│
-├── create-fullstack-architecture
-│   ├── Task: create-doc.md
-│   └── Template: fullstack-architecture-tmpl.yaml
-│
-├── create-brownfield-architecture
-│   ├── Task: create-doc.md
-│   └── Template: brownfield-architecture-tmpl.yaml
 │
 ├── research
 │   └── Task: create-deep-research-prompt.md
@@ -351,9 +341,12 @@ architect skill
 ├── shard-prd
 │   └── Task: shard-doc.md
 │
-└── jira
-    ├── Task: fetch-jira-issue.md
-    └── Utils: jira-integration.md
+├── jira
+│   ├── Task: fetch-jira-issue.md
+│   └── Utils: jira-integration.md
+│
+└── doc-out
+    └── Direct output operation
 ```
 
 ## Path Examples

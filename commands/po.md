@@ -66,9 +66,13 @@ commands:
       Fetch and display Jira issue details (Epic, Story, Bug).
       Execute fetch-jira-issue task with provided issue key.
       Automatically integrates context into subsequent workflows.
+  - create-prd: |
+      Execute create-prd task to create Product Requirements Document.
+      Works for new features or enhancements to existing systems.
+      Focuses on requirements clarity, integration strategy, and acceptance criteria.
+  - create-epic: Execute create-epic task to create a new epic with proper structure and requirements
+  - create-story: Execute create-story task to create a story from requirements with acceptance criteria
   - correct-course: execute the correct-course task
-  - create-epic: Create epic for brownfield projects (task brownfield-create-epic)
-  - create-story: Create task from requirements (task brownfield-create-story)
   - doc-out: Output full document to current destination file
   - execute-checklist-po: Run task execute-checklist (checklist po-master-checklist)
   - shard-doc {document} {destination}: run the task shard-doc against the optionally provided document to the specified destination
@@ -80,12 +84,17 @@ dependencies:
     - change-checklist.md
     - po-master-checklist.md
   tasks:
+    - create-prd.md
+    - create-epic.md
+    - create-story.md
     - correct-course.md
     - execute-checklist.md
     - fetch-jira-issue.md
     - shard-doc.md
     - validate-next-story.md
   templates:
+    - prd-tmpl.yaml
+    - epic-tmpl.yaml
     - story-tmpl.yaml
   utils:
     - jira-integration.md

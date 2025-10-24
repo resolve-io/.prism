@@ -124,11 +124,49 @@ describe('UserService', () => {
 - Always validate and sanitize user input
 - Use parameterized queries for database operations
 - Implement proper authentication and authorization
+- Validate at every layer (defense in depth)
 
-### Sensitive Data
-- Never log sensitive information
-- Use environment variables for secrets
+### Credential Management
+- **Environment Variables**: Store all credentials in environment variables, never hardcode
+- **Local Storage**: Use `.env` files for local development (automatically gitignored)
+- **No Hardcoded Secrets**: No API tokens, passwords, or keys in source code
+- **Personal Tokens**: Use personal API tokens, not shared accounts
+- **Token Security**: Never embed credentials in URLs (prevents logging exposure)
+
+### Configuration Security
+```yaml
+# ✅ Good: Use environment variable placeholders
+api:
+  token: ${API_TOKEN}
+
+# ❌ Bad: Never hardcode credentials
+api:
+  token: "sk-1234567890abcdef"
+```
+
+### Sensitive Data Handling
+- Never log sensitive information (passwords, tokens, PII)
 - Encrypt sensitive data at rest and in transit
+- Keep credentials out of chat messages and screenshots
+- Never commit `.env` files to version control
+
+### Gitignore Essentials
+Ensure these patterns are in `.gitignore`:
+```
+.env
+.env.local
+.env.*.local
+*.local.yaml
+*.local.json
+**/credentials.*
+**/secrets.*
+```
+
+### User Control & Permissions
+- Request minimal necessary permissions
+- Allow users to audit permissions via `/permissions` command
+- Respect user approval for network requests
+- Document what data is accessed and why
 
 ## Performance Guidelines
 

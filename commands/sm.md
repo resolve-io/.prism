@@ -85,6 +85,14 @@ commands:
       Fetch and display Jira issue details (Epic, Story, Bug).
       Execute fetch-jira-issue task with provided issue key.
       Automatically integrates context into subsequent workflows.
+  - create-epic: |
+      Execute create-epic task to create a new epic.
+      Works for both new features and enhancements to existing systems.
+      Focuses on integration points, dependencies, and risk analysis.
+  - create-story: |
+      Execute create-story task for quick story creation.
+      Works for new features, enhancements, or bug fixes.
+      Emphasizes proper sizing, testing requirements, and acceptance criteria.
   - decompose {epic}: |
       Execute epic-decomposition task to break epic into right-sized stories.
       If epic is a Jira issue key (e.g., PLAT-123), automatically fetch epic details.
@@ -131,6 +139,8 @@ dependencies:
   checklists:
     - story-draft-checklist.md
   tasks:
+    - create-epic.md
+    - create-story.md
     - epic-decomposition.md
     - create-next-story.md
     - probe-estimation.md
@@ -140,6 +150,7 @@ dependencies:
     - execute-checklist.md
     - fetch-jira-issue.md
   templates:
+    - epic-tmpl.yaml
     - story-tmpl.yaml
   docs:
     - estimation-history.yaml

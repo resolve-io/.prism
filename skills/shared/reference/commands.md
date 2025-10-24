@@ -45,25 +45,17 @@ When using skills in slash command mode, prefix with `*`:
 
 ### Document Creation
 
-**`create-backend-architecture`**
-- **Purpose**: Create backend system architecture document
-- **Template**: Uses `architecture-tmpl.yaml`
-- **Output**: Comprehensive backend architecture doc
-
-**`create-frontend-architecture`**
-- **Purpose**: Create frontend application architecture document
-- **Template**: Uses `front-end-architecture-tmpl.yaml`
-- **Output**: Frontend architecture with state management, routing, UI patterns
-
-**`create-fullstack-architecture`**
-- **Purpose**: Create complete full-stack architecture document
-- **Template**: Uses `fullstack-architecture-tmpl.yaml`
-- **Output**: Comprehensive system architecture covering all layers
-
-**`create-brownfield-architecture`**
-- **Purpose**: Assess and redesign existing system architecture
-- **Template**: Uses `brownfield-architecture-tmpl.yaml`
-- **Output**: Migration strategy and modernization plan
+**`create-architecture`**
+- **Purpose**: Intelligently create architecture documentation based on project type
+- **How it works**:
+  - Analyzes PRD and project requirements
+  - Recommends appropriate template (fullstack or backend-focused)
+  - Gets user confirmation
+  - Creates comprehensive architecture doc
+- **Templates**:
+  - `fullstack-architecture-tmpl.yaml` for full-stack projects
+  - `architecture-tmpl.yaml` for backend/services projects
+- **Output**: Complete architecture covering all relevant layers
 
 ### Analysis & Research
 
@@ -202,22 +194,6 @@ When using skills in slash command mode, prefix with `*`:
 - **Output**: `docs/qa/assessments/{epic}.{story}-test-design-{YYYYMMDD}.md`
 - **Use When**: After risk assessment, before development
 
-### Validation (During Development)
-
-**`trace-requirements {story}` (short: `*trace`)**
-- **Purpose**: Map requirements to tests using Given-When-Then
-- **Arguments**: `story` - Story file path or ID
-- **Task**: Executes `trace-requirements.md`
-- **Output**: `docs/qa/assessments/{epic}.{story}-trace-{YYYYMMDD}.md`
-- **Use When**: Mid-development checkpoint
-
-**`nfr-assess {story}` (short: `*nfr`)**
-- **Purpose**: Validate non-functional requirements (performance, security, reliability)
-- **Arguments**: `story` - Story file path or ID
-- **Task**: Executes `nfr-assess.md`
-- **Output**: `docs/qa/assessments/{epic}.{story}-nfr-{YYYYMMDD}.md`
-- **Use When**: Before considering story "done"
-
 ### Review (After Development)
 
 **`review {story}`**
@@ -251,14 +227,12 @@ When using skills in slash command mode, prefix with `*`:
 ```
 1. PO: *create-story
 2. PO: *validate-story-draft {story}
-3. QA: *risk {story}              # Assess risks
-4. QA: *design {story}            # Plan tests
+3. QA: *risk {story}              # Assess risks (optional)
+4. QA: *design {story}            # Plan tests (optional)
 5. Dev: *develop-story            # Implement
-6. QA: *trace {story}             # Verify coverage
-7. QA: *nfr {story}               # Check NFRs
-8. QA: *review {story}            # Full review
-9. Dev: *review-qa                # Apply fixes
-10. QA: *gate {story}             # Update gate
+6. QA: *review {story}            # Full review (optional)
+7. Dev: *review-qa                # Apply fixes (if needed)
+8. QA: *gate {story}              # Update gate (optional)
 ```
 
 ### Brownfield Story Lifecycle (High Risk)
@@ -269,11 +243,9 @@ When using skills in slash command mode, prefix with `*`:
 3. QA: *design {story}            # Plan regression tests
 4. PO: *validate-story-draft {story}
 5. Dev: *develop-story
-6. QA: *trace {story}             # Ensure old + new covered
-7. QA: *nfr {story}               # Performance regression check
-8. QA: *review {story}            # Deep integration analysis
-9. Dev: *review-qa
-10. QA: *gate {story}             # May WAIVE legacy issues
+6. QA: *review {story}            # Deep integration analysis
+7. Dev: *review-qa
+8. QA: *gate {story}              # May WAIVE legacy issues
 ```
 
 ## Command Flags & Options
@@ -290,7 +262,7 @@ When using skills in slash command mode, prefix with `*`:
 ## Best Practices
 
 **Command Usage:**
-- ✅ Use short forms in brownfield workflows (`*risk`, `*design`, `*trace`, `*nfr`)
+- ✅ Use short forms in brownfield workflows (`*risk`, `*design`)
 - ✅ Always run `*help` when entering a new skill
 - ✅ Use `*risk` before starting ANY brownfield work
 - ✅ Run `*design` after risk assessment
@@ -300,7 +272,6 @@ When using skills in slash command mode, prefix with `*`:
 - ❌ Skipping `*risk` on legacy code changes
 - ❌ Running `*review` before all tasks are complete
 - ❌ Using `*yolo` mode for critical stories
-- ❌ Forgetting to run `*trace` during development
 
 ## Integration Commands
 

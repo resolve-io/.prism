@@ -16,130 +16,60 @@ Commands can be invoked by:
 
 ## Document Creation Commands
 
-### create-backend-architecture
+### create-architecture
 
-**Purpose**: Create comprehensive backend system architecture document
-
-**What it does**:
-- Uses `create-doc` task with `architecture-tmpl.yaml` template
-- Guides through backend system design
-- Documents APIs, services, databases, infrastructure
-- Includes security, performance, scalability considerations
-
-**When to use**:
-- Designing new backend systems
-- Documenting existing backend architecture
-- Planning API-first applications
-- Microservices or monolithic architectures
-
-**Example**:
-```
-"I need to design the backend architecture for our inventory management system"
-```
-
-**Output**: Backend architecture document with:
-- System overview and components
-- API design and endpoints
-- Database schema and data flow
-- Service architecture
-- Security architecture
-- Deployment and scaling strategy
-
----
-
-### create-frontend-architecture
-
-**Purpose**: Create comprehensive frontend application architecture document
+**Purpose**: Intelligently create architecture documentation based on your project type
 
 **What it does**:
-- Uses `create-doc` task with `front-end-architecture-tmpl.yaml` template
-- Guides through frontend system design
-- Documents UI components, state management, routing
-- Includes performance, accessibility, user experience
+- Analyzes your PRD (`docs/prd.md`) and project context
+- Recommends the appropriate template:
+  - **Full-Stack** (`fullstack-architecture-tmpl.yaml`): Frontend + backend + infrastructure
+  - **Backend/Services** (`architecture-tmpl.yaml`): APIs, databases, services, microservices
+  - **Frontend Only**: Discusses standalone frontend architecture needs
+- Explains recommendation with clear rationale
+- Gets explicit user confirmation
+- Executes `create-doc` task with confirmed template
 
 **When to use**:
-- Designing new web or mobile applications
-- Documenting frontend architecture
-- Planning React, Vue, Angular, or other framework projects
-- SPA or MPA architecture decisions
+- Designing any new system architecture
+- Documenting existing architecture
+- Planning application structure
+- Technology selection and evaluation
 
-**Example**:
+**Examples**:
 ```
-"Design the frontend architecture for our customer portal"
-```
+"Create architecture for our project"
+→ Analyzes docs/prd.md
+→ Detects web app with API backend
+→ Recommends fullstack template
+→ Creates comprehensive architecture covering both layers
 
-**Output**: Frontend architecture document with:
-- Application structure and routing
-- Component hierarchy
-- State management strategy
-- API integration patterns
-- Performance optimization
-- Build and deployment
-
----
-
-### create-fullstack-architecture
-
-**Purpose**: Create complete application architecture (frontend + backend + infrastructure)
-
-**What it does**:
-- Uses `create-doc` task with `fullstack-architecture-tmpl.yaml` template
-- Guides through entire system design
-- Documents all layers: UI, API, services, data, infrastructure
-- Includes end-to-end workflows
-
-**When to use**:
-- Designing complete applications
-- Planning new products from scratch
-- Documenting full-stack systems
-- Coordinating frontend and backend development
-
-**Example**:
-```
-"Create full-stack architecture for our SaaS platform"
+"Design the architecture"
+→ Detects backend-only microservice project
+→ Recommends backend-focused template
+→ Creates service architecture with API specs
 ```
 
-**Output**: Full-stack architecture document with:
+**Output varies by project type**:
+
+**Full-Stack Projects**:
 - System overview (all layers)
-- Frontend architecture
-- Backend architecture
-- Data architecture
-- Infrastructure and deployment
+- Platform and infrastructure choices
+- Frontend architecture (components, routing, state)
+- Backend architecture (APIs, services, data)
+- Unified project structure (monorepo)
 - Integration patterns
 - End-to-end workflows
+- Development and deployment
 
----
-
-### create-brownfield-architecture
-
-**Purpose**: Assess and redesign existing systems
-
-**What it does**:
-- Uses `create-doc` task with `brownfield-architecture-tmpl.yaml` template
-- Analyzes current system state
-- Identifies problems and technical debt
-- Proposes modernization strategy
-- Plans phased migration
-
-**When to use**:
-- Modernizing legacy systems
-- Planning major refactoring
-- Assessing technical debt
-- Migration to new technologies
-- System rescue/recovery
-
-**Example**:
-```
-"We need to modernize our 10-year-old monolithic PHP application"
-```
-
-**Output**: Brownfield architecture document with:
-- Current system assessment
-- Problems and pain points
-- Proposed target architecture
-- Migration strategy (e.g., strangler fig pattern)
-- Phased implementation plan
-- Risk mitigation
+**Backend/Services Projects**:
+- System overview and components
+- API design and endpoints
+- Service architecture
+- Database schema and data flow
+- Security architecture
+- Error handling and logging
+- Infrastructure and deployment
 
 ---
 
@@ -387,10 +317,10 @@ yolo  # Toggle off
 1. Start with requirements:
    jira PLAT-789  # Get context
 
-2. Create architecture:
-   create-fullstack-architecture
+2. Create architecture (intelligently adapts to project type):
+   create-architecture
 
-3. Research specific topics:
+3. Research specific topics as needed:
    research "authentication patterns for SaaS"
 
 4. Quality check:
@@ -403,22 +333,19 @@ yolo  # Toggle off
    doc-out
 ```
 
-### Brownfield Modernization Flow
+### Project Documentation Flow
 
 ```
 1. Document current state:
    document-project
 
-2. Create modernization plan:
-   create-brownfield-architecture
+2. Research improvement patterns:
+   research "microservices migration strategies"
 
-3. Research migration patterns:
-   research "strangler fig pattern for legacy migration"
-
-4. Quality check:
+3. Quality check:
    execute-checklist
 
-5. Plan implementation:
+4. Plan implementation:
    shard-prd
 ```
 
@@ -437,10 +364,8 @@ Commands rely on:
 - `shard-doc.md` - Document sharding
 
 ### Templates (`.prism/templates/`)
-- `architecture-tmpl.yaml` - Backend architecture
-- `front-end-architecture-tmpl.yaml` - Frontend architecture
+- `architecture-tmpl.yaml` - Backend/services architecture
 - `fullstack-architecture-tmpl.yaml` - Full-stack architecture
-- `brownfield-architecture-tmpl.yaml` - Legacy system assessment
 
 ### Checklists (`.prism/checklists/`)
 - `architect-checklist.md` - Architecture quality checklist
@@ -456,10 +381,10 @@ You don't need to memorize command names. The skill understands natural language
 
 | You say | Maps to |
 |---------|---------|
-| "Design backend architecture" | `create-backend-architecture` |
-| "Create frontend architecture doc" | `create-frontend-architecture` |
-| "Full-stack design" | `create-fullstack-architecture` |
-| "Assess legacy system" | `create-brownfield-architecture` |
+| "Design the architecture" | `create-architecture` |
+| "Create architecture document" | `create-architecture` |
+| "Design backend architecture" | `create-architecture` (recommends backend template) |
+| "Full-stack architecture" | `create-architecture` (recommends fullstack template) |
 | "Research GraphQL vs REST" | `research "GraphQL vs REST"` |
 | "Document this project" | `document-project` |
 | "Run quality checklist" | `execute-checklist` |
