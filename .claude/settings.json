@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/enforce-story-context.sh",
+            "description": "Ensure workflow commands have required story context"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/track-current-story.sh",
+            "description": "Track story file as current workflow context"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/enforce-story-updates.sh",
+            "description": "Validate story file updates"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/validate-workflow-phase.sh",
+            "description": "Ensure story phase matches status"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/validate-required-sections.sh",
+            "description": "Verify all required PRISM sections exist"
+          }
+        ]
+      }
+    ]
+  }
+}

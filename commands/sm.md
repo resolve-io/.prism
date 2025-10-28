@@ -93,16 +93,160 @@ commands:
       Execute create-story task for quick story creation.
       Works for new features, enhancements, or bug fixes.
       Emphasizes proper sizing, testing requirements, and acceptance criteria.
-  - decompose {epic}: |
-      Execute epic-decomposition task to break epic into right-sized stories.
-      If epic is a Jira issue key (e.g., PLAT-123), automatically fetch epic details.
-      Uses PSP sizing to ensure 1-3 day story sizes.
-      Maintains architectural alignment in splits.
-  - draft: |
-      Execute create-next-story task with PROBE estimation.
-      If Jira epic context available, use for story creation.
-      Ensures story is properly sized (not too large/small).
-      Assigns story points and maps to size category.
+  - decompose {epic}:
+      orchestration: |
+        PHASE 1: Epic Analysis
+        - Load epic from docs/prd/epic-{number}.md
+        - Review epic objectives and requirements
+        - Identify natural story boundaries
+        - Apply PSP sizing discipline
+
+        PHASE 2: Epic Understanding (DELEGATED)
+        - DELEGATE to epic-analyzer sub-agent:
+          * Break down epic into logical story candidates
+          * Identify dependencies between stories
+          * Suggest story sequencing
+          * Estimate story sizes
+          * Receive decomposition suggestions
+
+        PHASE 3: Story Creation Loop
+        - FOR EACH suggested story:
+          * Draft story following decomposition suggestions
+          * Apply PROBE estimation
+          * DELEGATE to story validators (same as *draft)
+          * Collect validation results
+          * Create story file if valid
+
+        PHASE 4: Epic Coverage Verification
+        - DELEGATE to epic-coverage-validator:
+          * Compare all created stories against epic
+          * Identify any epic requirements not covered
+          * Check for overlapping story scope
+          * Verify logical story sequence
+          * Receive coverage report
+
+        PHASE 5: Completion
+        - Display decomposition summary
+        - List all created stories with validation status
+        - Highlight any gaps in epic coverage
+        - Provide recommendations for next steps
+
+      sub_agents:
+        epic-analyzer:
+          when: Before creating any stories
+          input: Epic file path, architecture references
+          output: Story candidates with dependencies and sizing
+          model: sonnet
+
+        story-structure-validator:
+          when: After each story draft
+          input: Story file path
+          output: Structure compliance report
+          model: haiku
+
+        story-content-validator:
+          when: After structure validation
+          input: Story file path
+          output: Content quality report
+          model: sonnet
+
+        epic-alignment-checker:
+          when: After content validation
+          input: Story file path, epic reference
+          output: Alignment report
+          model: sonnet
+
+        architecture-compliance-checker:
+          when: After alignment check
+          input: Story file path, architecture references
+          output: Compliance report
+          model: sonnet
+
+        epic-coverage-validator:
+          when: After all stories created
+          input: Epic path, list of created story paths
+          output: Coverage report with gaps identified
+          model: sonnet
+  - draft:
+      orchestration: |
+        PHASE 1: Story Creation
+        - Execute create-next-story task
+        - Read previous story Dev/QA notes for lessons learned
+        - Reference sharded epic from docs/prd/
+        - Reference architecture patterns from docs/architecture/
+        - Apply PROBE estimation
+        - Create story file in docs/stories/{epic-number}/
+
+        PHASE 2: Immediate Validation (CRITICAL)
+        - DELEGATE to story-structure-validator:
+          * Verify all required sections present
+          * Check YAML frontmatter format
+          * Validate markdown structure
+          * Receive structure compliance report
+
+        - DELEGATE to story-content-validator:
+          * Verify acceptance criteria are measurable
+          * Check tasks are properly sized (1-3 days)
+          * Validate Dev Notes provide clear guidance
+          * Ensure Testing section has scenarios
+          * Receive content quality report
+
+        - DELEGATE to epic-alignment-checker:
+          * Compare story against parent epic requirements
+          * Verify all epic acceptance criteria covered
+          * Check no scope creep beyond epic
+          * Identify any gaps in coverage
+          * Receive alignment report
+
+        - DELEGATE to architecture-compliance-checker:
+          * Verify story follows established patterns
+          * Check technology stack alignment
+          * Validate system boundaries respected
+          * Identify any architectural concerns
+          * Receive compliance report
+
+        PHASE 3: Quality Decision
+        - If ALL validators report success:
+          * Mark story status as "Draft"
+          * Display summary of validations
+          * Story ready for optional PO review
+
+        - If ANY validator reports issues:
+          * Display all validation issues
+          * Ask user: Fix now or proceed with issues?
+          * If fix: Address issues and re-validate
+          * If proceed: Mark issues in story notes
+          * Update story status to "Draft (with issues)"
+
+        PHASE 4: Completion
+        - Summarize story creation
+        - List validation results
+        - Provide next steps (optional PO validation or user approval)
+
+      sub_agents:
+        story-structure-validator:
+          when: Immediately after story file created
+          input: Story file path
+          output: Structure compliance report (sections present, format correct)
+          model: haiku
+
+        story-content-validator:
+          when: After structure validation passes
+          input: Story file path
+          output: Content quality report (criteria measurable, tasks sized, etc.)
+          model: sonnet
+
+        epic-alignment-checker:
+          when: After content validation passes
+          input: Story file path, epic reference
+          output: Alignment report (requirements covered, no scope creep)
+          model: sonnet
+
+        architecture-compliance-checker:
+          when: After epic alignment passes
+          input: Story file path, architecture references
+          output: Compliance report (patterns followed, boundaries respected)
+          model: sonnet
   - estimate {story}: |
       Execute probe-estimation task for existing story.
       If story is Jira issue key, fetch current details first.

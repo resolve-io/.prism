@@ -5,6 +5,59 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-10-27
+
+### Added
+- **Hooks Manager Skill** - Complete skill for managing Claude Code hooks
+  - Created comprehensive hooks-manager skill with 15 commands
+  - Reference documentation: commands.md (819 lines), event-types.md (764 lines), examples.md (648 lines)
+  - New security.md (378 lines) with threat models, checklists, and secure patterns
+  - 13 pre-built hook patterns for logging, safety, automation, and notifications
+  - Progressive disclosure structure following skill-builder patterns
+
+- **PRISM Workflow Hooks** - Active hooks enforcing core-development-cycle workflow
+  - enforce-story-context: Blocks workflow commands requiring story context
+  - track-current-story: Captures story file path from *draft command
+  - validate-story-updates: Ensures required sections in story files
+  - validate-required-sections: Status-based validation of story completeness
+
+### Changed
+- **Hooks Configuration Format** - Updated to official Claude Code format
+  - Migrated from flat array to nested `hooks.EventName[].matcher.hooks[]` structure
+  - Added `${CLAUDE_PLUGIN_ROOT}` variable for all plugin hook paths
+  - Added `"type": "command"` property to all hook definitions
+  - Updated hooks/hooks.json with correct nested format
+
+- **Progressive Disclosure Compliance** - hooks-manager skill optimization
+  - Reduced SKILL.md from 363 lines to 179 lines (51% reduction)
+  - Moved detailed content to reference files (Level 3 progressive disclosure)
+  - Added quick start with 3-level learning path (30 sec → 2 min → deep dive)
+  - All reference .md files properly organized in /reference/ folder
+
+### Fixed
+- **Hook Event Accuracy** - Corrected blocking behavior per official docs
+  - Updated exit code 2 behavior documentation per event type
+  - Fixed PostToolUse blocking description (tool already executed, stderr to Claude)
+  - Added accurate exit code behavior to all 9 event types
+  - Documented UserPromptSubmit blocking (erases prompt, stderr to user)
+  - Clarified Stop/SubagentStop blocking behavior (blocks stoppage)
+
+### Documented
+- **Complete Hook Schema** - Canonical configuration reference
+  - Added Configuration Format section to commands.md (142 lines)
+  - Documented plugin vs user-level hooks differences
+  - Complete TypeScript schema notation for hooks.json
+  - All 9 event names with timing and blocking capabilities
+  - Matcher patterns, exit codes, and timeout configurations
+  - PRISM's actual working configuration as reference example
+
+### Validated
+- All 4 PRISM hooks correctly formatted and functional
+- hooks-manager skill follows progressive disclosure patterns
+- 2,788 lines of comprehensive hooks documentation
+- Configuration matches official docs.claude.com specification
+- Security best practices documented with 5 threat models
+
 ## [1.3.0] - 2025-10-24
 
 ### Added

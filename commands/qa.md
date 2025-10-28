@@ -75,18 +75,140 @@ commands:
       Execute fetch-jira-issue task with provided issue key.
       Automatically integrates context into subsequent workflows.
   - design {story}: Alias for *test-design - Execute test-design task to create comprehensive test scenarios
-  - gate {story}: Execute qa-gate task to write/update quality gate decision in directory from qa.qaLocation/gates/
+  - gate {story}:
+      orchestration: |
+        PHASE 1: Load Existing Context
+        - Load story file
+        - Check if gate file already exists in qa.qaLocation/gates/
+        - Load existing gate if present
+
+        PHASE 2: Gate Creation/Update (Delegated)
+        - DELEGATE to qa-gate-manager:
+          * Input: story_path, findings (from current review), update_mode
+          * Create new gate OR update existing gate
+          * Receive gate decision and file path
+
+        PHASE 3: Confirmation
+        - Report gate file location and status to user
+        - If updating: show what changed
+
+      sub_agents:
+        qa-gate-manager:
+          when: After loading context (Phase 2)
+          pass: Gate file created/updated successfully
+          fail: Should not fail - always creates/updates gate
+          output: |
+            JSON with gate_file_path, gate_id, status, and confirmation message
   - nfr {story}: Alias for *nfr-assess - Execute nfr-assess task to validate non-functional requirements
   - nfr-assess {story}: Execute nfr-assess task to validate non-functional requirements
-  - review {story}: |
-      Adaptive, risk-aware comprehensive review.
-      Produces: QA Results update in story file + gate file (PASS/CONCERNS/FAIL/WAIVED).
-      Gate file location: qa.qaLocation/gates/{epic}.{story}-{slug}.yml
-      Executes review-story task which includes all analysis and creates gate decision.
+  - review {story}:
+      orchestration: |
+        PHASE 1: Context Loading
+        - Load story file from docs/stories/
+        - Load related epic from docs/prd/
+        - Load File List from Dev Agent Record
+        - Load relevant architecture sections
+
+        PHASE 2: Requirements Traceability (Delegated)
+        - DELEGATE to requirements-tracer:
+          * Input: story_path, epic_reference, file_list
+          * Trace PRD → Epic → Story → Implementation → Tests
+          * Identify coverage gaps
+          * Validate Given-When-Then patterns
+          * Receive traceability report (JSON)
+        - If traceability status is MISSING or critical gaps:
+          * Document as CRITICAL issue
+          * Prepare for FAIL gate status
+
+        PHASE 3: Manual Quality Review
+        - Review code for PRISM principles:
+          * Predictability: Consistent patterns?
+          * Resilience: Error handling adequate?
+          * Intentionality: Clear, purposeful code?
+          * Sustainability: Maintainable?
+          * Maintainability: Domain boundaries clear?
+        - Check architecture alignment
+        - Identify technical debt
+        - Assess non-functional requirements
+        - Review test quality and coverage
+        - Compile quality issues by severity (critical/high/medium/low)
+
+        PHASE 4: Gate Decision (Delegated)
+        - Compile all findings:
+          * Traceability report from Phase 2
+          * Coverage metrics
+          * Code quality issues from Phase 3
+          * Architecture concerns
+          * NFR compliance
+          * Risk assessment
+        - DELEGATE to qa-gate-manager:
+          * Input: story_path, all findings, recommendations
+          * Receive gate decision (PASS/CONCERNS/FAIL/WAIVED)
+          * Gate file created at docs/qa/gates/{epic}.{story}-{slug}.yml
+          * Receive gate_id and file path
+
+        PHASE 5: Story Update
+        - Append QA Results to story file (in QA Results section ONLY):
+          * Traceability report summary
+          * Coverage metrics
+          * Quality findings by severity
+          * Recommendations
+          * Reference to gate file: "Gate: {gate_id} (see {gate_file_path})"
+        - If status is PASS:
+          * Update story status: "Review" → "Done"
+        - If status is CONCERNS/FAIL:
+          * Keep story in "Review" status
+          * Clearly list items to fix
+        - Notify user of review completion with gate status
+
+      sub_agents:
+        requirements-tracer:
+          when: Early in review (Phase 2) - before manual review
+          pass: Continue to manual quality review with traceability data
+          fail: Document critical gaps, prepare FAIL gate status
+          output: |
+            JSON with traceability status, coverage percentage, trace matrix,
+            gaps analysis, and recommendations
+
+        qa-gate-manager:
+          when: After all analysis complete (Phase 4) - final decision point
+          pass: Gate file created, story updated, workflow complete
+          fail: Should not fail - always creates gate (may be FAIL status)
+          output: |
+            JSON with gate_file_path, gate_id, status, issue counts,
+            and recommendations for next action
   - risk {story}: Alias for *risk-profile - Execute risk-profile task to generate risk assessment matrix
   - risk-profile {story}: Execute risk-profile task to generate risk assessment matrix
   - test-design {story}: Execute test-design task to create comprehensive test scenarios
-  - trace {story}: Execute trace-requirements task to map requirements to tests using Given-When-Then
+  - trace {story}:
+      orchestration: |
+        PHASE 1: Load Context
+        - Load story file
+        - Load related epic
+        - Extract File List from Dev Agent Record
+
+        PHASE 2: Traceability Analysis (Delegated)
+        - DELEGATE to requirements-tracer:
+          * Input: story_path, epic_reference, file_list
+          * Trace PRD → Epic → Story → Implementation → Tests
+          * Identify coverage gaps
+          * Validate Given-When-Then patterns
+          * Receive traceability report
+
+        PHASE 3: Report Results
+        - Display traceability matrix
+        - Highlight gaps found
+        - Show coverage percentage
+        - Provide recommendations
+
+      sub_agents:
+        requirements-tracer:
+          when: After loading context (Phase 2)
+          pass: Traceability report generated and displayed
+          fail: Report errors, may indicate missing files or malformed story
+          output: |
+            JSON with traceability status, coverage percentage, trace matrix,
+            gaps analysis, and actionable recommendations
   - exit: Say goodbye as the Test Architect, and then abandon inhabiting this persona
 dependencies:
   docs:

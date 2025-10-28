@@ -88,6 +88,48 @@ commands:
       Execute fetch-jira-issue task with provided issue key.
       Automatically integrates context into subsequent workflows.
   - develop-story:
+      - orchestration: |
+          PHASE 1: Startup & Context Loading
+          - Set PSP Estimation Tracking Started field to current timestamp
+          - Load story and understand requirements
+          - Review dev guidelines from core-config.yaml devLoadAlwaysFiles
+
+          PHASE 2: Implementation Loop
+          - FOR EACH task in story:
+            * Read task description and acceptance criteria
+            * Implement following PRISM principles (see prism-implementation section)
+            * Write comprehensive tests (TDD - Resilience principle)
+            * DELEGATE to lint-checker sub-agent:
+              - Input: Changed files from current task implementation
+              - Action: Review code quality and formatting
+              - Output: Linting violations and recommendations
+              - Response: Address any CRITICAL issues before proceeding
+            * Execute validations (tests + linting)
+            * ONLY if ALL pass: Update task checkbox with [x]
+            * Update File List section with any new/modified/deleted source files
+            * Repeat until all tasks complete
+
+          PHASE 3: Completion Validation
+          - DELEGATE to file-list-auditor sub-agent:
+            * Input: Story file path, current branch name
+            * Action: Verify File List accuracy against actual git changes
+            * Output: Validation report with discrepancies (if any)
+            * Response: Update File List if discrepancies found
+
+          - DELEGATE to test-runner sub-agent:
+            * Input: Story file path, test command from project config
+            * Action: Execute complete test suite (unit + integration)
+            * Output: Test results with pass/fail status and coverage
+            * Response: Fix any failing tests before proceeding
+            * Requirement: ALL tests must pass to proceed
+
+          PHASE 4: Final Checks & Story Closure
+          - Update PSP Estimation Tracking Completed field with current timestamp
+          - Calculate Actual Hours from Started/Completed timestamps
+          - Update Estimation Accuracy percentage
+          - Execute story-dod-checklist task (Definition of Done validation)
+          - Set story status to 'Ready for Review'
+          - HALT for user review and next instructions
       - startup: 'Set PSP Estimation Tracking Started field to current timestamp'
       - order-of-execution: 'Read (first or next) task→Implement Task following PRISM principles→Write comprehensive tests (Resilience)→Execute validations→Only if ALL pass, then update the task checkbox with [x]→Update story section File List to ensure it lists any new or modified or deleted source file→repeat order-of-execution until complete'
       - prism-implementation:
@@ -103,6 +145,27 @@ commands:
       - blocking: 'HALT for: Unapproved deps needed, confirm with user | Ambiguous after story check | 3 failures attempting to implement or fix something repeatedly | Missing config | Failing regression'
       - ready-for-review: 'Code matches requirements + All validations pass + Follows PRISM standards + File List complete'
       - completion: "All Tasks and Subtasks marked [x] and have tests→Validations and full regression passes (DON'T BE LAZY, EXECUTE ALL TESTS and CONFIRM)→Ensure File List is Complete→Update PSP Estimation Tracking Completed field with current timestamp→Calculate Actual Hours from Started/Completed timestamps→Update Estimation Accuracy percentage→run the task execute-checklist for the checklist story-dod-checklist→set story status: 'Ready for Review'→HALT"
+      - sub_agents:
+          lint-checker:
+            when: After implementing each task, before marking task complete
+            input: Changed files from current task implementation
+            output: Linting violations categorized by severity, code quality recommendations
+            model: haiku
+            response_handling: Address CRITICAL and ERROR level issues immediately; log WARNINGS for future improvement
+
+          file-list-auditor:
+            when: Before marking story as 'Ready for Review', in completion phase
+            input: Story file path, current git branch name
+            output: File List validation report with any discrepancies between documented and actual changes
+            model: haiku
+            response_handling: Update File List section if discrepancies found; re-run validation to confirm accuracy
+
+          test-runner:
+            when: Before marking story as 'Ready for Review', after file-list-auditor completes
+            input: Story file path, test command from project configuration
+            output: Complete test suite results with pass/fail status, coverage metrics, and failure details
+            model: haiku
+            response_handling: ALL tests must pass to proceed; investigate and fix any failures before continuing to story closure
   - explain: teach me what and why you did whatever you just did in detail so I can learn. Explain to me as if you were training a junior engineer, emphasizing how PRISM principles were applied.
   - review-qa: run task `apply-qa-fixes.md'
   - run-tests: Execute linting and tests
