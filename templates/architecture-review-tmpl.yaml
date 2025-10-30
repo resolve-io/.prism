@@ -1,0 +1,228 @@
+# Architecture Review Report
+component_system: "{{component_name}}"
+review_date: "{{review_date}}"
+reviewer: "Pierre (Peer Review Specialist)"
+architecture_document: "{{architecture_doc_path}}"
+
+executive_summary:
+  overall_architecture_health:
+    excellent: false
+    good: false
+    acceptable: false
+    poor: false
+
+  alignment_score:
+    requirements_alignment: "{{score}}/10"
+    prism_principles: "{{score}}/10"
+    best_practices: "{{score}}/10"
+    future_scalability: "{{score}}/10"
+
+architecture_assessment:
+  system_design_review:
+    component_structure:
+      current_state: "{{component_structure_description}}"
+      assessment: "{{component_assessment}}"
+      recommendations: "{{component_recommendations}}"
+
+    data_flow:
+      current_implementation: "{{data_flow_description}}"
+      issues_identified: "{{data_flow_issues}}"
+      improvements: "{{data_flow_improvements}}"
+
+    integration_points:
+      apis_services: "{{integration_description}}"
+      concerns: "{{integration_concerns}}"
+
+  prism_architecture_principles:
+    predictability:
+      consistent_patterns: "{{assessment}}"
+      standard_interfaces: "{{assessment}}"
+      clear_contracts: "{{assessment}}"
+
+    resilience:
+      fault_tolerance: "{{assessment}}"
+      recovery_mechanisms: "{{assessment}}"
+      circuit_breakers: "{{assessment}}"
+
+    intentionality:
+      design_clarity: "{{assessment}}"
+      decision_documentation: "{{assessment}}"
+      purpose_alignment: "{{assessment}}"
+
+    sustainability:
+      long_term_viability: "{{assessment}}"
+      maintenance_burden: "{{assessment}}"
+      evolution_capability: "{{assessment}}"
+
+    maintainability:
+      code_organization: "{{assessment}}"
+      dependency_management: "{{assessment}}"
+      update_complexity: "{{assessment}}"
+
+pattern_analysis:
+  design_patterns_used:
+    - pattern: "{{pattern_1}}"
+      implementation: "{{implementation}}"
+      assessment: "{{assessment}}"
+      notes: "{{notes}}"
+    - pattern: "{{pattern_2}}"
+      implementation: "{{implementation}}"
+      assessment: "{{assessment}}"
+      notes: "{{notes}}"
+
+  anti_patterns_detected:
+    - anti_pattern: "{{antipattern_1}}"
+      location: "{{location}}"
+      impact: "{{impact}}"
+      resolution: "{{resolution}}"
+
+technical_debt_assessment:
+  current_debt:
+    - item: "{{debt_item_1}}"
+      impact: "{{impact}}"
+      effort_to_resolve: "{{effort}}"
+      priority: "{{priority}}"
+    - item: "{{debt_item_2}}"
+      impact: "{{impact}}"
+      effort_to_resolve: "{{effort}}"
+      priority: "{{priority}}"
+
+  debt_prevention: "{{debt_prevention_strategies}}"
+
+scalability_analysis:
+  current_limitations: "{{scalability_limitations}}"
+  growth_considerations: "{{growth_considerations}}"
+  recommended_improvements: "{{scalability_improvements}}"
+
+security_architecture:
+  security_posture: "{{security_assessment}}"
+  vulnerabilities: "{{vulnerabilities_found}}"
+  recommendations: "{{security_recommendations}}"
+
+performance_architecture:
+  bottlenecks: "{{performance_bottlenecks}}"
+  optimization_opportunities: "{{optimization_opportunities}}"
+  caching_strategy: "{{caching_assessment}}"
+
+technology_stack_review:
+  current_stack_assessment:
+    - technology: "{{tech_1}}"
+      version: "{{version}}"
+      status: "{{status}}"
+      notes: "{{notes}}"
+    - technology: "{{tech_2}}"
+      version: "{{version}}"
+      status: "{{status}}"
+      notes: "{{notes}}"
+
+  upgrade_recommendations: "{{upgrade_recommendations}}"
+  technology_risks: "{{technology_risks}}"
+
+compliance_and_standards:
+  industry_standards:
+    rest_api_standards: false
+    security_standards_owasp: false
+    accessibility_standards: false
+    performance_standards: false
+
+  internal_standards:
+    coding_conventions: false
+    documentation_standards: false
+    testing_requirements: false
+    deployment_standards: false
+
+risk_assessment:
+  high_risk_areas:
+    - "{{high_risk_1}}"
+    - "{{high_risk_2}}"
+
+  medium_risk_areas:
+    - "{{medium_risk_1}}"
+    - "{{medium_risk_2}}"
+
+  mitigation_strategies: "{{mitigation_strategies}}"
+
+recommendations:
+  critical_must_address:
+    - "{{critical_1}}"
+    - "{{critical_2}}"
+
+  important_should_address:
+    - "{{important_1}}"
+    - "{{important_2}}"
+
+  nice_to_have:
+    - "{{nice_to_have_1}}"
+    - "{{nice_to_have_2}}"
+
+implementation_roadmap:
+  phase_1_immediate:
+    sprint: "Sprint 1"
+    tasks:
+      - "{{task_1}}"
+      - "{{task_2}}"
+
+  phase_2_short_term:
+    sprints: "Next 2-3 Sprints"
+    tasks:
+      - "{{task_3}}"
+      - "{{task_4}}"
+
+  phase_3_long_term:
+    tasks:
+      - "{{task_5}}"
+      - "{{task_6}}"
+
+documentation_gaps:
+  missing_documentation:
+    - "{{missing_doc_1}}"
+    - "{{missing_doc_2}}"
+
+  outdated_documentation:
+    - "{{outdated_doc_1}}"
+    - "{{outdated_doc_2}}"
+
+testing_architecture:
+  test_coverage:
+    unit_tests: "{{coverage}}%"
+    integration_tests: "{{coverage}}%"
+    e2e_tests: "{{coverage}}%"
+
+  testing_gaps: "{{testing_gaps}}"
+
+monitoring_and_observability:
+  current_state: "{{monitoring_assessment}}"
+  improvements_needed: "{{monitoring_improvements}}"
+
+conclusion:
+  summary: "{{summary_statement}}"
+
+  key_takeaways:
+    - "{{takeaway_1}}"
+    - "{{takeaway_2}}"
+    - "{{takeaway_3}}"
+
+  next_steps:
+    - "{{next_step_1}}"
+    - "{{next_step_2}}"
+    - "{{next_step_3}}"
+
+  follow_up_review:
+    scheduled_date: "{{follow_up_date}}"
+    focus_areas: "{{focus_areas}}"
+
+appendix:
+  diagrams_referenced:
+    - "{{diagram_1}}"
+    - "{{diagram_2}}"
+
+  related_documents:
+    - "{{document_1}}"
+    - "{{document_2}}"
+
+  tools_used_for_review:
+    - "{{tool_1}}"
+    - "{{tool_2}}"
+
+metadata:
+  system: "PRISM Architecture Review - Building Excellence Through Continuous Assessment"

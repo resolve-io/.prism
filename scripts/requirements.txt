@@ -1,0 +1,8 @@
+# PRISM Documentation Validation Script Requirements
+# Story-002: Hierarchical Progressive Disclosure Pattern Validation
+
+# Token counting library for Claude-compatible token budget validation
+# Uses cl100k_base encoding (same as GPT-4 and Claude)
+tiktoken>=0.5.1
+
+# Future dependencies can be added here as validation expands

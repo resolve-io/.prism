@@ -1,0 +1,94 @@
+# Code Feedback Template
+file: "{{file_path}}"
+reviewer: "Pierre (Peer Review Specialist)"
+date: "{{review_date}}"
+feedback_type: "{{feedback_type}}"
+
+summary: "{{brief_summary}}"
+
+prism_alignment:
+  predictability:
+    score: "{{score}}/5"
+    comment: "{{comment}}"
+  resilience:
+    score: "{{score}}/5"
+    comment: "{{comment}}"
+  intentionality:
+    score: "{{score}}/5"
+    comment: "{{comment}}"
+  sustainability:
+    score: "{{score}}/5"
+    comment: "{{comment}}"
+  maintainability:
+    score: "{{score}}/5"
+    comment: "{{comment}}"
+
+specific_feedback:
+  - line: "{{line_number}}"
+    code_snippet: "{{code_snippet}}"
+    issue_type: "{{issue_type}}"
+    severity: "{{severity}}"
+    current_implementation: |
+      {{current_code}}
+    issue_description: "{{issue_description}}"
+    suggested_improvement: |
+      {{suggested_code}}
+    rationale: "{{rationale}}"
+    learning_point: "{{educational_note}}"
+
+  - line: "{{line_number}}"
+    code_snippet: "{{code_snippet}}"
+    issue_type: "{{issue_type}}"
+    severity: "{{severity}}"
+    current_implementation: |
+      {{current_code}}
+    issue_description: "{{issue_description}}"
+    suggested_improvement: |
+      {{suggested_code}}
+    rationale: "{{rationale}}"
+
+positive_observations:
+  - line: "{{line_number}}"
+    code_example: |
+      {{good_code_example}}
+    why_this_is_good: "{{explanation}}"
+
+overall_recommendations:
+  pattern_consistency: "{{pattern_feedback}}"
+  error_handling: "{{error_handling_feedback}}"
+  code_organization: "{{organization_feedback}}"
+  testing: "{{testing_feedback}}"
+  documentation: "{{documentation_feedback}}"
+
+action_items:
+  required_changes:
+    - "{{required_change_1}}"
+    - "{{required_change_2}}"
+
+  suggested_improvements:
+    - "{{suggestion_1}}"
+    - "{{suggestion_2}}"
+
+  future_considerations:
+    - "{{future_item_1}}"
+    - "{{future_item_2}}"
+
+resources_and_references:
+  relevant_documentation:
+    - "{{doc_link_1}}"
+    - "{{doc_link_2}}"
+
+  best_practices:
+    - "{{best_practice_1}}"
+    - "{{best_practice_2}}"
+
+  similar_examples_in_codebase:
+    - "{{example_file_1}}"
+    - "{{example_file_2}}"
+
+follow_up:
+  next_review_date: "{{next_review_date}}"
+  focus_areas: "{{focus_areas}}"
+
+metadata:
+  system: "PRISM Code Feedback - Continuous Improvement Through Collaboration"

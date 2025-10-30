@@ -1,0 +1,163 @@
+# Failing Test Template
+# Powered by PRISM™ Core
+
+title: "{Issue Title}"
+issue_id: "{ISSUE-XXX}"
+priority: "{P0|P1|P2|P3}"
+status: "Reproduces Consistently"
+date_validated: "{YYYY-MM-DD}"
+
+test_objective:
+  description: "Verify that {specific functionality} works correctly when {conditions}."
+  currently_fails: "{Brief description of the bug}"
+
+environment_and_prerequisites:
+  environment:
+    platform: "{staging|production|local}"
+    browser: "{Chrome 120|Firefox 119|Safari 17}"
+    api_version: "{version}"
+    feature_flags: "{list any required flags}"
+
+  user_requirements:
+    role: "{admin|user|guest}"
+    permissions: "{specific permissions needed}"
+    account_state: "{trial|paid|enterprise}"
+
+  data_requirements:
+    required_records:
+      - record_type: "{User|Product|Order}"
+        state: "{active|pending|archived}"
+        properties:
+          - field: "{field}"
+            value: "{value}"
+          - field: "{field}"
+            value: "{value}"
+
+steps_to_reproduce:
+  - step: 1
+    action: "Navigate to {URL}"
+    element: "-"
+    expected: "Page loads"
+    actual: "Page loads"
+    status: "✅"
+  - step: 2
+    action: "Click {button}"
+    element: "#button-id"
+    expected: "Modal opens"
+    actual: "Modal opens"
+    status: "✅"
+  - step: 3
+    action: "Enter \"{value}\""
+    element: "input[name='field']"
+    expected: "Accepts input"
+    actual: "Accepts input"
+    status: "✅"
+  - step: 4
+    action: "Submit form"
+    element: "button[type='submit']"
+    expected: "Success message"
+    actual: "**ERROR**"
+    status: "❌"
+
+failure_point:
+  step: 4
+  expected: "Form submits successfully, shows confirmation"
+  actual: "Form submission fails with error: \"{exact error message}\""
+
+error_details:
+  console_error: |
+    Uncaught TypeError: Cannot read property 'x' of undefined
+        at FileName.js:123:45
+        at processResponse (api.js:456:12)
+
+  network_response: |
+    {
+      "status": 500,
+      "error": "Internal Server Error",
+      "message": "Database connection timeout",
+      "timestamp": "2024-01-15T10:30:00Z"
+    }
+
+  stack_trace: |
+    Error: Database connection timeout
+        at Connection.timeout (db.js:234:15)
+        at async PaymentController.process (payment.js:89:20)
+        at async handleRequest (middleware.js:45:12)
+
+test_assertions:
+  primary_assertion:
+    note: "This should PASS but currently FAILS"
+    code: |
+      expect(successMessage).toBeVisible();
+      expect(successMessage).toHaveText('Payment processed successfully');
+
+  supporting_assertions:
+    - description: "API response check"
+      code: "expect(response.status).toBe(200);"
+      result: "FAILS: returns 500"
+    - description: "Database check"
+      code: "expect(paymentRecord).toBeDefined();"
+      result: "FAILS: record not created"
+    - description: "UI state check"
+      code: "expect(errorBanner).not.toBeVisible();"
+      result: "FAILS: error shown"
+
+visual_evidence:
+  before_action: "[Screenshot placeholder - form ready for submission]"
+  after_action: "[Screenshot placeholder - error message displayed]"
+  expected_result: "[Screenshot placeholder - success message that should appear]"
+
+impact_analysis:
+  user_impact:
+    severity: "{Critical|High|Medium|Low}"
+    users_affected: "{percentage or count}"
+    workaround_available: "{Yes with steps|No}"
+
+  business_impact:
+    revenue_impact: "{blocking purchases|degraded experience|cosmetic}"
+    customer_complaints: "{number} reports"
+    sla_violation: "{Yes|No}"
+
+related_information:
+  similar_issues:
+    - issue: "{ISSUE-YYY}"
+      description: "{Similar title - resolved/open}"
+    - issue: "{ISSUE-ZZZ}"
+      description: "{Related issue - may have same root cause}"
+
+  affected_components:
+    frontend: "{ComponentName.jsx}"
+    backend: "{ControllerName.cs}"
+    database: "{table_name}"
+    external_service: "{ServiceName API}"
+
+definition_of_done:
+  for_development:
+    - "Can reproduce the issue locally"
+    - "Root cause identified"
+    - "Fix implemented"
+    - "This test passes after fix"
+    - "No regression in related areas"
+
+  for_qa:
+    - "Automated test created from this spec"
+    - "Test fails before fix (confirms reproduction)"
+    - "Test passes after fix applied"
+    - "Added to regression suite"
+    - "Edge cases covered"
+
+  for_support:
+    - "Customer notified of investigation"
+    - "Workaround provided if available"
+    - "Fix verified in staging"
+    - "Customer confirms resolution"
+
+notes:
+  investigation_notes: "{Any additional context from root cause investigation}"
+  workaround: "{Steps customer can take to avoid the issue temporarily}"
+  fix_suggestions: "{Potential approaches to fix based on investigation}"
+
+metadata:
+  created_by: "Support Agent"
+  validated_with: "Playwright-MCP"
+  handoff_to: "Dev Team (fix) & QA Team (test automation)"

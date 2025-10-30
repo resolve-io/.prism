@@ -113,57 +113,13 @@ All peer review capabilities (when using this skill):
 | **Integration** | |
 | `jira {issueKey}` | Fetch context from Jira ticket |
 
-→ [Command Reference](../../shared/reference/commands.md)
+→ [Command Reference](../shared/reference/commands.md)
 
 ## Review Checklist
 
-Comprehensive review criteria:
+Comprehensive review criteria covering architecture, code quality, duplication, test coverage, PRISM compliance, technical debt, and documentation.
 
-### Architecture & Design
-- [ ] Changes fit existing architecture
-- [ ] Component boundaries respected
-- [ ] Design patterns used correctly
-- [ ] Dependencies managed appropriately
-- [ ] No circular dependencies
-
-### Code Quality
-- [ ] Clean Code principles followed
-- [ ] SOLID principles applied
-- [ ] Clear, descriptive naming
-- [ ] Functions small and focused
-- [ ] Low cyclomatic complexity
-
-### Duplication
-- [ ] No duplicated code
-- [ ] Common logic extracted
-- [ ] Utilities reused where appropriate
-- [ ] No reinvented wheels
-
-### Test Coverage
-- [ ] All new code tested
-- [ ] Edge cases covered
-- [ ] Error paths tested
-- [ ] Integration tests present
-- [ ] Tests follow AAA pattern (Arrange-Act-Assert)
-
-### PRISM Compliance
-- [ ] Predictability: Structured, measurable
-- [ ] Resilience: Error handling, tests
-- [ ] Intentionality: Clear, purposeful
-- [ ] Sustainability: Maintainable
-- [ ] Maintainability: Clean boundaries
-
-### Technical Debt
-- [ ] No new technical debt introduced
-- [ ] Existing debt addressed if touched
-- [ ] TODOs have tickets
-- [ ] Workarounds documented
-
-### Documentation
-- [ ] Complex logic commented
-- [ ] Public APIs documented
-- [ ] README updated if needed
-- [ ] Architecture docs current
+→ [Full Review Checklist](./reference/review-checklist.md)
 
 ## Review File Permissions
 
@@ -195,81 +151,21 @@ The peer skill integrates with:
 - **Docs**: Coding standards, common patterns, anti-patterns
 - **Templates**: Peer review report, code feedback, architecture review
 
-→ [Dependencies Reference](../../shared/reference/dependencies.md)
+→ [Dependencies Reference](../shared/reference/dependencies.md)
 
-→ [Examples](../../shared/reference/examples.md) - Complete peer review workflows including authentication implementation review, duplication detection, and architecture validation
+→ [Examples](../shared/reference/examples.md) - Complete peer review workflows including authentication implementation review, duplication detection, and architecture validation
 
 ## Best Practices
 
-### Code Review
+Key DO's and DON'Ts for effective code review: systematic approach, actionable feedback, consider context.
 
-✅ **DO:**
-- Review code systematically and thoroughly
-- Check architecture alignment first
-- Look for duplication proactively
-- Verify comprehensive test coverage
-- Apply consistent standards (Clean Code, SOLID)
-- Provide actionable, specific feedback
-- Explain WHY, not just WHAT needs changing
-- Praise good practices when found
-- Consider context and trade-offs
-
-❌ **DON'T:**
-- Nitpick formatting (use linters)
-- Block for minor style preferences
-- Provide vague feedback ("make it better")
-- Review without understanding context
-- Skip checking for duplication
-- Forget to validate tests
-- Be overly critical without suggestions
-- Modify code directly (advisory role)
-- Ignore PRISM principles
-
-→ [Best Practices](../../shared/reference/best-practices.md)
+→ [Best Practices](./reference/best-practices-review.md)
 
 ## Mentoring Approach
 
-### Educational Feedback Format
+Provide educational feedback with ISSUE → WHY → SUGGESTION → REFERENCE format to help developers grow.
 
-**Good feedback example:**
-```
-ISSUE: The `getUserData()` function is doing too much (fetching,
-transforming, validating, logging).
-
-WHY IT MATTERS: Violates Single Responsibility Principle (SOLID).
-Hard to test, hard to reuse, hard to maintain.
-
-SUGGESTION: Extract into smaller functions:
-- fetchUserData()
-- transformUserData()
-- validateUserData()
-- logUserAccess()
-
-Then compose them in getUserData(). Each function now testable and
-reusable independently.
-
-REFERENCE: Clean Code, Chapter 3 - Functions should do one thing
-```
-
-**Poor feedback example:**
-```
-This function is bad. Refactor it.
-```
-
-### Mentoring Topics
-
-Common areas for educational feedback:
-
-- SOLID principles application
-- Clean Code patterns
-- Design patterns usage
-- Test-driven development
-- Refactoring techniques
-- PRISM methodology
-- Architecture patterns
-- Performance optimization
-
-→ [Mentoring Guide](./reference/mentoring.md)
+→ [Mentoring Guide](./reference/mentoring-feedback.md)
 
 ## Reference Documentation
 

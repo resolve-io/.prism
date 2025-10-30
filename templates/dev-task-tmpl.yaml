@@ -1,0 +1,153 @@
+# Dev Task Template
+task_id: "DEV-{ticket_number}"
+
+issue_information:
+  customer_ticket: "#{ticket_number}"
+  priority: "{P0|P1|P2|P3}"
+  severity: "{Critical|High|Medium|Low}"
+  support_validation: "✅ Completed"
+  root_cause_investigation: "✅ Completed"
+
+problem_statement:
+  customer_impact:
+    whats_broken: "{user_facing_description}"
+    business_impact: "{revenue/operational_impact}"
+    affected_users: "{scope_and_count}"
+    workaround: "{available_or_none}"
+
+  technical_summary:
+    root_cause: "{identified_root_cause}"
+    component: "{affected_service_or_module}"
+    introduced: "{version_or_date_if_known}"
+    error_type: "{null_ref|timeout|logic|race_condition|other}"
+
+requirements_for_fix:
+  functional_requirements:
+    - "{requirement_1}"
+    - "{requirement_2}"
+    - "{requirement_3}"
+
+  non_functional_requirements:
+    performance: "{response_time_requirements}"
+    security: "{validation_requirements}"
+    reliability: "{error_handling_requirements}"
+    compatibility: "{backward_compatibility_needs}"
+
+  technical_constraints:
+    - "Minimal code changes preferred"
+    - "No breaking API changes"
+    - "Must be deployable without downtime"
+    - "Maintain existing behavior for unaffected flows"
+
+investigation_findings:
+  evidence_from_support:
+    validation_method: "Playwright automation"
+    reproduction_rate: "{percentage}"
+    error_messages:
+      - "{error_message_1}"
+      - "{error_message_2}"
+    stack_trace: "{if_available}"
+
+  affected_code_areas:
+    - file: "{file_path_1}"
+      component: "{component_name}"
+      suspected_issue: "{issue_description}"
+    - file: "{file_path_2}"
+      component: "{component_name}"
+      suspected_issue: "{issue_description}"
+
+  suggested_approach:
+    note: "Dev agent determines actual implementation"
+    approaches:
+      - "{high_level_approach_1}"
+      - "{high_level_approach_2}"
+
+definition_of_done:
+  development_checklist:
+    - "Root cause addressed"
+    - "Fix implemented with minimal changes"
+    - "Unit tests updated/added"
+    - "Integration tests pass"
+    - "Code reviewed and approved"
+    - "Performance impact validated"
+    - "Documentation updated if needed"
+
+  validation_requirements:
+    - "Original issue no longer reproduces"
+    - "QA test (created separately) passes"
+    - "No regression in existing functionality"
+    - "Performance metrics maintained"
+    - "Security scan passes (if applicable)"
+
+risk_assessment:
+  change_risk: "{Low|Medium|High}"
+  change_details:
+    complexity: "{simple|moderate|complex}"
+    dependencies: "{isolated|some|many}"
+    testing_coverage: "{excellent|good|needs_improvement}"
+
+  deployment_risk: "{Low|Medium|High}"
+  deployment_details:
+    rollback_plan: "{simple_revert|feature_flag|complex}"
+    user_impact: "{transparent|minimal|visible}"
+    data_changes: "{none|backward_compatible|migration_needed}"
+
+testing_coordination:
+  qa_integration:
+    qa_task_created: "QA-{ticket_number}"
+    test_type: "E2E Integration"
+    test_status: "Specification provided"
+
+  testing_requirements:
+    - "Existing tests must continue to pass"
+    - "New QA test must pass post-fix"
+    - "Manual validation in staging required"
+    - "Performance benchmarks maintained"
+
+sprint_planning:
+  effort_estimate:
+    story_points: "{1|2|3|5|8}"
+    probe_size: "{very_small|small|medium|large|very_large}"
+    size_mapping:
+      "1": "very_small (VS)"
+      "2": "small (S)"
+      "3": "medium (M)"
+      "5": "large (L)"
+      "8": "very_large (VL)"
+    time_estimate: "{hours_or_days}"
+
+  dependencies:
+    - "QA test specification available"
+    - "Environment access confirmed"
+    - "Related tickets: {linked_issues}"
+
+  timeline:
+    sprint: "{number}"
+    target_completion: "{date}"
+    customer_commitment: "{if_any}"
+
+communication:
+  stakeholders:
+    customer_support: "Awaiting fix"
+    qa_team: "Ready to test"
+    devops: "Deployment planning needed"
+    product: "Monitoring issue"
+
+  updates_required:
+    - "Ticket status updates"
+    - "Sprint board updates"
+    - "Team standup mention"
+    - "Customer communication (via Support)"
+
+metadata:
+  assigned_to: "Dev Agent"
+  created_by: "Support Agent"
+  status: "Ready for Development"
+
+attachments:
+  - name: "Validation Report"
+    link: "{link}"
+  - name: "Screenshots"
+    link: "{link}"
+  - name: "Investigation Details"
+    link: "{link}"

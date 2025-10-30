@@ -114,28 +114,13 @@ All support engineering capabilities (when using this skill):
 | **Integration** | |
 | `jira {issueKey}` | Fetch context from Jira ticket |
 
-→ [Command Reference](../../shared/reference/commands.md)
+→ [Command Reference](../shared/reference/commands.md)
 
 ## Playwright Integration
 
-**MANDATORY: Use Playwright-MCP for validation**
+Use Playwright-MCP tools for browser automation, screenshot capture, and state inspection.
 
-### Available Tools
-
-- `mcp__playwright-mcp__init-browser`: Initialize browser for testing
-- `mcp__playwright-mcp__get-screenshot`: Capture evidence
-- `mcp__playwright-mcp__execute-code`: Inspect page state
-- `mcp__playwright-mcp__get-context`: Analyze page context
-
-### Workflow Rules
-
-**ALWAYS:**
-- Capture before/after screenshots when validating
-- Check console errors during reproduction
-- Document exact steps taken in Playwright
-- Save evidence for Dev and QA teams
-
-→ [Playwright Guide](./reference/playwright.md)
+→ [Playwright Guide](./reference/playwright-automation.md)
 
 ## Workflow Permissions
 
@@ -159,30 +144,9 @@ All support engineering capabilities (when using this skill):
 
 ## Priority Assessment
 
-### Priority Levels
+Four priority levels (P0-P3) based on severity and business impact.
 
-| Level | Description | Response Time |
-|-------|-------------|---------------|
-| **P0** | Critical - System down, data loss | Immediate |
-| **P1** | High - Major feature broken, many users affected | <4 hours |
-| **P2** | Medium - Feature impaired, workaround exists | <1 day |
-| **P3** | Low - Minor issue, cosmetic, few users affected | Next sprint |
-
-### Assessment Factors
-
-**Severity:**
-- How many users affected?
-- Can users work around it?
-- Is data at risk?
-- Is security compromised?
-
-**Business Impact:**
-- Revenue impact?
-- Customer satisfaction impact?
-- Compliance/legal risk?
-- Brand reputation risk?
-
-→ [Priority Guide](./reference/priority.md)
+→ [Priority Guide](./reference/priority-assessment.md)
 
 ## Integration with PRISM
 
@@ -196,35 +160,15 @@ The support skill integrates with:
 - **Dev Agent**: Handoff for fixes
 - **QA Agent**: Handoff for test implementation
 
-→ [Dependencies Reference](../../shared/reference/dependencies.md)
+→ [Dependencies Reference](../shared/reference/dependencies.md)
 
-→ [Examples](../../shared/reference/examples.md) - Complete support validation workflows including mobile login issues, payment processing errors, and failing test investigations
+→ [Examples](../shared/reference/examples.md) - Complete support validation workflows including mobile login issues, payment processing errors, and failing test investigations
 
 ## Best Practices
 
-### Issue Validation
+Always reproduce with Playwright, capture evidence, document thoroughly, and create tasks for Dev/QA teams.
 
-✅ **DO:**
-- Always use Playwright to reproduce
-- Capture comprehensive evidence (screenshots, logs, traces)
-- Follow customer steps exactly
-- Document every step taken
-- Check multiple scenarios (edge cases)
-- Assess business impact
-- Create clear, actionable tasks
-- Handoff to appropriate teams (Dev, QA)
-
-❌ **DON'T:**
-- Assume issue without reproducing
-- Skip evidence capture
-- Implement fixes yourself (create dev tasks)
-- Write test code yourself (create QA tasks)
-- Forget to assess priority
-- Skip documentation
-- Bypass SDLC process
-- Work in isolation (collaborate with teams)
-
-→ [Best Practices](../../shared/reference/best-practices.md)
+→ [Best Practices](./reference/best-practices-support.md)
 
 ## Proactive Engagement
 

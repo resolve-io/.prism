@@ -98,7 +98,7 @@ All product owner capabilities (when using this skill):
 | **Integration** | |
 | `jira {issueKey}` | Fetch context from Jira ticket |
 
-→ [Command Reference](../../shared/reference/commands.md)
+→ [Command Reference](../shared/reference/commands.md)
 
 ## Integration with PRISM
 
@@ -110,7 +110,7 @@ The PO skill integrates with:
 - **Tasks**: Validation, sharding, course correction tasks
 - **Jira**: Automatic issue context fetching
 
-→ [Dependencies Reference](../../shared/reference/dependencies.md)
+→ [Dependencies Reference](../shared/reference/dependencies.md)
 
 ## Best Practices
 
@@ -133,7 +133,7 @@ The PO skill integrates with:
 - Mix multiple features in one story
 - Approve stories without validation checklist
 
-→ [Complete Best Practices](../../shared/reference/best-practices.md#story-creation-best-practices)
+→ [Complete Best Practices](../shared/reference/best-practices.md#story-creation-best-practices)
 
 ## Validation Checklist
 
@@ -165,10 +165,10 @@ Use Yolo Mode when:
 
 Shared references:
 
-- **[Commands (All Skills)](../../shared/reference/commands.md)** - Complete command reference
-- **[Dependencies (All Skills)](../../shared/reference/dependencies.md)** - Integration and file structure
-- **[Examples](../../shared/reference/examples.md)** - Real-world PO workflows
-- **[Best Practices](../../shared/reference/best-practices.md)** - Story creation and validation standards
+- **[Commands (All Skills)](../shared/reference/commands.md)** - Complete command reference
+- **[Dependencies (All Skills)](../shared/reference/dependencies.md)** - Integration and file structure
+- **[Examples](../shared/reference/examples.md)** - Real-world PO workflows
+- **[Best Practices](../shared/reference/best-practices.md)** - Story creation and validation standards
 
 ## Common Questions
 

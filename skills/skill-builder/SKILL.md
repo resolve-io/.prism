@@ -18,7 +18,7 @@ version: 1.0.0
 
 **Guides you through building efficient Claude Code skills** that follow best practices:
 
-- **Progressive Disclosure**: Structure skills in 3 levels (metadata, body, bundled)
+- **Progressive Disclosure**: Structure skills in * levels (metadata, body, bundled, *)
 - **Token Optimization**: Keep metadata ~100 tokens, body <2k tokens, details in bundled files
 - **Templates**: Copy-paste ready SKILL.md templates and structure examples
 - **Process**: Step-by-step guide from planning to deployment

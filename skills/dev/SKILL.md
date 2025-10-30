@@ -72,7 +72,7 @@ version: 1.0.0
 - **Sustainability**: Maintainable code, continuous improvement, technical debt management
 - **Maintainability**: Domain-driven patterns, clear boundaries, expressive naming
 
-→ [Complete PRISM Best Practices](../../shared/reference/best-practices.md#core-prism-principles)
+→ [Complete PRISM Best Practices](../shared/reference/best-practices.md#core-prism-principles)
 
 ## Available Commands
 
@@ -90,7 +90,7 @@ All dev capabilities (when using this skill):
 | `jira {issueKey}` | Fetch context from Jira ticket |
 | `strangler` | Execute strangler pattern migration workflow |
 
-→ [Command Reference](../../shared/reference/commands.md)
+→ [Command Reference](../shared/reference/commands.md)
 
 ## Integration with PRISM
 
@@ -102,7 +102,7 @@ The dev skill integrates with:
 - **Jira**: Automatic issue context fetching
 - **PSP Tracking**: Estimation accuracy measurement
 
-→ [Dependencies Reference](../../shared/reference/dependencies.md)
+→ [Dependencies Reference](../shared/reference/dependencies.md)
 
 ## Best Practices
 
@@ -125,7 +125,7 @@ The dev skill integrates with:
 - Implement without understanding requirements
 - Bypass quality gates for speed
 
-→ [Complete Best Practices](../../shared/reference/best-practices.md#development-best-practices)
+→ [Complete Best Practices](../shared/reference/best-practices.md#development-best-practices)
 
 ## Blocking Conditions
 
@@ -167,10 +167,10 @@ Core references (loaded as needed):
 
 Shared references:
 
-- **[Commands (All Skills)](../../shared/reference/commands.md)** - Complete command reference
-- **[Dependencies (All Skills)](../../shared/reference/dependencies.md)** - Integration and file structure
-- **[Examples](../../shared/reference/examples.md)** - Real-world development workflows
-- **[Best Practices](../../shared/reference/best-practices.md)** - PRISM principles, TDD, Clean Code, SOLID
+- **[Commands (All Skills)](../shared/reference/commands.md)** - Complete command reference
+- **[Dependencies (All Skills)](../shared/reference/dependencies.md)** - Integration and file structure
+- **[Examples](../shared/reference/examples.md)** - Real-world development workflows
+- **[Best Practices](../shared/reference/best-practices.md)** - PRISM principles, TDD, Clean Code, SOLID
 
 ## Common Questions
 

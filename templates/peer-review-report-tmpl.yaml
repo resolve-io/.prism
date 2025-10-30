@@ -1,0 +1,150 @@
+# Peer Review Report
+story: "{{story_id}}"
+date: "{{review_date}}"
+reviewer: "Pierre (Peer Review Specialist)"
+review_type: "{{review_type}}"
+
+executive_summary:
+  overall_assessment:
+    approved: false
+    approved_with_suggestions: false
+    needs_changes: false
+    rejected: false
+
+  quick_stats:
+    files_reviewed: "{{file_count}}"
+    lines_of_code: "{{loc_count}}"
+    test_coverage: "{{coverage_percentage}}%"
+    issues_found: "{{issue_count}}"
+    suggestions_made: "{{suggestion_count}}"
+
+prism_principles_compliance:
+  predictability:
+    score: "{{score}}/5"
+    assessments:
+      pattern_consistency: "{{assessment}}"
+      convention_adherence: "{{assessment}}"
+      code_organization: "{{assessment}}"
+
+  resilience:
+    score: "{{score}}/5"
+    assessments:
+      error_handling: "{{assessment}}"
+      recovery_mechanisms: "{{assessment}}"
+      defensive_programming: "{{assessment}}"
+
+  intentionality:
+    score: "{{score}}/5"
+    assessments:
+      code_clarity: "{{assessment}}"
+      purpose_documentation: "{{assessment}}"
+      design_decisions: "{{assessment}}"
+
+  sustainability:
+    score: "{{score}}/5"
+    assessments:
+      maintainability: "{{assessment}}"
+      technical_debt: "{{assessment}}"
+      future_proofing: "{{assessment}}"
+
+  maintainability:
+    score: "{{score}}/5"
+    assessments:
+      code_complexity: "{{assessment}}"
+      modularity: "{{assessment}}"
+      documentation: "{{assessment}}"
+
+architecture_alignment:
+  component_design: "{{architecture_alignment_notes}}"
+  pattern_usage: "{{pattern_compliance_notes}}"
+  dependencies: "{{dependency_review_notes}}"
+
+code_quality_analysis:
+  strengths:
+    - "{{strength_1}}"
+    - "{{strength_2}}"
+    - "{{strength_3}}"
+
+  issues_found:
+    critical_issues: "{{critical_issues_list}}"
+    major_issues: "{{major_issues_list}}"
+    minor_issues: "{{minor_issues_list}}"
+
+test_coverage_analysis:
+  unit_tests:
+    coverage: "{{unit_coverage}}%"
+    quality: "{{test_quality_assessment}}"
+    missing_tests: "{{missing_tests}}"
+
+  integration_tests:
+    coverage: "{{integration_coverage}}%"
+    scenarios_covered: "{{scenarios}}"
+    gaps_identified: "{{gaps}}"
+
+security_review:
+  vulnerabilities: "{{security_issues}}"
+  best_practices: "{{security_practices}}"
+
+performance_considerations:
+  bottlenecks_identified: "{{performance_issues}}"
+  optimization_opportunities: "{{optimization_suggestions}}"
+
+duplication_analysis:
+  code_duplication: "{{duplication_report}}"
+  refactoring_opportunities: "{{refactoring_suggestions}}"
+
+recommendations:
+  must_fix_blocking:
+    - "{{blocker_1}}"
+    - "{{blocker_2}}"
+
+  should_fix_important:
+    - "{{important_1}}"
+    - "{{important_2}}"
+
+  consider_nice_to_have:
+    - "{{suggestion_1}}"
+    - "{{suggestion_2}}"
+
+learning_opportunities:
+  best_practices_to_adopt: "{{best_practices}}"
+  patterns_to_study: "{{patterns_to_learn}}"
+  resources: "{{learning_resources}}"
+
+file_by_file_review:
+  - file_path: "{{file_path_1}}"
+    status: "{{status}}"
+    comments:
+      - line: "{{line_number}}"
+        comment: "{{comment}}"
+      - line: "{{line_number}}"
+        comment: "{{comment}}"
+
+  - file_path: "{{file_path_2}}"
+    status: "{{status}}"
+    comments:
+      - line: "{{line_number}}"
+        comment: "{{comment}}"
+
+conclusion:
+  summary_statement: "{{summary_statement}}"
+
+  next_steps:
+    - "{{next_step_1}}"
+    - "{{next_step_2}}"
+    - "{{next_step_3}}"
+
+  sign_off_requirements:
+    - requirement: "All critical issues resolved"
+      completed: false
+    - requirement: "Test coverage adequate"
+      completed: false
+    - requirement: "Documentation updated"
+      completed: false
+    - requirement: "No security vulnerabilities"
+      completed: false
+    - requirement: "Performance benchmarks met"
+      completed: false
+
+metadata:
+  generated_by: "PRISM Peer Review System"

@@ -1,0 +1,99 @@
+# QA Task Template
+task_id: "QA-{ticket_number}"
+
+issue_information:
+  customer_ticket: "#{ticket_number}"
+  priority: "{P0|P1|P2|P3}"
+  reported_date: "{date}"
+  support_validation: "✅ Completed"
+
+test_specification:
+  test_objective: "Ensure that {functionality} operates correctly when {user_action} to prevent {issue_description}."
+
+  test_scenarios:
+    scenario_1:
+      name: "Reproduce Original Issue"
+      type: "Regression Test (Should FAIL before fix)"
+      given: "{initial_state}"
+      when: "{user_actions}"
+      then: "{expected_behavior}"
+      currently: "{actual_broken_behavior}"
+
+    scenario_2:
+      name: "Happy Path Validation"
+      type: "E2E Integration Test"
+      given: "{normal_conditions}"
+      when: "{standard_user_flow}"
+      then: "{successful_outcome}"
+
+    scenario_3:
+      name: "Edge Cases"
+      type: "Boundary Testing"
+      given: "{edge_condition}"
+      when: "{boundary_action}"
+      then: "{graceful_handling}"
+
+  test_data_requirements:
+    users:
+      - role: "admin"
+        permissions:
+          - "full_access"
+      - role: "standard"
+        permissions:
+          - "limited"
+
+    sample_data:
+      - data_type_1: "{sample_values}"
+      - data_type_2: "{sample_values}"
+
+    edge_cases:
+      null_values: true
+      empty_strings: true
+      max_length: true
+
+  environment_requirements:
+    database: "Test database with seeded data"
+    services: "{required_services}"
+    authentication: "{auth_requirements}"
+    external_dependencies: "{mocked_or_containerized}"
+
+  validation_evidence_from_support:
+    playwright_reproduction: "[Link to validation report]"
+    screenshots: "[Link to evidence]"
+    console_errors: "{error_messages}"
+    network_issues: "{api_failures}"
+
+  acceptance_criteria:
+    - "Test reproduces exact customer scenario"
+    - "Test fails with current code (before fix)"
+    - "Test will pass after Dev implements fix"
+    - "Test is maintainable and clear"
+    - "Test follows project conventions"
+    - "No flaky behaviors"
+    - "Proper assertions for all scenarios"
+
+  implementation_guidelines:
+    - "Use existing test framework (xUnit/WebApplicationFactory)"
+    - "Follow project test patterns"
+    - "Utilize existing fixtures where possible"
+    - "Add to appropriate test collection"
+    - "Include clear documentation"
+
+definition_of_done:
+  - "All scenarios implemented as tests"
+  - "Tests reviewed by QA lead"
+  - "Tests integrated into CI/CD pipeline"
+  - "Coverage report generated"
+  - "Documentation updated"
+
+handoff_notes_from_support: "{additional_context_from_support_investigation}"
+
+related_information:
+  dev_task: "DEV-{ticket_number}"
+  investigation_report: "[Link]"
+  customer_communication: "[Link]"
+
+metadata:
+  assigned_to: "QA Agent"
+  due_date: "Sprint {number}"
+  status: "Ready for Implementation"

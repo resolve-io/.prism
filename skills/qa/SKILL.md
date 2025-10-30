@@ -106,7 +106,7 @@ All test architect capabilities (when using this skill):
 | **Integration** | |
 | `jira {issueKey}` | Fetch context from Jira ticket |
 
-→ [Command Reference](../../shared/reference/commands.md)
+→ [Command Reference](../shared/reference/commands.md)
 
 ## Quality Gate Decisions
 
@@ -117,14 +117,14 @@ Quality gates provide advisory decisions:
 - **FAIL** ❌ - Blocking issues must be fixed before proceeding
 - **WAIVED** 🔓 - Issues acknowledged, explicitly waived by user
 
-→ [Complete Gate Criteria](../../shared/reference/best-practices.md#quality-assurance-best-practices)
+→ [Complete Gate Criteria](../shared/reference/best-practices.md#quality-assurance-best-practices)
 
 ## Risk Assessment
 
 **Risk-based prioritization using Probability × Impact:**
 - Low (1-9), Medium (10-29), High (30-54), Critical (55+)
 
-→ [Risk Assessment Guide](../../shared/reference/best-practices.md#risk-based-prioritization)
+→ [Risk Assessment Guide](../shared/reference/best-practices.md#risk-based-prioritization)
 
 ## Story File Permissions
 
@@ -157,9 +157,9 @@ The QA skill integrates with:
 - **Templates**: QA gate template, story template
 - **Jira**: Automatic issue context fetching
 
-→ [Dependencies Reference](../../shared/reference/dependencies.md)
+→ [Dependencies Reference](../shared/reference/dependencies.md)
 
-→ [Examples](../../shared/reference/examples.md) - Complete QA workflows including authentication review, brownfield risk profiling, bug fixes, performance optimization, and security enhancements
+→ [Examples](../shared/reference/examples.md) - Complete QA workflows including authentication review, brownfield risk profiling, bug fixes, performance optimization, and security enhancements
 
 ## Best Practices
 
@@ -183,7 +183,7 @@ The QA skill integrates with:
 - Fail stories for minor issues
 - Provide feedback without actionable suggestions
 
-→ [Complete Best Practices](../../shared/reference/best-practices.md#testing-best-practices)
+→ [Complete Best Practices](../shared/reference/best-practices.md#testing-best-practices)
 
 ## Reference Documentation
 
@@ -193,10 +193,10 @@ Core QA references:
 
 Shared references:
 
-- **[Commands (All Skills)](../../shared/reference/commands.md)** - Complete command reference including QA commands
-- **[Dependencies (All Skills)](../../shared/reference/dependencies.md)** - Integration, tasks, and file structure
-- **[Examples](../../shared/reference/examples.md)** - Real-world QA workflows and brownfield testing
-- **[Best Practices](../../shared/reference/best-practices.md)** - Testing standards, TDD, quality gates
+- **[Commands (All Skills)](../shared/reference/commands.md)** - Complete command reference including QA commands
+- **[Dependencies (All Skills)](../shared/reference/dependencies.md)** - Integration, tasks, and file structure
+- **[Examples](../shared/reference/examples.md)** - Real-world QA workflows and brownfield testing
+- **[Best Practices](../shared/reference/best-practices.md)** - Testing standards, TDD, quality gates
 
 ## Common Questions
 

@@ -1,0 +1,221 @@
+# SDLC Handoff Template
+handoff_package: "Issue #{ticket_number}"
+
+executive_summary:
+  issue_type: "{Bug|Performance|Security|Feature}"
+  priority: "{P0|P1|P2|P3}"
+  status: "✅ Validated → 📋 Ready for SDLC"
+  target_resolution: "Sprint {number}"
+
+issue_lifecycle_tracking:
+  support_phase:
+    status: "COMPLETE"
+    tasks:
+      - "Customer issue reported"
+      - "Issue validated via Playwright"
+      - "Root cause investigated"
+      - "Impact assessment completed"
+      - "Documentation prepared"
+
+  development_phase:
+    status: "PENDING"
+    tasks:
+      - task: "DEV-{ticket}: Fix implementation"
+        completed: false
+      - task: "Code review completed"
+        completed: false
+      - task: "Unit tests updated"
+        completed: false
+      - task: "Documentation updated"
+        completed: false
+
+  qa_phase:
+    status: "PENDING"
+    tasks:
+      - task: "QA-{ticket}: Test creation"
+        completed: false
+      - task: "Test validates issue"
+        completed: false
+      - task: "Fix verification"
+        completed: false
+      - task: "Regression testing"
+        completed: false
+
+  deployment_phase:
+    status: "PENDING"
+    tasks:
+      - task: "Staging deployment"
+        completed: false
+      - task: "Production deployment"
+        completed: false
+      - task: "Post-deployment verification"
+        completed: false
+      - task: "Customer notification"
+        completed: false
+
+complete_issue_documentation:
+  customer_report:
+    reporter: "{customer_id}"
+    date_reported: "{date}"
+    severity_reported: "{customer_severity}"
+    description: |
+      {original_customer_description}
+    business_impact: |
+      {how_this_affects_their_business}
+
+  validation_results:
+    validation_method: "Playwright Automation"
+    reproduction_rate: "{100%|Intermittent}"
+    evidence:
+      screenshots: "[Link to screenshots]"
+      console_errors: "[Link to logs]"
+      network_traces: "[Link to traces]"
+      playwright_script: "[Link to validation code]"
+    reproduction_steps:
+      - "{step_1}"
+      - "{step_2}"
+      - "{step_3}"
+
+  root_cause_analysis:
+    identified_cause: "{root_cause_description}"
+    affected_component: "{service/module}"
+    introduced_in: "{version/date}"
+    code_location: "{file:line}"
+    investigation_notes: |
+      {additional_investigation_details}
+
+task_assignments:
+  development_task:
+    id: "DEV-{ticket_number}"
+    assigned: "Dev Agent"
+    status: "Ready"
+    deliverables:
+      - "Fix implementation"
+      - "Code review"
+      - "Unit test updates"
+    specification: "[Link to dev task]"
+
+  qa_task:
+    id: "QA-{ticket_number}"
+    assigned: "QA Agent"
+    status: "Ready"
+    deliverables:
+      - "E2E test creation"
+      - "Fix validation"
+      - "Regression testing"
+    specification: "[Link to QA task]"
+
+  devops_requirements:
+    deployment_window: "{scheduled_time}"
+    rollback_plan: "{strategy}"
+    monitoring: "{metrics_to_watch}"
+
+risk_and_priority_matrix:
+  risk_assessment:
+    - factor: "Customer Impact"
+      level: "{High/Med/Low}"
+      mitigation: "{mitigation_strategy}"
+    - factor: "Technical Complexity"
+      level: "{High/Med/Low}"
+      mitigation: "{mitigation_strategy}"
+    - factor: "Regression Risk"
+      level: "{High/Med/Low}"
+      mitigation: "{mitigation_strategy}"
+    - factor: "Deployment Risk"
+      level: "{High/Med/Low}"
+      mitigation: "{mitigation_strategy}"
+
+  priority_justification:
+    business_priority: "{reason}"
+    technical_priority: "{reason}"
+    customer_priority: "{reason}"
+
+communication_plan:
+  internal_communications:
+    dev_team:
+      channel: "#dev-team"
+      message: "New {priority} fix required for {component}"
+      action: "Review and estimate"
+
+    qa_team:
+      channel: "#qa-team"
+      message: "Test spec ready for {ticket}"
+      action: "Plan test implementation"
+
+    leadership:
+      channel: "#leadership"
+      message: "Customer issue {ticket} in pipeline"
+      action: "Monitor SLA compliance"
+
+  customer_communications:
+    initial_response:
+      sent: "{timestamp}"
+      message: "Issue confirmed and escalated to engineering"
+
+    progress_update:
+      schedule: "{daily|weekly}"
+      next_update: "{date}"
+
+    resolution_notice:
+      target_date: "{date}"
+      message_template: "Fix deployed and verified"
+
+success_metrics:
+  sla_tracking:
+    target_resolution: "{sla_time}"
+    current_status: "{on_track|at_risk|delayed}"
+    time_elapsed: "{hours/days}"
+
+  quality_gates:
+    - "Support validation complete"
+    - "Dev implementation complete"
+    - "QA verification complete"
+    - "Staging validation complete"
+    - "Production deployment successful"
+    - "Customer confirmation received"
+
+escalation_information:
+  escalation_triggers:
+    - "P0 unresolved after 2 hours"
+    - "P1 unassigned after 4 hours"
+    - "Customer executive escalation"
+    - "SLA breach imminent"
+
+  escalation_contacts:
+    level_1:
+      role: "Team Lead"
+      contact: "{contact}"
+    level_2:
+      role: "Engineering Manager"
+      contact: "{contact}"
+    level_3:
+      role: "Director"
+      contact: "{contact}"
+    level_4:
+      role: "VP/C-Level"
+      contact: "{contact}"
+
+references_and_links:
+  documentation:
+    original_ticket:
+      label: "#{ticket_number}"
+      link: "{link}"
+    validation_report: "{link}"
+    investigation_notes: "{link}"
+    dev_task:
+      label: "DEV-{ticket}"
+      link: "{link}"
+    qa_task:
+      label: "QA-{ticket}"
+      link: "{link}"
+
+  related_issues:
+    similar_issues: "{linked_tickets}"
+    dependencies: "{blocking_tickets}"
+    follow_up_items: "{future_work}"
+
+metadata:
+  handoff_completed_by: "Support Agent"
+  handoff_date: "{timestamp}"
+  sdlc_owner: "Dev & QA Teams"
+  status: "🚦 In SDLC Pipeline"

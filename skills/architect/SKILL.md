@@ -103,7 +103,7 @@ All architect capabilities (when using this skill):
 | `doc-out` | Output complete document to file |
 | `yolo` | Toggle Yolo Mode for rapid iteration |
 
-→ [Command Reference](../../shared/reference/commands.md)
+→ [Command Reference](../shared/reference/commands.md)
 
 ## Integration with PRISM
 
@@ -114,7 +114,7 @@ The architect skill integrates with:
 - **Checklists**: Quality gates in `.prism/checklists/`
 - **Jira**: Automatic issue context fetching
 
-→ [Dependencies Reference](../../shared/reference/dependencies.md)
+→ [Dependencies Reference](../shared/reference/dependencies.md)
 
 ## Architecture Workflow
 
@@ -148,7 +148,7 @@ The architect skill integrates with:
 - Create documentation that becomes stale
 - Design without considering developer experience
 
-→ [Complete Best Practices](../../shared/reference/best-practices.md#architecture-best-practices)
+→ [Complete Best Practices](../shared/reference/best-practices.md#architecture-best-practices)
 
 ## Reference Documentation
 
@@ -160,10 +160,10 @@ Core references (loaded as needed):
 
 Shared references:
 
-- **[Commands (All Skills)](../../shared/reference/commands.md)** - Complete command reference
-- **[Dependencies (All Skills)](../../shared/reference/dependencies.md)** - Integration and file structure
-- **[Examples](../../shared/reference/examples.md)** - Real-world workflows including architecture
-- **[Best Practices](../../shared/reference/best-practices.md)** - Architecture principles and PRISM methodology
+- **[Commands (All Skills)](../shared/reference/commands.md)** - Complete command reference
+- **[Dependencies (All Skills)](../shared/reference/dependencies.md)** - Integration and file structure
+- **[Examples](../shared/reference/examples.md)** - Real-world workflows including architecture
+- **[Best Practices](../shared/reference/best-practices.md)** - Architecture principles and PRISM methodology
 
 ## Common Questions
 
