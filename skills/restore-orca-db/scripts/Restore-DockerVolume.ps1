@@ -61,8 +61,10 @@ Write-Host ""
 # Find Orca SQL volume
 Write-Host "Finding Orca SQL volume..." -ForegroundColor Yellow
 try {
-    $volumeName = & $volumeScript
-    Write-Host "  [OK] Found volume: $volumeName" -ForegroundColor Green
+    $volumeName = & $volumeScript -Interactive
+    if ($volumeName) {
+        Write-Host "  [OK] Selected volume: $volumeName" -ForegroundColor Green
+    }
 } catch {
     Write-Host "  [ERROR] $_" -ForegroundColor Red
     throw

@@ -1,7 +1,7 @@
 ---
 name: restore-orca-db
 description: Restore Orca SQL database from backup in user profile cache
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Orca Database Restore Skill
@@ -14,7 +14,8 @@ version: 2.0.0
 ## What This Skill Does
 
 Restores the Orca SQL Server database from a backup file:
-- Discovers Orca SQL volume dynamically (no hard-coded names)
+- **Intelligently discovers the correct Orca SQL volume** - Prioritizes volumes currently in use by containers
+- **Interactive volume selection** - Prompts you to choose if multiple volumes exist or none are in use
 - Finds most recent backup or restores specific named backup
 - Safely stops containers using the volume (preserves them for restart)
 - Clears volume and imports backup data
@@ -23,7 +24,10 @@ Restores the Orca SQL Server database from a backup file:
 
 ## How It Works
 
-1. Find Orca SQL volume → Dynamic discovery
+1. Find Orca SQL volume → **Smart discovery prioritizes volumes in use by containers**
+   - If exactly one volume is in use → Uses it automatically
+   - If multiple volumes in use → Prompts you to choose
+   - If no volumes in use → Prompts you to choose from available volumes
 2. Locate backup file → Most recent or specific name
 3. Stop containers using volume → Graceful shutdown (containers preserved)
 4. Clear existing volume data → Prevent conflicts
@@ -63,6 +67,8 @@ Restores the Orca SQL Server database from a backup file:
 
 ## Safety Features
 
+- **Smart volume detection** - Automatically finds and uses volumes with running containers
+- **Interactive selection** - Prompts when multiple or ambiguous volumes exist
 - **Volume name validation** - Checks pattern and length
 - **Container preservation** - Containers are stopped but not deleted, then restarted
 - **State tracking** - Remembers which containers were running vs stopped
@@ -121,6 +127,16 @@ Previously running containers have been restarted with the restored database.
 
 ## Troubleshooting
 
+**"Multiple Orca SQL volumes are in use"**
+- You'll be prompted to choose which volume to restore to
+- Check container names to identify the correct volume
+- The active Orca instance will typically have the newer hash
+
+**"No Orca SQL volumes are in use by containers"**
+- You'll be prompted to choose from available volumes
+- If unsure, launch Orca first to identify the active volume
+- The skill will then automatically detect the correct volume on next run
+
 **"No timestamped backups found"**
 - Check: Do backups exist? Run `ls $env:USERPROFILE\.claude-orca\backups\`
 - Use custom backup name if only named backups exist
@@ -152,8 +168,14 @@ See: [Troubleshooting Guide](./reference/troubleshooting.md)
 ## Scripts
 
 - `Restore-DockerVolume.ps1` - Main restore logic
+- `Find-OrcaVolume.ps1` - Smart volume discovery (shared with backup-orca-db skill)
 
 ---
 
-**Version:** 2.0.0
+**Version:** 2.1.0
 **Last Updated:** 2025-11-03
+**Changelog:**
+- v2.1.0: Added smart volume detection that prioritizes volumes in use by containers
+- v2.1.0: Added interactive prompts for multiple or ambiguous volume scenarios
+- v2.1.0: Fixed PowerShell array handling bug in single-volume detection
+- v2.0.0: Initial release with basic volume discovery
