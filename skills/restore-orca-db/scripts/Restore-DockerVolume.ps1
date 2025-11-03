@@ -113,24 +113,40 @@ Write-Host "    Size: $backupSizeMB MB" -ForegroundColor Gray
 
 # Check for containers using the volume
 Write-Host ""
-Write-Host "Checking for running containers..." -ForegroundColor Yellow
+Write-Host "Checking for containers using the volume..." -ForegroundColor Yellow
 
 $containers = docker ps -a --filter "volume=$volumeName" --format "{{.ID}}" 2>$null
+
+# Track container states for restoration after backup
+$containerStates = @()
 
 if ($containers) {
     Write-Host "  [OK] Found container(s) using the volume" -ForegroundColor Yellow
 
     foreach ($containerId in $containers) {
-        $containerName = docker ps -a --filter "id=$containerId" --format "{{.Names}}" 2>$null
+        $containerInfo = docker inspect $containerId 2>$null | ConvertFrom-Json
 
-        Write-Host "  Stopping container: $containerName ($containerId)" -ForegroundColor Yellow
-        docker stop $containerId 2>&1 | Out-Null
+        if ($containerInfo) {
+            $containerName = $containerInfo.Name -replace '^/', ''
+            $wasRunning = $containerInfo.State.Running
 
-        Write-Host "  Removing container: $containerName" -ForegroundColor Yellow
-        docker rm $containerId 2>&1 | Out-Null
+            # Store container state for later restart
+            $containerStates += [PSCustomObject]@{
+                Id = $containerId
+                Name = $containerName
+                WasRunning = $wasRunning
+            }
+
+            if ($wasRunning) {
+                Write-Host "  Stopping container: $containerName ($containerId)" -ForegroundColor Yellow
+                docker stop $containerId 2>&1 | Out-Null
+            } else {
+                Write-Host "  Container already stopped: $containerName ($containerId)" -ForegroundColor Gray
+            }
+        }
     }
 
-    Write-Host "  [OK] All containers stopped and removed" -ForegroundColor Green
+    Write-Host "  [OK] Containers ready for volume restore (will be restarted if needed)" -ForegroundColor Green
 } else {
     Write-Host "  [OK] No containers using the volume" -ForegroundColor Green
 }
@@ -202,10 +218,39 @@ try {
     throw
 }
 
+# Restart containers that were running before restore
+if ($containerStates.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Restarting containers..." -ForegroundColor Yellow
+
+    foreach ($container in $containerStates) {
+        if ($container.WasRunning) {
+            Write-Host "  Starting container: $($container.Name) ($($container.Id))" -ForegroundColor Yellow
+            docker start $container.Id 2>&1 | Out-Null
+
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  [OK] Container restarted successfully" -ForegroundColor Green
+            } else {
+                Write-Host "  [WARNING] Failed to restart container: $($container.Name)" -ForegroundColor Yellow
+                Write-Host "  You may need to launch Orca manually using the 'orca' skill." -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "  Container was stopped before restore: $($container.Name) (leaving stopped)" -ForegroundColor Gray
+        }
+    }
+}
+
 Write-Host ""
 Write-Host "[SUCCESS] Database restore complete!" -ForegroundColor Green
-Write-Host ""
-Write-Host "To use the restored database, launch Orca using the 'orca' skill." -ForegroundColor Cyan
+
+if ($containerStates.Count -gt 0 -and ($containerStates | Where-Object { $_.WasRunning }).Count -gt 0) {
+    Write-Host ""
+    Write-Host "Previously running containers have been restarted with the restored database." -ForegroundColor Cyan
+} else {
+    Write-Host ""
+    Write-Host "To use the restored database, launch Orca using the 'orca' skill." -ForegroundColor Cyan
+}
+
 Write-Host ""
 
 return [PSCustomObject]@{

@@ -16,19 +16,21 @@ version: 2.0.0
 Restores the Orca SQL Server database from a backup file:
 - Discovers Orca SQL volume dynamically (no hard-coded names)
 - Finds most recent backup or restores specific named backup
-- Safely stops and removes containers using the volume
+- Safely stops containers using the volume (preserves them for restart)
 - Clears volume and imports backup data
+- Restarts containers that were running before restore
 - Verifies restoration success
 
 ## How It Works
 
 1. Find Orca SQL volume → Dynamic discovery
 2. Locate backup file → Most recent or specific name
-3. Stop containers using volume → Graceful shutdown
+3. Stop containers using volume → Graceful shutdown (containers preserved)
 4. Clear existing volume data → Prevent conflicts
 5. Import backup → Extract tar.gz into volume
 6. Verify restoration → Check file count
-7. Ready to launch Orca → Use `orca` skill
+7. Restart containers → Automatically restart containers that were running
+8. Ready to use → Database restored with containers running (if they were before)
 
 ## Backup Location
 
@@ -62,7 +64,8 @@ Restores the Orca SQL Server database from a backup file:
 ## Safety Features
 
 - **Volume name validation** - Checks pattern and length
-- **Container management** - Gracefully stops SQL containers
+- **Container preservation** - Containers are stopped but not deleted, then restarted
+- **State tracking** - Remembers which containers were running vs stopped
 - **Data protection** - 3-second countdown before restore
 - **Verification** - Confirms files restored successfully
 - **Clear warnings** - Shows what will be deleted
@@ -88,10 +91,10 @@ Finding backup file...
     Date: 10/31/2025 2:30:45 PM
     Size: 145.23 MB
 
-Checking for running containers...
+Checking for containers using the volume...
+  [OK] Found container(s) using the volume
   Stopping container: sql-cc67ab6e00 (abc123)
-  Removing container: sql-cc67ab6e00
-  [OK] All containers stopped and removed
+  [OK] Containers ready for volume restore (will be restarted if needed)
 
 WARNING: This will DELETE all data in volume: orca.apphost-cc67ab6e00-sql-data
 WARNING: And restore from backup: orca-db-2025-10-31-14-30.tar.gz
@@ -107,9 +110,13 @@ Importing backup...
 Verifying restore...
   [OK] Restored 15 files/directories
 
+Restarting containers...
+  Starting container: sql-cc67ab6e00 (abc123)
+  [OK] Container restarted successfully
+
 [SUCCESS] Database restore complete!
 
-To use the restored database, launch Orca using the 'orca' skill.
+Previously running containers have been restarted with the restored database.
 ```
 
 ## Troubleshooting

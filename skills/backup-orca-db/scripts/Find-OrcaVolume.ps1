@@ -25,11 +25,28 @@ param()
 
 Write-Verbose "Searching for Orca SQL volume..."
 
-# Find volume matching Orca pattern
-$volumeName = docker volume ls --filter "name=orca.apphost" --format "{{.Name}}" 2>$null | Where-Object { $_ -like "*sql-data*" } | Select-Object -First 1
+# Find all volumes matching Orca pattern
+$allVolumes = docker volume ls --filter "name=orca.apphost" --format "{{.Name}}" 2>$null | Where-Object { $_ -like "*sql-data*" }
 
-if (!$volumeName) {
+if (!$allVolumes) {
     throw "Orca SQL volume not found. Is Orca installed? Run 'docker volume ls' to see available volumes."
+}
+
+# Prefer the volume that's currently in use by a container
+$volumeName = $null
+foreach ($volume in $allVolumes) {
+    $containers = docker ps -a --filter "volume=$volume" --format "{{.ID}}" 2>$null
+    if ($containers) {
+        $volumeName = $volume
+        Write-Verbose "Found active volume in use by container: $volumeName"
+        break
+    }
+}
+
+# If no volume is in use, fall back to the first one found
+if (!$volumeName) {
+    $volumeName = $allVolumes | Select-Object -First 1
+    Write-Verbose "No volume in active use, using first available: $volumeName"
 }
 
 Write-Verbose "Found Orca SQL volume: $volumeName"
