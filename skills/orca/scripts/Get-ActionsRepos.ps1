@@ -62,7 +62,7 @@ $repos = @(
         Path = Join-Path $devRoot "actions.manager"
         BuildType = "dotnet"
         SolutionPath = "actions.manager.sln"
-        BinPath = "src/bin/Debug/net9.0"
+        BinPath = "actions.manager.cloud/bin/Debug/net9.0"
     },
 
     # .NET Framework projects (use msbuild)
@@ -85,7 +85,7 @@ $repos = @(
         Path = Join-Path $devRoot "express-engine"
         BuildType = "msbuild"
         SolutionPath = "eyeShareEngine/eyeShareEngine.sln"
-        BinPath = "eyeShareEngine/bin"
+        BinPath = "eyeShareEngine/eyeShareEngine/bin"
     },
     [PSCustomObject]@{
         Name = "express-executor"
@@ -99,14 +99,14 @@ $repos = @(
         Path = Join-Path $devRoot "express-scheduler"
         BuildType = "msbuild"
         SolutionPath = "eyeShareSchedulerServer/eyeShareSchedulerServer.sln"
-        BinPath = "eyeShareSchedulerServer/bin"
+        BinPath = "eyeShareSchedulerServer/eyeShare Scheduler Server/bin"
     },
     [PSCustomObject]@{
         Name = "express-integrations"
         Path = Join-Path $devRoot "express-integrations"
         BuildType = "msbuild"
         SolutionPath = "ModulesSharedProject.sln"
-        BinPath = "bin"
+        BinPath = "Integrations"
     },
     [PSCustomObject]@{
         Name = "express-web-api"
