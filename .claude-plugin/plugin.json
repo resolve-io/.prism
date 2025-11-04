@@ -1,7 +1,7 @@
 {
   "name": "prism-devtools",
-  "description": "Comprehensive development toolkit for building Claude Code plugins and skills with progressive disclosure patterns, validation tools, and PRISM methodology agents",
-  "version": "1.5.0",
+  "description": "Comprehensive development toolkit for building Claude Code plugins and skills with progressive disclosure patterns, validation tools, PRISM methodology agents, and Obsidian-powered long-term memory",
+  "version": "1.6.0",
   "author": {
     "name": "PRISM Development Team"
   },
@@ -18,6 +18,9 @@
     "methodology",
     "tdd",
     "agile",
-    "psp"
+    "psp",
+    "obsidian",
+    "memory",
+    "knowledge-management"
   ]
 }

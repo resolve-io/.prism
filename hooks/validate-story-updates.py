@@ -7,21 +7,24 @@ Part of: PRISM Core Development Lifecycle
 """
 
 import sys
+import io
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-def main():
-    # Read tool input from stdin
-    try:
-        tool_data = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        # No valid JSON input, allow operation
-        sys.exit(0)
+# Fix Windows console encoding for emoji support
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-    # Extract file path
-    file_path = tool_data.get('tool_input', {}).get('file_path', '')
+def main():
+    # Claude Code passes parameters via environment variables
+    # Not via stdin JSON
+    import os
+
+    # Extract file path from environment variables
+    file_path = os.environ.get('TOOL_PARAMS_file_path', '')
 
     # Only validate story files
     if not re.match(r'^docs/stories/.*\.md$', file_path):
@@ -45,7 +48,7 @@ def main():
         sys.exit(2)
 
     # Log the story update
-    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open('.prism-workflow.log', 'a') as log:
         log.write(f"{timestamp} | STORY_UPDATED | {file_path}\n")
 
@@ -86,7 +89,7 @@ def main():
         if qa_section and len(qa_section.group(0).split('\n')) < 5:
             print("⚠️  WARNING: QA Results section appears empty or incomplete", file=sys.stderr)
 
-    print(f"✅ Story file update validated: {file_path}")
+    # Hooks should be silent on success - no output for successful validation
 
     sys.exit(0)
 

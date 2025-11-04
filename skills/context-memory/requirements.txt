@@ -1,0 +1,13 @@
+# PRISM Context Memory Python Dependencies
+
+# For Obsidian markdown storage
+python-frontmatter>=1.1.0
+
+# For reading core-config.yaml
+PyYAML>=6.0
+
+# Claude API (for SQLite version only)
+anthropic>=0.40.0
+
+# Optional: for enhanced CLI output
+rich>=13.0.0

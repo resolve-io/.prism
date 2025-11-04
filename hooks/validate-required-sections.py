@@ -7,21 +7,24 @@ Part of: PRISM Core Development Lifecycle
 """
 
 import sys
+import io
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-def main():
-    # Read tool input from stdin
-    try:
-        tool_data = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        # No valid JSON input, allow operation
-        sys.exit(0)
+# Fix Windows console encoding for emoji support
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-    # Extract file path
-    file_path = tool_data.get('tool_input', {}).get('file_path', '')
+def main():
+    # Claude Code passes parameters via environment variables
+    # Not via stdin JSON
+    import os
+
+    # Extract file path from environment variables
+    file_path = os.environ.get('TOOL_PARAMS_file_path', '')
 
     # Only validate story files
     if not re.match(r'^docs/stories/.*\.md$', file_path):
@@ -109,11 +112,10 @@ def main():
             print(f"   WARNING: {warning}", file=sys.stderr)
         print("   These should be addressed but won't block workflow progression", file=sys.stderr)
 
-    if not validation_errors and not validation_warnings:
-        print("✅ Story validation passed: All required sections present")
+    # Hooks should be silent on success - no output for successful validation
 
     # Log validation result
-    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     result = "FAIL" if validation_errors else ("WARN" if validation_warnings else "PASS")
     with open('.prism-workflow.log', 'a') as log:
         log.write(f"{timestamp} | VALIDATION | {result} | {file_path} | {status}\n")

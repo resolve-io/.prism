@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Optional: SQLite viewer for debugging
+  sqlite-web:
+    image: coleifer/sqlite-web
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/data
+    command: ["-H", "0.0.0.0", "-x", "/data/.prism-memory.db"]
+    environment:
+      - SQLITE_DATABASE=/data/.prism-memory.db
+    profiles:
+      - debug
+    # Access at http://localhost:8080
+
+  # Python environment for running context memory utilities
+  prism-memory:
+    build:
+      context: .
+      dockerfile: skills/context-memory/Dockerfile
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PRISM_MEMORY_DB=/workspace/.prism-memory.db
+      - PRISM_MEMORY_AUTO_CAPTURE=true
+    env_file:
+      - .env
+    command: tail -f /dev/null  # Keep container running
+    profiles:
+      - dev
+
+# Usage:
+#
+# Start SQLite viewer for debugging:
+#   docker-compose --profile debug up sqlite-web
+#   Open http://localhost:8080
+#
+# Start Python dev environment:
+#   docker-compose --profile dev up -d prism-memory
+#   docker-compose exec prism-memory bash
+#
+# Run initialization:
+#   docker-compose run --rm prism-memory python skills/context-memory/utils/init_db.py
+#
+# Test Claude API:
+#   docker-compose run --rm prism-memory python skills/context-memory/utils/claude_api.py

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/enforce-story-context.sh",
+            "command": "python hooks/enforce-story-context.py",
             "description": "Ensure workflow commands have required story context"
           }
         ]
@@ -18,8 +18,28 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/track-current-story.sh",
+            "command": "python hooks/track-current-story.py",
             "description": "Track story file as current workflow context"
+          },
+          {
+            "type": "command",
+            "command": "python hooks/capture-file-context.py",
+            "description": "Capture file changes for context memory"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/validate-story-updates.py",
+            "description": "Validate story file updates"
+          },
+          {
+            "type": "command",
+            "command": "python hooks/capture-file-context.py",
+            "description": "Capture file changes for context memory"
           }
         ]
       },
@@ -28,18 +48,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/enforce-story-updates.sh",
-            "description": "Validate story file updates"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/validate-workflow-phase.sh",
-            "description": "Ensure story phase matches status"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/validate-required-sections.sh",
+            "command": "python hooks/validate-required-sections.py",
             "description": "Verify all required PRISM sections exist"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/capture-commit-context.py",
+            "description": "Capture git commit context for memory"
           }
         ]
       }

@@ -7,21 +7,23 @@ Part of: PRISM Core Development Lifecycle
 """
 
 import sys
+import io
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-def main():
-    # Read tool input from stdin
-    try:
-        tool_data = json.load(sys.stdin)
-    except json.JSONDecodeError:
-        # No valid JSON input, allow operation
-        sys.exit(0)
+# Fix Windows console encoding for emoji support
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-    # Extract command from tool input
-    command = tool_data.get('tool_input', {}).get('command', '')
+def main():
+    # Claude Code passes parameters via environment variables
+    # Not via stdin JSON
+
+    # Extract command from environment variables
+    command = os.environ.get('TOOL_PARAMS_command', '')
 
     # Check if command is a PRISM skill command that requires a story context
     requires_story = False
@@ -78,12 +80,12 @@ def main():
             sys.exit(2)  # Block the command
 
         # Log command with story context
-        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         with open('.prism-workflow.log', 'a') as log:
             log.write(f"{timestamp} | COMMAND | {command_name} | {story_file}\n")
 
-        print(f"✅ Story context verified: {story_file}")
-        print(f"   Proceeding with: {command_name}")
+        # Hooks should be silent on success
+        # Success is indicated by exit code 0
 
     sys.exit(0)
 
