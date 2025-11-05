@@ -1,7 +1,7 @@
 ---
 name: orca
 description: Launch Orca with smart build detection - builds if source changed OR build output missing
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Orca Launch Skill
@@ -12,6 +12,46 @@ version: 2.0.0
 **Force rebuild:** `"launch orca with rebuild"`
 **Skip build check:** `"launch orca without building"`
 
+## CRITICAL: How to Execute This Skill
+
+**DO NOT write your own PowerShell scripts.** All logic is already implemented in `Launch-Orca.ps1`.
+
+### Step 1: Call Launch-Orca.ps1
+
+**Standard launch (with smart build detection):**
+```bash
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\orca\scripts\Launch-Orca.ps1"
+```
+
+**Skip build check (when user says "without building"):**
+```bash
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\orca\scripts\Launch-Orca.ps1" -SkipBuild
+```
+
+**Force rebuild (when user says "rebuild" or "with rebuild"):**
+```bash
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\orca\scripts\Launch-Orca.ps1" -ForceBuild
+```
+
+### Step 2: Parse the Output
+
+`Launch-Orca.ps1` returns a PSCustomObject with:
+- `Success` (bool): Whether ready to launch
+- `LaunchCommand` (string): The exact command to run (e.g., "cd /d/dev/orca/Orca.AppHost && dotnet run --no-build")
+- `BuiltRepos` (array): List of repos that were built
+- `Message` (string): Status message
+
+### Step 3: Launch Orca in Background
+
+Use the Bash tool with the returned `LaunchCommand`:
+```bash
+Bash(command: <LaunchCommand>, run_in_background: true, timeout: 120000)
+```
+
+### Step 4: Get Dashboard URL
+
+Wait 10-15 seconds, then use `BashOutput` to get the dashboard URL with auth token.
+
 ## What This Skill Does
 
 Launches the Orca application with intelligent build detection:
@@ -21,17 +61,17 @@ Launches the Orca application with intelligent build detection:
 - Builds only when necessary (branch changed OR source newer OR no output)
 - Launches Orca in background with dashboard access
 
-## How It Works
+## How It Works (Internally)
 
+The `Launch-Orca.ps1` script handles:
 1. Get repository list → All Actions/Orca repos
 2. Check branch cache → Detect branch switches
-3. Check build output → Find missing/outdated builds
+3. Check build output → Find missing/outdated builds (using BinPath for each repo)
 4. Compare timestamps → Source vs build files
 5. Stop processes → If builds needed
 6. Build repositories → Only affected ones
 7. Update branch cache → Track current branches
-8. Launch Orca → Background bash session
-9. Return dashboard URL → With auth token
+8. Return launch command → For you to execute with Bash tool
 
 ## Build Detection Logic
 
@@ -70,48 +110,36 @@ actions.manager:develop
 
 ### Normal Launch (with build check)
 
-```
-1. Check all repos for changes
-2. If changes found:
-   - Stop running processes
-   - Build affected repos
-   - Update branch cache
-3. Launch: cd /d/dev/orca/Orca.AppHost && dotnet run --no-build
-4. Monitor: Use BashOutput with shell ID
-```
+See **"CRITICAL: How to Execute This Skill"** section above for the exact commands.
+
+Summary:
+1. Call `Launch-Orca.ps1` (no parameters)
+2. Script checks all repos for changes and builds if needed
+3. Script returns launch command
+4. Execute launch command with Bash tool in background
+5. Monitor with BashOutput to get dashboard URL
 
 ### Skip Build
 
-```
-"launch orca without building"
-- Skips all build checks
-- Uses existing binaries
-- Faster startup (if already built)
+When user says **"without building"**:
+```bash
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\orca\scripts\Launch-Orca.ps1" -SkipBuild
 ```
 
 ### Force Rebuild
 
-```
-"launch orca with rebuild"
-- Rebuilds all repos regardless of changes
-- Ensures clean build state
-```
-
-## Common Commands
-
+When user says **"rebuild"** or **"with rebuild"**:
 ```bash
-# Standard launch with smart build
-"launch orca"
-
-# Force rebuild everything
-"launch orca and rebuild everything"
-
-# Skip build check (faster if already built)
-"launch orca without building"
-
-# Stop Orca
-"stop orca processes"
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\orca\scripts\Launch-Orca.ps1" -ForceBuild
 ```
+
+## User Commands
+
+Users may say:
+- `"launch orca"` → Standard launch with smart build detection
+- `"launch orca and rebuild everything"` → Force rebuild (-ForceBuild)
+- `"launch orca without building"` → Skip build check (-SkipBuild)
+- `"stop orca processes"` → Stop running Orca (use Stop-ActionsProcesses script)
 
 ## Dashboard Access
 
@@ -195,5 +223,20 @@ After launch (~10-15 seconds for startup):
 
 ---
 
-**Version:** 2.0.0
-**Last Updated:** 2025-11-03
+**Version:** 2.1.0
+**Last Updated:** 2025-11-04
+
+## Changelog
+
+### v2.1.0 (2025-11-04)
+- **BREAKING**: Added "CRITICAL: How to Execute This Skill" section
+- Explicitly instructs to call `Launch-Orca.ps1` directly, not write custom scripts
+- Added step-by-step execution guide with exact PowerShell commands
+- Documented the PSCustomObject return structure
+- Clarified that all build detection logic is already in the scripts
+- Fixed confusion about when to use bash vs PowerShell vs writing scripts
+
+### v2.0.0 (2025-11-03)
+- Initial version with embedded scripts
+- Smart build detection with branch tracking
+- Support for dotnet and MSBuild projects
