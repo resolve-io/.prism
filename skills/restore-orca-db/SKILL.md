@@ -1,7 +1,7 @@
 ---
 name: restore-orca-db
 description: Restore Orca SQL database from backup in user profile cache
-version: 2.1.0
+version: 2.2.0
 ---
 
 # Orca Database Restore Skill
@@ -10,6 +10,42 @@ version: 2.1.0
 
 **Restore most recent backup:** `"restore orca database"`
 **Restore specific backup:** `"restore orca database from migration-test"`
+
+## CRITICAL: How to Execute This Skill
+
+**DO NOT write your own PowerShell scripts.** All logic is already implemented in `Restore-DockerVolume.ps1`.
+
+### Step 1: Call Restore-DockerVolume.ps1
+
+**Restore most recent backup:**
+```bash
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\restore-orca-db\scripts\Restore-DockerVolume.ps1"
+```
+
+**Restore specific named backup:**
+```bash
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\restore-orca-db\scripts\Restore-DockerVolume.ps1" -BackupName "migration-test"
+```
+
+**Skip confirmation countdown:**
+```bash
+powershell.exe -ExecutionPolicy Bypass -File "D:\dev\.prism\skills\restore-orca-db\scripts\Restore-DockerVolume.ps1" -SkipConfirmation
+```
+
+### Step 2: Monitor the Output
+
+The script will:
+1. Find the correct Orca SQL volume (with interactive prompts if needed)
+2. Locate the backup file
+3. Stop any running containers using the volume
+4. Clear the volume and restore the backup
+5. Restart containers that were running before
+
+The script returns a PSCustomObject with:
+- `Success` (bool): Whether restore succeeded
+- `VolumeName` (string): The volume that was restored
+- `BackupFile` (string): The backup file used
+- `Message` (string): Status message
 
 ## What This Skill Does
 
@@ -172,10 +208,22 @@ See: [Troubleshooting Guide](./reference/troubleshooting.md)
 
 ---
 
-**Version:** 2.1.0
-**Last Updated:** 2025-11-03
-**Changelog:**
-- v2.1.0: Added smart volume detection that prioritizes volumes in use by containers
-- v2.1.0: Added interactive prompts for multiple or ambiguous volume scenarios
-- v2.1.0: Fixed PowerShell array handling bug in single-volume detection
-- v2.0.0: Initial release with basic volume discovery
+**Version:** 2.2.0
+**Last Updated:** 2025-11-05
+
+## Changelog
+
+### v2.2.0 (2025-11-05)
+- **BREAKING**: Added "CRITICAL: How to Execute This Skill" section
+- Explicitly instructs to call `Restore-DockerVolume.ps1` directly, not write custom scripts
+- Added step-by-step execution guide with exact PowerShell commands
+- Documented the PSCustomObject return structure
+- Clarified that all restore logic is already in the scripts
+
+### v2.1.0 (2025-11-03)
+- Added smart volume detection that prioritizes volumes in use by containers
+- Added interactive prompts for multiple or ambiguous volume scenarios
+- Fixed PowerShell array handling bug in single-volume detection
+
+### v2.0.0 (Initial)
+- Initial release with basic volume discovery
