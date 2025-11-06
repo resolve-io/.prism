@@ -62,6 +62,7 @@ coverage/
 # PRISM Context Memory (runtime files only, not vault)
 .prism-memory.db
 .prism-memory-log.txt
+.prism-memory-api-log.txt
 .prism-memory.db-shm
 .prism-memory.db-wal
 .prism-knowledge/

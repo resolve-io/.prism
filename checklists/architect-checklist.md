@@ -1,4 +1,4 @@
-<!-- Powered by BMAD™ Core -->
+<!-- Powered by PRISM™ System -->
 
 # Architect Solution Validation Checklist
 

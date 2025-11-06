@@ -81,6 +81,9 @@ commands:
       This adaptive command handles all architecture scenarios intelligently.
   - doc-out: Output full document to current destination file
   - document-project: execute the task document-project.md
+  - initialize-architecture: execute the task initialize-architecture.md to create all architecture documents
+  - validate-architecture: execute checklist architecture-validation-checklist.md to verify architecture documentation
+  - optimize-smart-connections: execute task optimize-for-smart-connections.md to enable AI semantic search
   - execute-checklist {checklist}: Run task execute-checklist (default->architect-checklist)
   - research {topic}: execute task create-deep-research-prompt
   - shard-prd: run the task shard-doc.md for the provided architecture.md (ask if not found)
@@ -89,6 +92,7 @@ commands:
 dependencies:
   checklists:
     - architect-checklist.md
+    - architecture-validation-checklist.md
   docs:
     - technical-preferences.md
   tasks:
@@ -97,6 +101,8 @@ dependencies:
     - document-project.md
     - execute-checklist.md
     - fetch-jira-issue.md
+    - initialize-architecture.md
+    - optimize-for-smart-connections.md
   templates:
     - architecture-tmpl.yaml
     - fullstack-architecture-tmpl.yaml

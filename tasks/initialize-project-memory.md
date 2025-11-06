@@ -23,19 +23,23 @@ python skills/context-memory/utils/init_vault.py
 ```
 
 This creates:
-- `.prism-knowledge/` vault folder
+- `docs/memory/` vault folder (at project root)
 - Folder structure (Files, Patterns, Decisions, Commits, etc.)
 - Index files (README, File Index, Pattern Index, Decision Log)
 - `.gitignore` configuration
 
+**Default location:** `docs/memory/` (one level up from `.prism/`)
+
+**Custom location:** Set `PRISM_OBSIDIAN_VAULT` in `.env` file
+
 ### 3. Verify Setup
 
 ```bash
-# Check vault exists
-ls -lh .prism-knowledge/
+# Check vault exists (from project root)
+ls -lh docs/memory/
 
 # Check structure
-ls .prism-knowledge/PRISM-Memory/
+ls docs/memory/PRISM-Memory/
 
 # View stats
 python -c "from skills.context-memory.utils.storage_obsidian import get_memory_stats; print(get_memory_stats())"
@@ -86,14 +90,34 @@ Claude will:
 - Organize by file path structure
 - Capture patterns and architecture decisions
 
-### 6. Open in Obsidian (Optional)
+### 6. Enable REST API (Optional but Recommended)
+
+For instant synchronization with Obsidian:
+
+1. Install **Local REST API** plugin in Obsidian
+2. Get API key from plugin settings
+3. Configure `.prism/.env`:
+   ```bash
+   cd .prism
+   cp .env.example .env
+   # Edit .env and replace 'your-api-key-here' with your actual key
+   ```
+4. Test: `python skills/context-memory/utils/obsidian_rest_client.py`
+
+**Security:** Never commit `.env` - it contains your personal API key!
+
+**Benefits:** Instant updates in Obsidian, 10x faster search
+
+See: `skills/context-memory/reference/obsidian-rest-api.md` for details
+
+### 7. Open in Obsidian (Optional)
 
 1. Launch Obsidian
 2. File > Open vault
-3. Select `.prism-knowledge/`
+3. Select `docs/memory/` (from project root)
 4. Explore the knowledge graph
 
-### 7. Verify Results
+### 8. Verify Results
 
 ```bash
 # Check stats
@@ -102,12 +126,12 @@ python -c "from skills.context-memory.utils.storage_obsidian import get_memory_s
 # Test search
 python -c "from skills.context-memory.utils.storage_obsidian import recall_query; results = recall_query('authentication'); print(f'Found {len(results)} results')"
 
-# Browse notes
-ls .prism-knowledge/PRISM-Memory/Files/
-ls .prism-knowledge/PRISM-Memory/Patterns/
+# Browse notes (from project root)
+ls docs/memory/PRISM-Memory/Files/
+ls docs/memory/PRISM-Memory/Patterns/
 ```
 
-### 8. Automatic Capture is Now Active
+### 9. Automatic Capture is Now Active
 
 With hooks enabled, all future edits are captured automatically:
 - File changes → Notes in `Files/`
@@ -127,7 +151,7 @@ After completion:
 ## Vault Structure
 
 ```
-.prism-knowledge/PRISM-Memory/
+docs/memory/PRISM-Memory/
 ├── Files/              # File analyses (mirrors source structure)
 │   └── src/
 │       └── auth/
@@ -150,9 +174,9 @@ After completion:
 
 ### Vault Not Found
 ```
-❌ Vault does not exist: .prism-knowledge
+❌ Vault does not exist: docs/memory
 ```
-**Solution:** Run `python skills/context-memory/utils/init_vault.py`
+**Solution:** Run `python skills/context-memory/utils/init_vault.py` from `.prism/` directory
 
 ### Import Error
 ```
@@ -163,9 +187,10 @@ ModuleNotFoundError: No module named 'frontmatter'
 ### Hook Not Capturing Files
 **Check:**
 - Verify hook paths in `.claude/hooks.json`
-- Ensure vault exists at `.prism-knowledge/`
+- Ensure vault exists at `docs/memory/` (from project root)
 - Confirm file is source code (hooks skip .md, .json, etc.)
 - Review `.prism-memory-log.txt` for errors
+- Check REST API status in `.prism-memory-api-log.txt` (if using API)
 
 ### Notes Not Appearing in Obsidian
 **Solution:**

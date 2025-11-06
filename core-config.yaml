@@ -12,6 +12,26 @@ architecture:
   architectureVersion: v4
   architectureSharded: true
   architectureShardedLocation: docs/architecture
+  # Required architecture documents (created by initialize-architecture task)
+  requiredDocs:
+    - name: coding-standards.md
+      description: Coding standards, patterns, and conventions
+      purpose: Define code quality standards and style guidelines
+    - name: tech-stack.md
+      description: Technology stack and dependencies
+      purpose: Document all technologies, frameworks, and tools
+    - name: source-tree.md
+      description: Source code organization and structure
+      purpose: Map directory structure and file organization
+    - name: deployment.md
+      description: Deployment architecture and infrastructure
+      purpose: Document deployment strategy and environments
+    - name: data-model.md
+      description: Data models and database schemas
+      purpose: Document data structures and relationships
+    - name: api-contracts.md
+      description: API contracts and integration points
+      purpose: Document all API endpoints and integrations
 customTechnicalDocuments: null
 devLoadAlwaysFiles:
   - docs/architecture/coding-standards.md
@@ -58,3 +78,58 @@ memory:
     interactions: PRISM-Memory/Interactions
     preferences: PRISM-Memory/Preferences
     learnings: PRISM-Memory/Learnings
+
+# Project Documentation Settings (document-project task)
+documentation:
+  output_folder: docs/project       # Where documentation will be generated
+  default_scan_level: quick         # Default: quick | deep | exhaustive
+  max_file_size_kb: 500            # Skip files larger than this
+  skip_directories:                 # Directories to ignore during scanning
+    - node_modules
+    - .git
+    - dist
+    - build
+    - coverage
+    - __pycache__
+  include_file_types:              # File extensions to analyze
+    - .ts
+    - .js
+    - .tsx
+    - .jsx
+    - .py
+    - .java
+    - .cs
+    - .go
+    - .rs
+    - .rb
+    - .php
+    - .md
+
+# Smart Connections Integration (Obsidian AI semantic search)
+smart_connections:
+  enabled: true
+  vault_path: ../docs/memory          # Main knowledge vault
+  additional_vaults:                   # Additional vaults to index
+    - path: ./.prism
+      name: PRISM System
+      include_patterns:
+        - "**/*.md"
+      exclude_patterns:
+        - "**/node_modules/**"
+        - "**/.git/**"
+        - "**/.claude-temp/**"
+
+  # Semantic optimization settings
+  semantic_tags:
+    enabled: true
+    auto_generate: false              # Manual tagging preferred for quality
+
+  # Frontmatter template for new documents
+  frontmatter_template:
+    tags: []                          # Semantic tags
+    aliases: []                       # Alternative names
+    related: []                       # Related document links
+    type: null                        # Document type (task|checklist|skill|doc)
+    domain: null                      # Domain area
+    complexity: null                  # simple|moderate|complex
+    status: draft                     # draft|active|deprecated

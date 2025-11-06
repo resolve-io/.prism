@@ -49,6 +49,15 @@ try:
 except ImportError:
     INTELLIGENCE_AVAILABLE = False
 
+# Import REST API client
+try:
+    from obsidian_rest_client import get_client as get_rest_client
+    REST_API_AVAILABLE = True
+except ImportError:
+    REST_API_AVAILABLE = False
+    def get_rest_client():
+        return None
+
 # Cache for core-config.yaml
 _core_config_cache = None
 
@@ -266,6 +275,65 @@ def format_date(dt: Optional[datetime] = None) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def write_note_hybrid(note_path: Path, post: frontmatter.Post, vault_path: Path) -> bool:
+    """
+    Write note using REST API with filesystem fallback.
+
+    Strategy:
+    1. Try REST API first (if configured and healthy)
+    2. Fall back to filesystem if API fails
+    3. Always ensure filesystem is in sync
+
+    Args:
+        note_path: Full path to note file
+        post: Frontmatter post object
+        vault_path: Vault root path
+
+    Returns:
+        True if written successfully, False otherwise
+    """
+    # Get markdown content
+    content = frontmatter.dumps(post)
+
+    # Calculate relative path from vault root
+    try:
+        relative_path = note_path.relative_to(vault_path)
+        vault_relative_str = str(relative_path).replace('\\', '/')
+    except ValueError:
+        # Path not relative to vault, use filesystem only
+        vault_relative_str = None
+
+    # Try REST API first
+    api_success = False
+    if REST_API_AVAILABLE and vault_relative_str:
+        client = get_rest_client()
+        if client and client.is_healthy:
+            try:
+                # Extract tags from frontmatter if present
+                tags = post.metadata.get('tags', [])
+                api_success = client.create_or_update_note(
+                    path=vault_relative_str,
+                    content=content,
+                    tags=tags
+                )
+                if api_success:
+                    # REST API succeeded, still write to filesystem for backup
+                    pass
+            except Exception as e:
+                # API failed, will use filesystem fallback
+                pass
+
+    # Filesystem write (always as fallback or backup)
+    try:
+        ensure_folder(note_path.parent)
+        with open(note_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return True
+    except Exception as e:
+        # Both API and filesystem failed
+        return False
+
+
 # ============================================================================
 # STORE operations (Agent provides analyzed data, we just store it)
 # ============================================================================
@@ -306,6 +374,7 @@ def store_file_analysis(
     """
     try:
         folders = get_folder_paths()
+        vault_path = get_vault_path()
 
         # Create file structure matching original path
         # e.g., src/auth/jwt.ts -> Files/src/auth/jwt.ts.md
@@ -418,9 +487,8 @@ def store_file_analysis(
         # Create or update frontmatter post
         post = frontmatter.Post(content, **metadata)
 
-        # Write to file
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(frontmatter.dumps(post))
+        # Write to file using hybrid approach (REST API + filesystem)
+        write_note_hybrid(note_path, post, vault_path)
 
         if not is_update:
             print(f"[OK] Stored analysis for {file_path}")
@@ -449,6 +517,7 @@ def store_pattern(
     """
     try:
         folders = get_folder_paths()
+        vault_path = get_vault_path()
 
         # Organize by category if provided
         if category:
@@ -506,8 +575,7 @@ def store_pattern(
         # Create or update note
         post = frontmatter.Post(content, **metadata)
 
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(frontmatter.dumps(post))
+        write_note_hybrid(note_path, post, vault_path)
 
         print(f"[OK] Stored pattern: {name}")
         return True
@@ -534,6 +602,7 @@ def store_decision(
     """
     try:
         folders = get_folder_paths()
+        vault_path = get_vault_path()
         ensure_folder(folders['decisions'])
 
         # Create filename with date prefix for chronological sorting
@@ -581,8 +650,7 @@ def store_decision(
         # Create note
         post = frontmatter.Post(content, **metadata)
 
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(frontmatter.dumps(post))
+        write_note_hybrid(note_path, post, vault_path)
 
         print(f"[OK] Stored decision: {title}")
         return True
@@ -613,6 +681,7 @@ def store_interaction(
     """
     try:
         folders = get_folder_paths()
+        vault_path = get_vault_path()
         ensure_folder(folders['interactions'])
 
         # Create filename with timestamp and topic
@@ -651,8 +720,7 @@ def store_interaction(
         # Create note
         post = frontmatter.Post(content, **metadata)
 
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(frontmatter.dumps(post))
+        write_note_hybrid(note_path, post, vault_path)
 
         return True
 
@@ -684,6 +752,7 @@ def store_git_commit(
     """
     try:
         folders = get_folder_paths()
+        vault_path = get_vault_path()
 
         # Organize by year-month
         commit_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
@@ -735,8 +804,7 @@ def store_git_commit(
         # Create note
         post = frontmatter.Post(content, **metadata)
 
-        with open(note_path, 'w', encoding='utf-8') as f:
-            f.write(frontmatter.dumps(post))
+        write_note_hybrid(note_path, post, vault_path)
 
         return True
 
@@ -876,9 +944,8 @@ def recall_query(query: str, limit: int = 10, update_access: bool = True) -> Lis
                     post.metadata['access_count'] = old_access_count + 1
                     post.metadata['last_accessed'] = format_date()
 
-                    # Write updated metadata
-                    with open(note_path, 'w', encoding='utf-8') as f:
-                        f.write(frontmatter.dumps(post))
+                    # Write updated metadata using hybrid approach
+                    write_note_hybrid(note_path, post, vault)
 
                 except Exception:
                     # Don't fail query if update fails
@@ -1188,8 +1255,7 @@ def consolidate_story_learnings(
                         post.metadata['review_reason'] = f'Low confidence ({confidence:.2f}) after story {story_id}'
                         post.metadata['last_story'] = story_id
 
-                        with open(note_path, 'w', encoding='utf-8') as f:
-                            f.write(frontmatter.dumps(post))
+                        write_note_hybrid(note_path, post, vault)
 
                         stats['memories_refreshed'] += 1
                     else:
@@ -1199,8 +1265,7 @@ def consolidate_story_learnings(
                         post.metadata['last_story'] = story_id
                         post.metadata['last_accessed'] = format_date()
 
-                        with open(note_path, 'w', encoding='utf-8') as f:
-                            f.write(frontmatter.dumps(post))
+                        write_note_hybrid(note_path, post, vault)
 
         # 2. Reinforce patterns that were used
         if patterns_used:
@@ -1219,8 +1284,7 @@ def consolidate_story_learnings(
                         post.metadata['last_used_story'] = story_id
                         post.metadata['last_accessed'] = format_date()
 
-                        with open(pattern_file, 'w', encoding='utf-8') as f:
-                            f.write(frontmatter.dumps(post))
+                        write_note_hybrid(pattern_file, post, vault)
 
                         stats['patterns_reinforced'] += 1
                         break
@@ -1267,8 +1331,7 @@ def consolidate_story_learnings(
                 content += "<!-- Links to related files, patterns, and decisions -->\n"
 
                 post = frontmatter.Post(content, **metadata)
-                with open(learning_note, 'w', encoding='utf-8') as f:
-                    f.write(frontmatter.dumps(post))
+                write_note_hybrid(learning_note, post, vault)
 
                 stats['learnings_captured'] = 1
 

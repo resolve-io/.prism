@@ -1,328 +1,302 @@
 ---
 name: context-memory
-description: Setup and configure PRISM long-term memory using Obsidian vault to capture codebase context (files, patterns, decisions, git history) as human-readable markdown notes. Skills query memory for context-aware suggestions.
-version: 1.6.0
+description: Python utility API for storing and retrieving project context in Obsidian vault markdown notes
+version: 1.7.0
 ---
 
-# Context Memory System
+# Context Memory - Utility API Reference
 
-Long-term memory for PRISM skills using Obsidian markdown notes with intelligent learning.
+Python storage utilities for capturing codebase context as Obsidian markdown notes.
 
-## What This Does
+## What This Is
 
-**Captures codebase context automatically:**
-- File analyses with summaries and functions
-- Code patterns and conventions
-- Architectural decisions with reasoning
-- Git commit history
-- Agent learnings from interactions
+**Pure utility functions** for storing/retrieving context:
+- File analyses (summaries, functions, complexity)
+- Code patterns (reusable implementations)
+- Architectural decisions (with reasoning)
+- Git commits (change summaries)
 
-**Stores as human-readable markdown:**
-- Organized folder structure in Obsidian vault
-- YAML frontmatter with intelligence metadata
-- Wikilinks connect related concepts
-- Full-text searchable with semantic tags
+**Storage:** Markdown files in Obsidian vault with YAML frontmatter
 
-**Learns and improves over time:**
-- Updates existing knowledge rather than duplicating
-- Confidence scores increase with successful use
-- Memory decay signals need for refresh, not deletion
-- Post-story consolidation reviews and updates decayed memories
-- Patterns/decisions reinforced when successfully applied
-- Auto-extracts semantic tags from content
-- Tracks access patterns and relevance
-
-**Provides smart retrieval:**
-- Skills query context before suggesting solutions
-- Confidence-weighted results
-- Relevance scoring combines recency + frequency + confidence
-- Visual knowledge graph in Obsidian
-
-**Works transparently:**
-- No new user commands needed
-- Existing skills use it automatically
-- Intelligence features run in background
-- Context builds and refines as you code
-
-## Quick Start
-
-### 1. Install Dependencies
+## Installation
 
 ```bash
-pip install python-frontmatter
+pip install python-frontmatter pyyaml
 ```
-
-### 2. Initialize Vault
-
-```bash
-python skills/context-memory/utils/init_vault.py
-```
-
-Creates `docs/memory/` vault at the project root (same level as `.prism/`).
-
-**Example**:
-- PRISM plugin: `C:\Dev\.prism\`
-- Project root: `C:\Dev\`
-- Vault created at: `C:\Dev\docs\memory\`
-
-### 3. Enable Auto-Capture
-
-Configure hooks in `.claude/hooks.json`:
-
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{"type": "command", "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/capture-file-context-obsidian.py"}]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [{"type": "command", "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/capture-commit-context-obsidian.py"}]
-      }
-    ]
-  }
-}
-```
-
-### 4. Use Normally
-
-Context memory works automatically:
-```bash
-/dev "implement authentication"
-# Dev skill queries memory for similar implementations
-
-/architect "design payment system"
-# Architect skill recalls previous decisions
-
-/qa "review tests"
-# QA skill checks against established patterns
-```
-
-### 5. Open in Obsidian (Optional)
-
-Browse your knowledge base:
-1. Launch Obsidian
-2. File > Open vault
-3. Select `docs/memory/` from your project root
-4. Explore graph view (Ctrl+G)
 
 ## Configuration
 
-**Configuration Priority** (highest to lowest):
-1. Environment variables (`.env` file)
-2. `core-config.yaml` settings
-3. Built-in defaults
-
-### Option 1: Use core-config.yaml (Recommended)
-
-In `core-config.yaml`:
+Set vault location in `core-config.yaml`:
 
 ```yaml
 memory:
   enabled: true
   storage_type: obsidian
   vault: ../docs/memory
-  auto_capture: true
-  folders:
-    files: PRISM-Memory/Files
-    patterns: PRISM-Memory/Patterns
-    decisions: PRISM-Memory/Decisions
-    commits: PRISM-Memory/Commits
 ```
 
-### Option 2: Use Environment Variables
-
-In `.env` (in PRISM root directory):
+Or via environment variable:
 
 ```bash
-# Vault path - relative to .prism folder
 PRISM_OBSIDIAN_VAULT=../docs/memory
-
-# Enable automatic capture
-PRISM_MEMORY_AUTO_CAPTURE=true
 ```
 
-**Path Resolution**:
-- Relative paths: resolved from `.prism/` folder
-- Absolute paths: used as-is
+## Initialize Vault
 
-**Examples**:
 ```bash
-# Default (recommended) - vault at project root
-PRISM_OBSIDIAN_VAULT=../docs/memory
-# → C:\Dev\docs\memory (same level as .prism)
-
-# Vault inside .prism folder
-PRISM_OBSIDIAN_VAULT=docs/knowledge
-# → C:\Dev\.prism\docs\knowledge
-
-# Absolute path (use existing Obsidian vault)
-PRISM_OBSIDIAN_VAULT=/Users/you/Documents/Obsidian/MyVault
-# → /Users/you/Documents/Obsidian/MyVault
+python skills/context-memory/utils/init_vault.py
 ```
 
-## Post-Story Learning Cycle
+Creates folder structure:
+```
+docs/memory/PRISM-Memory/
+├── Files/          # File analyses
+├── Patterns/       # Code patterns
+├── Decisions/      # Architecture decisions
+└── Commits/        # Git history
+```
 
-After each story completion, the system automatically:
+## API Reference
 
-**1. Reviews Related Memories**
-- Finds file analyses for changed files
-- Checks confidence scores for each memory
-- Identifies patterns and decisions that were used
+### Import
 
-**2. Refreshes Decayed Memories**
-- Memories with confidence < 0.3 are marked for review
-- Tagged with `needs-review` for agent attention
-- Context updated based on story learnings
+```python
+from skills.context_memory.utils.storage_obsidian import (
+    store_file_analysis,
+    store_pattern,
+    store_decision,
+    recall_query,
+    recall_file,
+    get_memory_stats
+)
+```
 
-**3. Reinforces Successful Patterns**
-- Patterns used in the story gain confidence
-- Usage count incremented
-- Last-used timestamp updated
+### store_file_analysis()
 
-**4. Captures Story Learnings**
-- Key takeaways stored in `Learnings/` folder
-- Links to related files, patterns, decisions
-- Forms part of knowledge graph
+Store analysis of a source file.
 
-**Why This Matters for Coding:**
-- Decayed memories signal "needs update" not "delete"
-- Code context is never lost, only refreshed
-- System learns which patterns work over time
-- Knowledge compounds across stories
+```python
+store_file_analysis(
+    file_path: str,       # Relative path from project root
+    summary: str,         # Brief description
+    purpose: str,         # What it does
+    complexity: str,      # simple|moderate|complex
+    key_functions: List[str] = None,  # Important functions
+    dependencies: List[str] = None,   # External dependencies
+    notes: str = None     # Additional context
+)
+```
 
-**Configuration:**
-```yaml
-# In core-config.yaml
-memory:
-  decay_half_life_days: 30              # How fast memories decay
-  review_threshold: 0.3                  # Confidence requiring review
-  consolidate_on_story_complete: true    # Enable post-story learning
-  refresh_related_memories: true         # Update decayed memories
+**Example:**
+```python
+store_file_analysis(
+    file_path='src/auth/jwt-handler.ts',
+    summary='JWT token validation and refresh',
+    purpose='Handles authentication tokens',
+    complexity='moderate',
+    key_functions=['validateToken', 'refreshToken', 'revokeToken'],
+    dependencies=['jsonwebtoken', 'crypto'],
+    notes='Uses RSA256 signing'
+)
+```
+
+**Output:** `docs/memory/PRISM-Memory/Files/src/auth/jwt-handler.md`
+
+### store_pattern()
+
+Store reusable code pattern.
+
+```python
+store_pattern(
+    name: str,           # Pattern name
+    description: str,    # What it does
+    category: str,       # Pattern type
+    example_path: str = None,  # Where used
+    code_example: str = None,  # Code snippet
+    when_to_use: str = None    # Usage guidance
+)
+```
+
+**Example:**
+```python
+store_pattern(
+    name='Repository Pattern',
+    description='Encapsulates data access logic in repository classes',
+    category='architecture',
+    example_path='src/repos/user-repository.ts',
+    when_to_use='When abstracting database operations'
+)
+```
+
+**Output:** `docs/memory/PRISM-Memory/Patterns/architecture/repository-pattern.md`
+
+### store_decision()
+
+Record architectural decision.
+
+```python
+store_decision(
+    title: str,          # Decision title
+    decision: str,       # What was decided
+    context: str,        # Why it matters
+    alternatives: str = None,  # Options considered
+    consequences: str = None   # Impact/tradeoffs
+)
+```
+
+**Example:**
+```python
+store_decision(
+    title='Use JWT for Authentication',
+    decision='Implement stateless JWT tokens instead of server sessions',
+    context='Need to scale API horizontally across multiple servers',
+    alternatives='Considered Redis sessions but adds dependency',
+    consequences='Tokens cannot be revoked until expiry'
+)
+```
+
+**Output:** `docs/memory/PRISM-Memory/Decisions/YYYYMMDD-use-jwt-for-authentication.md`
+
+### recall_query()
+
+Search all stored context.
+
+```python
+recall_query(
+    query: str,          # Search terms
+    limit: int = 10      # Max results
+) -> List[Dict]
+```
+
+**Returns:**
+```python
+[
+    {
+        'type': 'file',  # file|pattern|decision
+        'path': 'src/auth/jwt-handler.ts',
+        'summary': 'JWT token validation...',
+        'content': '...'  # Full markdown content
+    },
+    ...
+]
+```
+
+**Example:**
+```python
+results = recall_query('authentication JWT')
+for result in results:
+    print(f"{result['type']}: {result['path']}")
+    print(f"  {result['summary']}")
+```
+
+### recall_file()
+
+Get analysis for specific file.
+
+```python
+recall_file(file_path: str) -> Optional[Dict]
+```
+
+**Returns:**
+```python
+{
+    'path': 'src/auth/jwt-handler.ts',
+    'summary': '...',
+    'purpose': '...',
+    'complexity': 'moderate',
+    'key_functions': [...],
+    'last_analyzed': '2025-01-05'
+}
+```
+
+**Example:**
+```python
+analysis = recall_file('src/auth/jwt-handler.ts')
+if analysis:
+    print(f"Complexity: {analysis['complexity']}")
+```
+
+### get_memory_stats()
+
+Get vault statistics.
+
+```python
+get_memory_stats() -> Dict
+```
+
+**Returns:**
+```python
+{
+    'files_analyzed': 42,
+    'patterns_stored': 15,
+    'decisions_recorded': 8,
+    'total_notes': 65,
+    'vault_path': '/path/to/docs/memory'
+}
+```
+
+## Note Structure
+
+All notes use YAML frontmatter + markdown body:
+
+```markdown
+---
+type: file_analysis
+path: src/auth/jwt-handler.ts
+analyzed_at: 2025-01-05T10:30:00
+complexity: moderate
+tags:
+  - authentication
+  - security
+---
+
+# JWT Handler
+
+Brief description of the file...
+
+## Purpose
+What this file does...
+
+## Key Functions
+- validateToken()
+- refreshToken()
 ```
 
 ## Reference Documentation
 
-**Getting Started:**
-- [Quick Start Guide](./reference/obsidian-quickstart.md) - 5-minute setup
-- [Complete Integration Guide](./reference/obsidian.md) - All features
-- [Architecture Design](./reference/obsidian-migration.md) - Vault structure
-
-**Intelligence Features:**
-- [Memory Intelligence](./reference/memory-intelligence.md) - Decay, learning, self-evaluation
-
-**For Skill Developers:**
-- [Integration Guide](./reference/integration.md) - Add memory to your skills
-- [API Reference](./reference/commands.md) - Python storage functions
-
-**System Architecture:**
-- [Overview](./reference/overview.md) - System design
-- [Architecture Details](./reference/architecture.md) - Agent-native design
-- [Knowledge Management](./reference/knowledge-management.md) - Update philosophy
+- [API Reference](./reference/commands.md) - Complete function signatures
+- [Integration Examples](./reference/integration.md) - Code examples for skills
 
 ## File Structure
 
 ```
 skills/context-memory/
 ├── SKILL.md                    # This file
-├── reference/                  # Documentation
-│   ├── obsidian-quickstart.md # 5-minute setup
-│   ├── obsidian.md            # Complete guide
-│   ├── obsidian-migration.md  # Architecture
-│   ├── integration.md         # For skill developers
-│   └── commands.md            # API reference
-├── utils/                      # Python utilities
-│   ├── init_vault.py          # Initialize vault
-│   ├── storage_obsidian.py    # Storage layer with helpers
-│   ├── migrate_to_obsidian.py # Migrate from SQLite
-│   └── test_obsidian.py       # Test system
-└── db/
-    └── schema.sql             # Legacy SQLite schema
-```
-
-## For Skill Developers
-
-Add memory to your skill:
-
-```python
-from storage_obsidian import (
-    store_file_analysis,
-    store_pattern,
-    store_decision,
-    recall_query
-)
-
-# Query before implementing
-results = recall_query("authentication")
-
-# Store patterns
-store_pattern(
-    "Repository Pattern",
-    "Encapsulates data access in repository classes",
-    "src/repos/user-repo.ts",
-    "architecture"
-)
-
-# Record decisions
-store_decision(
-    "Use JWT for auth",
-    "Stateless authentication scales better",
-    "API needs horizontal scaling",
-    "Considered sessions but needed stateless"
-)
-```
-
-See [Integration Guide](./reference/integration.md) for complete examples.
-
-## Vault Structure
-
-```
-docs/memory/PRISM-Memory/
-├── Files/              # File analyses (mirrors source structure)
-├── Patterns/           # Code patterns by category
-├── Decisions/          # Architectural decisions (date-prefixed)
-├── Commits/            # Git commits by month
-├── Interactions/       # Agent learnings
-└── Index/              # Navigation and overview
-    ├── README.md
-    ├── File Index.md
-    └── Pattern Index.md
-```
-
-## Verification
-
-Check if working:
-```bash
-# View stats
-python -c "from skills.context-memory.utils.storage_obsidian import get_memory_stats; print(get_memory_stats())"
-
-# Test search
-python -c "from skills.context-memory.utils.storage_obsidian import recall_query; print(len(recall_query('test')))"
-
-# Browse notes
-ls docs/memory/PRISM-Memory/
+├── reference/
+│   ├── commands.md            # Complete API reference
+│   └── integration.md         # Integration examples
+└── utils/
+    ├── init_vault.py          # Initialize vault
+    ├── storage_obsidian.py    # Storage functions
+    └── memory_intelligence.py # Confidence/decay utilities
 ```
 
 ## Troubleshooting
 
 **Vault not found:**
-- Run `python skills/context-memory/utils/init_vault.py`
+```bash
+python skills/context-memory/utils/init_vault.py
+```
 
 **Import errors:**
-- Run `pip install python-frontmatter`
+```bash
+pip install python-frontmatter pyyaml
+```
 
-**Hooks not triggering:**
-- Verify `.claude/hooks.json` is valid JSON
-- Ensure vault exists at `docs/memory/`
-- Check `.prism-memory-log.txt` for errors
-
-**Notes not in Obsidian:**
-- Close and reopen vault
-- Verify vault path in `.env`
-- Check files exist in filesystem
+**Path issues:**
+- Paths are relative to project root
+- Vault path is relative to `.prism/` folder
 
 ---
 
-**Version:** 1.6.0 - Obsidian-native memory system with post-story learning
+**Version:** 1.7.0 - Pure utility API for Obsidian storage
