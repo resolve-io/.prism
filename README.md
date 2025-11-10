@@ -248,6 +248,8 @@ Each skill contains:
 - `reference/` - Detailed guides (loaded as needed)
 
 Main documentation:
+- `docs/index.md` - Documentation hub and sub-agent system guide
+- `docs/guides/claude-code-overview.md` - How PRISM leverages Claude Code architecture (with links to all components)
 - `docs/prism-workflow.md` - Development process
 - `docs/prism-kb.md` - PRISM knowledge base
 - `docs/coding-standards-reference.md` - Coding standards and security practices

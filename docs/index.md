@@ -134,8 +134,29 @@ docs/
 ├── sub-agent-user-guide.md                   (Comprehensive guide - start here)
 ├── sub-agent-quick-reference.md              (Cheat sheet - bookmark this)
 ├── sub-agent-implementation-playbook.md      (Implementation details & architecture)
+├── guides/
+│   └── claude-code-overview.md              (How PRISM leverages Claude Code architecture)
 └── archive/                                  (Historical implementation docs)
 ```
+
+---
+
+## 📚 Learning Resources
+
+### Understanding Claude Code Architecture
+
+New to Claude Code or want to understand how PRISM leverages its features?
+
+**[How PRISM Leverages Claude Code's Architecture](./guides/claude-code-overview.md)** - Learn Claude Code concepts through PRISM's actual implementation:
+- **Project Memory** (CLAUDE.md) - Persistent context and conventions
+- **Slash Commands** - 7 manual agent workflows ([`/dev`](../commands/dev.md), [`/qa`](../commands/qa.md), etc.)
+- **Subagents** - 10 validation agents with isolated contexts
+- **Hooks** - 6 automatic workflow enforcers (story context, validation)
+- **Skills** - 11 auto-activating agent personas and meta-tools
+- **Plugins** - How PRISM bundles everything for distribution
+- **MCP** - Optional external system integrations (Jira, GitHub)
+
+This guide is **integration-focused**: every concept links to actual PRISM components you can examine.
 
 ---
 
@@ -146,6 +167,7 @@ docs/
 3. **Understanding validation**: See examples in [User Guide](./sub-agent-user-guide.md#understanding-validation-results)
 4. **Common issues**: [Quick Reference](./sub-agent-quick-reference.md#common-issues--quick-fixes) has solutions
 5. **Implementation details**: [Playbook](./sub-agent-implementation-playbook.md) has everything
+6. **Learning Claude Code**: [How PRISM Uses Claude Code](./guides/claude-code-overview.md)
 
 ---
 
