@@ -182,6 +182,6 @@ See [archive/README.md](./archive/README.md) for details.
 
 ---
 
-**Plugin Version**: 1.5.0
+**Plugin Version**: 1.7.0
 **Sub-Agent System**: Production Ready
-**Last Updated**: 2025-10-27
+**Last Updated**: 2025-11-10

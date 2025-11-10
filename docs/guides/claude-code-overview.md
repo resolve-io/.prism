@@ -299,4 +299,4 @@ PRISM demonstrates progressive disclosure at multiple levels:
 ---
 
 **Last Updated:** 2025-11-10
-**PRISM Version:** 1.5.0
+**PRISM Version:** 1.7.0

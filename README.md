@@ -1,50 +1,29 @@
 # PRISM Development System
 
-**Version 1.4.0** - Hooks Manager & Workflow Automation
+**Version 1.7.0** - Smart Connections Integration & Documentation Optimization
 
 A comprehensive Claude Code plugin that implements the PRISM software engineering methodology with specialized agents, progressive disclosure patterns, integrated workflows, and workflow automation hooks.
 
-## What's New in 1.4.0
+## What's New in 1.7.0
 
-🎯 **Hooks Manager Skill** - Complete hook management system for Claude Code
-✅ **PRISM Workflow Hooks** - Active enforcement of core-development-cycle workflow
-✅ **Official Hook Format** - Updated to match docs.claude.com specification
-✅ **Progressive Disclosure** - hooks-manager optimized from 363→179 lines (51% reduction)
-✅ **Security Documentation** - Threat models, checklists, and secure patterns
+🎯 **Smart Connections Integration** - AI-powered semantic search for PRISM documentation
+✅ **Documentation Optimization** - Intelligent upserts prevent duplication
+✅ **Architecture System** - Complete architecture documentation workflow
+✅ **Context Memory Cleanup** - Streamlined Obsidian-only storage (80% file reduction)
 
 ### Key Features
-- **Hooks Manager**: 15 commands for creating, testing, and managing hooks
-- **4 Active Hooks**: Story context enforcement, validation, and tracking
-- **Complete Documentation**: 2,788 lines across SKILL.md + 4 reference files
-- **Security Guide**: 378 lines covering 5 threat models and incident response
-- **13 Pre-built Patterns**: Logging, safety, automation, and notification examples
+- **Smart Connections**: Semantic search, 50+ tags, MOC files, quick start guide
+- **Intelligent Doc Upserts**: Query before creating (>70% similarity), auto-consolidation
+- **Architecture Docs**: 6 templates, 98-item validation checklist, initialization task
+- **Memory System**: Simplified to filesystem-only, enhanced semantic metadata
 
-### Hook Configuration Format
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/enforce-story-context.py"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+### Previous Updates
+- **1.6.0**: Documentation validation system and PRISM methodology checklist
+- **1.5.0**: Obsidian-based context memory with Smart Connections preparation
+- **1.4.0**: Hooks Manager skill with 15 commands and security documentation
+- **1.3.0**: Complete token documentation and parameter consistency
 
-### Previous Updates (1.3.0)
-🎯 **Complete Token Documentation** - Runtime tokens vs template placeholders
-✅ **Command Parameter Consistency** - Fixed all token naming drift
-✅ **100% Token Accountability** - Every token traced from source to consumers
-✅ **Strangler Workflow Fixed** - Now uses actual dev commands
-
-See [CHANGELOG.md](CHANGELOG.md) for complete details.
+See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ## Installation
 
