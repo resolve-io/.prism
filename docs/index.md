@@ -6,47 +6,54 @@
 
 ---
 
-## Quick Start
+## Overview
 
-**New to PRISM?** → [What Is PRISM?](#what-is-prism) - Understand the system
-**Get Started:** → [By Role](#getting-started-by-role) - Find your workflow
-**Need Reference?** → [Components](#system-components) - Deep dive into features
+PRISM is a Claude Code plugin system that implements a complete development methodology through automation. This documentation explains how PRISM leverages Claude Code's architecture to deliver automated quality gates, role-based workflows, and measurable outcomes.
+
+> **Important:** PRISM is built entirely on Claude Code's features—not a web application. We document:
+> - Claude Code architecture: Skills, sub-agents, hooks, workflows, slash commands
+> - [Core Development Workflow](../workflows/core-development-cycle.md): Story Master → Dev → QA → Peer
+> - Python automation, YAML orchestration, Markdown templates
+>
+> Test artifacts (epic-999, tech-stack.md) are fictional examples for validator testing—they represent projects PRISM helps manage, not PRISM itself.
 
 ---
 
-## What Is PRISM?
+## Quick Navigation
 
-PRISM is a **comprehensive development workflow system for Claude Code** that accelerates LLM-powered development through five core principles and practical automation.
+**New to PRISM?** → [Installation](../README.md#quick-start) · [First Steps](../README.md#2-first-steps)
+**Main Workflow** → [Core Development Cycle](../workflows/core-development-cycle.md) (SM → Dev → QA → Peer)
+**By Role** → [Developers](#for-developers) · [Story Masters](#for-story-masters) · [QA Engineers](#for-qa-engineers)
+**By Feature** → [Sub-Agents](#sub-agent-validation-system) · [Workflows](#workflows) · [Skills](#skills) · [Hooks](#hooks)
 
-> **Important:** PRISM is a Claude Code plugin and automation system, not a web application. It has no technology stack (Node.js, React, databases, etc.) - it operates entirely within Claude Code using skills, agents, hooks, and workflows. References to "tech stack" in documentation refer to projects that PRISM helps manage, not PRISM itself.
+---
 
-### The Five Principles
+## Understanding Claude Code Features in PRISM
 
-| Principle | Focus | Benefit |
-|-----------|-------|---------|
-| **Predictability** | Structured processes, measurement | Repeatable outcomes |
-| **Resiliency** | Test-driven development | Catch issues early |
-| **Intentionality** | Clear, purposeful design | Maintainable code |
-| **Sustainability** | Long-term practices | Reduces technical debt |
-| **Maintainability** | Domain-driven design | Complex logic stays clear |
+PRISM uses Claude Code's feature stack in a layered architecture. Each feature serves a specific purpose in the automation hierarchy.
 
-### System Architecture Layers
+### Quick Overview
 
-```
-5 Principles (methodology)
-   ↓
-7 Role-Based Agents (personas)
-   ↓
-10 Sub-Agent Validators (automation)
-   ↓
-4 Workflow Hooks (enforcement)
-   ↓
-28 Reusable Tasks (operations)
-   ↓
-Quality Gates (measured outcomes)
-```
+| Feature | Purpose | Tutorial |
+|---------|---------|----------|
+| **Slash Commands** | Manual role activation | [Tutorial](./reference/claude-code-features/slash-commands.md) |
+| **Skills** | Auto-activating personas | [Tutorial](./reference/claude-code-features/skills.md) |
+| **Hooks** | Event-driven enforcement | [Tutorial](./reference/claude-code-features/hooks.md) |
+| **Sub-Agents** | Isolated validation | [Tutorial](./reference/claude-code-features/sub-agents.md) |
+| **Workflows** | Multi-step orchestration | [Tutorial](./reference/claude-code-features/workflows.md) |
+| **Tasks** | Reusable operations | [Tutorial](./reference/claude-code-features/tasks.md) |
 
-**Impact**: ~1.3 hours saved per story, 95%+ requirements traceability, <5% rework rate
+### Feature Comparison
+
+| Capability | Commands | Skills | Sub-Agents | Hooks | Workflows | Tasks |
+|------------|----------|--------|------------|-------|-----------|-------|
+| **Activation** | Manual | Auto | Checkpoint | Event | Orchestrated | Called |
+| **Context** | Full | Full | Isolated | Full | Sequential | Varies |
+| **Best for** | Known role | Unknown intent | Validation | Enforcement | Multi-role | Reuse |
+
+**Learn more:** [Complete Tutorial Series](./reference/claude-code-features/README.md)
+
+**Key insight:** Commands give control, skills provide flexibility, sub-agents prevent context pollution, hooks prevent errors, workflows orchestrate complexity, tasks enable reuse.
 
 ---
 
@@ -54,257 +61,264 @@ Quality Gates (measured outcomes)
 
 ### For Developers
 
-**Implement features with automated quality checks**
+**Goal:** Implement features with automated quality checks and TDD workflow
 
-**Start**: [Development Workflow](../workflows/core-development-cycle.md#development-execution-cycle-brownfield-focus)
+**Entry Point:** [Core Development Workflow](../workflows/core-development-cycle.md#development-execution-cycle-brownfield-focus)
 
-**Commands**:
+**Commands:**
 ```bash
-/dev story-001          # Start development
-*develop-story          # Sequential TDD execution
-*review-qa              # Address feedback
+/dev story-001          # Activate developer role
 ```
 
-**Quality Gates**: file-list-auditor, test-runner, lint-checker
+**Key Tools:**
+- Sub-agents: file-list-auditor, test-runner, lint-checker
+- Workflows: [Core Development Cycle](../workflows/core-development-cycle.md)
+- Checklists: [Code Quality](../checklists/code-quality-checklist.md)
 
-**See**: [Dev Command](../commands/dev.md) · [Code Quality Checklist](../checklists/code-quality-checklist.md)
+**Learn More:** [Dev Command](../commands/dev.md)
 
 ---
 
 ### For Story Masters
 
-**Plan and size stories with PSP/PROBE estimation**
+**Goal:** Plan and size stories with PSP/PROBE estimation
 
-**Start**: [Planning Phase](../workflows/core-development-cycle.md#planning-phase)
+**Entry Point:** [Planning Phase](../workflows/core-development-cycle.md#planning-phase)
 
-**Commands**:
+**Commands:**
 ```bash
-/sm                     # Activate Story Master
-*draft                  # Create new story
-*resize {story}         # Re-estimate size
+/sm                     # Activate story master role
 ```
 
-**Quality Gates**: story-structure-validator, story-content-validator, epic-alignment-checker, architecture-compliance-checker, epic-analyzer
+**Key Tools:**
+- Sub-agents: story-structure-validator, story-content-validator, epic-alignment-checker, architecture-compliance-checker, epic-analyzer
+- Tasks: [PROBE Estimation](../tasks/probe-estimation.md)
+- Checklists: [Story Draft](../checklists/story-draft-checklist.md)
 
-**See**: [SM Command](../commands/sm.md) · [Story Checklist](../checklists/story-draft-checklist.md)
+**Learn More:** [SM Command](../commands/sm.md)
 
 ---
 
 ### For QA Engineers
 
-**Design test strategy and validate quality**
+**Goal:** Design test strategy and validate quality gates
 
-**Start**: [QA Role](../workflows/core-development-cycle.md#brownfield-development-approach)
+**Entry Point:** [QA Review Phase](../workflows/core-development-cycle.md#qa-review-phase)
 
-**Commands**:
+**Commands:**
 ```bash
-/qa story-001           # Start QA review
-*risk {story}           # Assess risks
-*design {story}         # Plan test strategy
-*review {story}         # Quality review
-*gate {story}           # Update quality gate
+/qa story-001           # Activate QA role
 ```
 
-**Quality Gates**: requirements-tracer, qa-gate-manager
+**Key Tools:**
+- Sub-agents: requirements-tracer, qa-gate-manager
+- Tasks: [Test Design](../tasks/test-design.md), [Risk Profile](../tasks/risk-profile.md)
+- Templates: [QA Gate YAML](../templates/)
 
-**See**: [QA Command](../commands/qa.md) · [Test Design](../tasks/test-design.md)
-
----
-
-### For Architects, POs, Reviewers
-
-**Architect**: [/architect](../commands/architect.md) - System design and patterns
-**Product Owner**: [/po](../commands/po.md) - Requirements management
-**Peer Reviewer**: [/peer](../commands/peer.md) - Code review
-**Support Engineer**: [/support](../commands/support.md) - Issue validation
+**Learn More:** [QA Command](../commands/qa.md)
 
 ---
 
-## System Components
+### Other Roles
+
+- **Architect** → [/architect](../commands/architect.md) - System design and tech decisions
+- **Product Owner** → [/po](../commands/po.md) - Requirements and backlog management
+- **Peer Reviewer** → [/peer](../commands/peer.md) - Code review and mentoring
+- **Support Engineer** → [/support](../commands/support.md) - Issue validation with Playwright
+
+---
+
+## Core Systems
 
 ### Sub-Agent Validation System
 
-**10 specialized validators** that automatically check quality at critical checkpoints
+**10 specialized validators** running at quality checkpoints—isolated execution prevents context pollution during implementation.
 
-**Quick Access**:
-- [Sub-Agent Overview](./reference/sub-agents/README.md) - What they are and how they work
-- [User Guide](./reference/sub-agents/user-guide.md) - Comprehensive guide for all roles
+**Why sub-agents?** Traditional "check the story" in main context loads entire story into memory, reducing tokens available for implementation. Sub-agents validate in isolation, then report back concisely.
+
+| Agent | Purpose | Runs When |
+|-------|---------|-----------|
+| story-structure-validator | Template compliance | Story creation |
+| story-content-validator | Quality scoring (0-100) | After structure passes |
+| epic-alignment-checker | Scope creep detection | Before approval |
+| architecture-compliance-checker | Tech stack validation | Before approval |
+| epic-analyzer | Decomposition suggestions | Epic breakdown |
+| file-list-auditor | Git changes match story | Development complete |
+| test-runner | Test execution, coverage | Development complete |
+| lint-checker | Code standards | Development complete |
+| requirements-tracer | PRD → Code coverage | QA review |
+| qa-gate-manager | Quality gate YAML | QA decision |
+
+**Impact:** ~1.3 hours saved per story, 95%+ traceability, <5% rework
+
+**Learn More:**
+- [Sub-Agent Overview](./reference/sub-agents/README.md) - What they are, how they work
+- [User Guide](./reference/sub-agents/user-guide.md) - Detailed workflows by role
 - [Quick Reference](./reference/sub-agents/quick-reference.md) - One-page cheat sheet
-- [Implementation](./reference/sub-agents/implementation/) - Architecture and technical details
-
-**Impact**: Saves ~1.3 hours per story, 95%+ traceability, <5% rework
 
 ---
 
 ### Workflows
 
-**Multi-step orchestration** with YAML-based processes and Mermaid diagrams
+**Multi-step orchestration** connecting roles, handoffs, and quality gates.
 
-**Key Workflow**: [Core Development Cycle](../workflows/core-development-cycle.md) - SM → Dev → QA → Peer
+**Core Development Cycle** is the primary workflow:
+```
+Story Master (plan) → Developer (implement) → QA (validate) → Peer (review)
+```
 
-**See**: [Workflow System](../workflows/README.md)
+Each phase has:
+- Entry criteria (what must be ready)
+- Execution steps (what to do)
+- Quality gates (sub-agent validations)
+- Exit criteria (what signals completion)
+- Handoff protocol (what next role receives)
+
+**Key Workflow:** [Core Development Cycle](../workflows/core-development-cycle.md)
+
+**All Workflows:** [Workflows Directory](../workflows/README.md)
 
 ---
 
 ### Skills
 
-**Auto-activating agent capabilities** with progressive disclosure
+**Auto-activating agent personas** that load when user intent matches role capabilities.
 
-**Core Skills**: agent-builder, skill-builder, hooks-manager
-**Examples**: orca-local-setup, orca-api-test, context-memory
+Skills vs Commands:
+- **Commands** (`/dev`): "I know I need the developer role"
+- **Skills** (auto): "Help me with this code" → Dev skill activates
 
-**See**: [Skills Directory](../skills/) · [Skill Creation](../skills/skill-builder/reference/skill-creation-process.md)
+**Core Skills:**
+- `prism-devtools:dev` - Development with TDD
+- `prism-devtools:qa` - Quality assurance
+- `prism-devtools:sm` - Story planning
+- `prism-devtools:architect` - System design
+- `prism-devtools:po` - Product owner
+- `prism-devtools:peer` - Code review
+- `prism-devtools:support` - Issue validation
 
----
-
-### Commands
-
-**7 role-based slash commands** for direct agent invocation
-
-`/architect` `/sm` `/dev` `/qa` `/po` `/peer` `/support`
-
-**See**: [Commands Directory](../commands/)
+**Build Your Own:** [Skill Builder](../skills/skill-builder/SKILL.md) · [Creation Process](../skills/skill-builder/reference/skill-creation-process.md)
 
 ---
 
 ### Hooks
 
-**4 workflow enforcement scripts** that automate integrity checks
+**Event-driven automation** enforcing workflow integrity—runs on tool calls, file changes, session start.
 
-- enforce-story-context.py - Blocks commands without active story
-- track-current-story.py - Captures current context
-- Validation hooks - Warn/block on missing sections
+Hooks prevent errors by blocking invalid operations:
+- **enforce-story-context.py** - Blocks `/dev`, `/qa` commands without active story
+- **track-current-story.py** - Captures current story context
+- **Validation hooks** - Warn on missing story sections
 
-**See**: [Hooks System](../hooks/README.md) · [Hooks Manager](../skills/hooks-manager/SKILL.md)
+**Why hooks?** Prevent "I forgot to set the story context" → 30 min debugging session. Hook blocks command instantly with helpful message.
+
+**Learn More:** [Hooks System](../hooks/README.md) · [Hooks Manager Skill](../skills/hooks-manager/SKILL.md)
+
+---
+
+### Commands (Slash Commands)
+
+**7 role-based entry points** for manual workflow control:
+
+`/architect` `/sm` `/dev` `/qa` `/po` `/peer` `/support`
+
+Each command:
+1. Loads role persona (identity, responsibilities, tools)
+2. Activates relevant workflows
+3. Provides role-specific commands (e.g., `/dev` enables `*develop-story`)
+
+**All Commands:** [Commands Directory](../commands/)
 
 ---
 
 ### Tasks, Templates & Checklists
 
-**28 reusable operations**: [probe-estimation](../tasks/probe-estimation.md), [test-design](../tasks/test-design.md), [risk-profile](../tasks/risk-profile.md), [+25 more](../tasks/)
+**Building blocks** for workflows and agents:
 
-**Templates**: PRD, Architecture, Stories, QA Gates - [Templates](../templates/)
-
-**10 quality gates**: [story-draft](../checklists/story-draft-checklist.md), [code-quality](../checklists/code-quality-checklist.md), [+8 more](../checklists/)
+- **28 Tasks** - Reusable operations: [probe-estimation](../tasks/probe-estimation.md), [test-design](../tasks/test-design.md), [risk-profile](../tasks/risk-profile.md), [+25 more](../tasks/)
+- **Templates** - Document generation: PRD, Architecture, Stories, QA Gates ([Templates](../templates/))
+- **10 Checklists** - Quality gates: [story-draft](../checklists/story-draft-checklist.md), [code-quality](../checklists/code-quality-checklist.md), [+8 more](../checklists/)
 
 ---
 
 ## Deep Dive Guides
 
-### Claude Code Integration
+### Claude Code Feature Tutorials
 
-**How PRISM leverages Claude Code's architecture**
+Learn how Claude Code features work through PRISM's implementation:
 
-Learn Claude Code concepts through PRISM's actual implementation:
-- Slash Commands - 7 manual workflows
-- Subagents - 10 validation agents
-- Hooks - Automatic enforcers
-- Skills - Auto-activating personas
-- Progressive Disclosure - Token-efficient loading
+**Tutorial Series:**
+- [Slash Commands](./reference/claude-code-features/slash-commands.md) - Manual role activation
+- [Skills](./reference/claude-code-features/skills.md) - Auto-activating agent personas
+- [Hooks](./reference/claude-code-features/hooks.md) - Event-driven workflow enforcement
+- [Sub-Agents](./reference/claude-code-features/sub-agents.md) - Isolated validation
+- [Workflows](./reference/claude-code-features/workflows.md) - Multi-step orchestration
+- [Tasks](./reference/claude-code-features/tasks.md) - Reusable building blocks
 
-**See**: [Claude Code Overview](./reference/guides/claude-code-overview.md)
+**Complete Series:** [Claude Code Features](./reference/claude-code-features/README.md)
+
+**Architecture Overview:** [Claude Code Integration](./reference/guides/claude-code-overview.md)
 
 ---
 
 ### Documentation Best Practices
 
-**Smart Connections** for efficient, non-duplicative documentation:
-- Update, don't duplicate
-- Query before create pattern
+Smart Connections integration for efficient, non-duplicative documentation:
+
+- Update existing docs vs creating duplicates
+- Query-before-create pattern (>70% similarity threshold)
+- Semantic deduplication and consolidation
 - Canonical document naming
-- Semantic deduplication
 
-**See**: [Documentation Best Practices](./reference/best-practices/documentation.md) · [Smart Connections Setup](./reference/best-practices/smart-connections.md)
-
----
-
-## Documentation Structure
-
-```
-docs/
-├── index.md                        # ← You are here
-│
-├── reference/                      # Detailed reference documentation
-│   ├── README.md                   # Reference overview
-│   ├── sub-agents/                 # Sub-agent system docs
-│   ├── guides/                     # Deep dive guides
-│   ├── best-practices/             # Standards & patterns
-│   └── data/                       # Reference data files
-│
-└── archive/                        # Historical documentation
-    ├── implementation-history/     # Development history
-    └── test-artifacts/             # Historical test docs
-```
-
-**Note**: This directory contains ONLY documentation. Operational artifacts (stories, QA gates, validation reports) are in `../artifacts/`.
+**Read:** [Documentation Best Practices](./reference/best-practices/documentation.md) · [Smart Connections Setup](./reference/best-practices/smart-connections.md)
 
 ---
 
-## Quick Navigation
+## Navigation by Task
 
-### By Task
+- **Starting a project** → [Core Workflow](../workflows/core-development-cycle.md) · [/architect](../commands/architect.md)
+- **Planning a feature** → [/sm](../commands/sm.md) · [Story Checklist](../checklists/story-draft-checklist.md)
+- **Implementing code** → [/dev](../commands/dev.md) · [Code Quality](../checklists/code-quality-checklist.md)
+- **Testing & QA** → [/qa](../commands/qa.md) · [Test Design](../tasks/test-design.md)
+- **Code review** → [/peer](../commands/peer.md) · [Peer Review](../checklists/peer-review-checklist.md)
 
-- **Starting a project**: [Core Workflow](../workflows/core-development-cycle.md) → [/architect](../commands/architect.md)
-- **Planning a feature**: [/sm](../commands/sm.md) → [Story Checklist](../checklists/story-draft-checklist.md)
-- **Implementing code**: [/dev](../commands/dev.md) → [Code Quality](../checklists/code-quality-checklist.md)
-- **Testing & QA**: [/qa](../commands/qa.md) → [Test Design](../tasks/test-design.md)
-- **Code review**: [/peer](../commands/peer.md) → [Peer Review](../checklists/peer-review-checklist.md)
+---
 
-### By Learning Goal
+## Navigation by Learning Goal
 
-- **Understanding PRISM**: [Methodology](../PRISM-METHODOLOGY.md) → [Core Workflow](../workflows/core-development-cycle.md)
-- **Understanding sub-agents**: [Sub-Agent Overview](./reference/sub-agents/README.md) → [User Guide](./reference/sub-agents/user-guide.md)
-- **Building skills**: [Skill Builder](../skills/skill-builder/SKILL.md) → [Creation Process](../skills/skill-builder/reference/skill-creation-process.md)
-- **Creating hooks**: [Hooks System](../hooks/README.md) → [Hooks Manager](../skills/hooks-manager/SKILL.md)
-
-### By Component
-
-- [Workflows](../workflows/README.md) - Multi-step orchestration
-- [Skills](../skills/) - Agent personas
-- [Commands](../commands/) - Slash commands
-- [Hooks](../hooks/README.md) - Automation
-- [Sub-Agents](./reference/sub-agents/README.md) - Validators
-- [Tasks](../tasks/) - Reusable operations
-- [Templates](../templates/) - Document generation
-- [Checklists](../checklists/) - Quality gates
+- **Understanding PRISM** → [Methodology](../PRISM-METHODOLOGY.md) · [Core Workflow](../workflows/core-development-cycle.md)
+- **Understanding sub-agents** → [Overview](./reference/sub-agents/README.md) · [User Guide](./reference/sub-agents/user-guide.md)
+- **Building skills** → [Skill Builder](../skills/skill-builder/SKILL.md) · [Creation Process](../skills/skill-builder/reference/skill-creation-process.md)
+- **Creating hooks** → [Hooks System](../hooks/README.md) · [Hooks Manager](../skills/hooks-manager/SKILL.md)
 
 ---
 
 ## Reference Documentation
 
-Complete detailed reference in progressive disclosure format:
+Complete technical reference with progressive disclosure:
 
-**[Reference Directory](./reference/README.md)** - Overview of all reference materials
-
-**Sub-Agent System**:
+### Sub-Agent System
 - [Overview](./reference/sub-agents/README.md) - What and how
-- [User Guide](./reference/sub-agents/user-guide.md) - Using sub-agents
-- [Quick Reference](./reference/sub-agents/quick-reference.md) - Cheat sheet
-- [Implementation](./reference/sub-agents/implementation/) - Technical details
+- [User Guide](./reference/sub-agents/user-guide.md) - Workflows by role
+- [Quick Reference](./reference/sub-agents/quick-reference.md) - One-page cheat sheet
+- [Implementation](./reference/sub-agents/implementation/) - Technical specs
 
-**Guides**:
-- [Claude Code Overview](./reference/guides/claude-code-overview.md) - Integration guide
+### Guides
+- [Claude Code Overview](./reference/guides/claude-code-overview.md) - Architecture integration
 
-**Best Practices**:
-- [Documentation](./reference/best-practices/documentation.md) - Doc standards
-- [Smart Connections](./reference/best-practices/smart-connections.md) - Setup guide
+### Best Practices
+- [Documentation](./reference/best-practices/documentation.md) - Standards
+- [Smart Connections](./reference/best-practices/smart-connections.md) - Setup
+
+**All Reference:** [Reference Directory](./reference/README.md)
 
 ---
 
 ## Troubleshooting
 
-**Sub-agent issues**: [Quick Reference](./reference/sub-agents/quick-reference.md#common-issues--quick-fixes)
-**Workflow problems**: [Workflow README](../workflows/README.md#troubleshooting)
-**Hook errors**: [Hooks README](../hooks/README.md#troubleshooting)
-
----
-
-## Archive
-
-Historical implementation documentation: [Archive README](./archive/README.md)
-- Strategy documents
-- Phase completion reports
-- Test artifacts
+- **Sub-agents** → [Quick Reference](./reference/sub-agents/quick-reference.md#common-issues--quick-fixes)
+- **Workflows** → [Workflow README](../workflows/README.md#troubleshooting)
+- **Hooks** → [Hooks README](../hooks/README.md#troubleshooting)
 
 ---
 
@@ -312,21 +326,27 @@ Historical implementation documentation: [Archive README](./archive/README.md)
 
 **Current Version**: 1.7.1
 
-**Production Ready**:
-- ✅ Workflows - Core development cycle
-- ✅ Skills - 6 core + project-specific
-- ✅ Commands - 7 role-based
-- ✅ Hooks - 4 automation scripts
-- ✅ Sub-Agents - 10 validators
-- ✅ Smart Connections - Context-aware docs
-- ✅ Progressive Disclosure - Token optimization
+**Production Ready:**
+- ✅ Core Development Workflow (SM → Dev → QA → Peer)
+- ✅ 10 Sub-Agent Validators (isolated quality checks)
+- ✅ 7 Role-Based Commands (manual control)
+- ✅ 6 Core Skills (auto-activation)
+- ✅ 4 Workflow Hooks (enforcement)
+- ✅ Progressive Disclosure (token efficiency)
+- ✅ Smart Connections (semantic search)
 
-**Metrics**:
+**Measured Impact:**
 - Time saved: ~1.3 hours per story
 - Requirements traceability: 95%+
 - Rework rate: <5%
 - Test coverage: 80-85%
 - Architecture compliance: 100%
+
+---
+
+## Archive
+
+Historical implementation: [Archive README](./archive/README.md)
 
 ---
 

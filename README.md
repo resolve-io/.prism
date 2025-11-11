@@ -73,7 +73,16 @@ PRISM is a software engineering methodology that combines proven practices into 
 
 **In Practice:** PRISM provides workflows, automation, agent personas, and quality gates that enforce these principles automatically.
 
-> **Note:** PRISM is a Claude Code plugin and automation system, not a web application. It has no technology stack - it operates entirely within Claude Code's architecture using skills, agents, hooks, and workflows.
+> **Important:** PRISM is a Claude Code plugin system, not a web application.
+>
+> **What PRISM is built with:**
+> - Claude Code features: Skills, sub-agents, hooks, workflows, slash commands
+> - [Core Development Workflow](workflows/core-development-cycle.md): Story Master → Dev → QA → Peer
+> - Python automation, YAML configs, Markdown templates
+>
+> **What PRISM is NOT:**
+> - Not a web app (no Node.js, React, databases, deployment infrastructure)
+> - Test documents (epic-999, tech-stack.md) are fictional validator test fixtures
 
 ## Key Features
 
