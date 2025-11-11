@@ -1,52 +1,23 @@
 # PRISM Development System
 
-**Version 1.7.0** - Smart Connections Integration & Documentation Optimization
+**Version 1.7.1** - Documentation Clarity Update
 
-A comprehensive Claude Code plugin that implements the PRISM software engineering methodology with specialized agents, progressive disclosure patterns, integrated workflows, and workflow automation hooks.
+A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
-## What's New in 1.7.0
+## Quick Start
 
-🎯 **Smart Connections Integration** - AI-powered semantic search for PRISM documentation
-✅ **Documentation Optimization** - Intelligent upserts prevent duplication
-✅ **Architecture System** - Complete architecture documentation workflow
-✅ **Context Memory Cleanup** - Streamlined Obsidian-only storage (80% file reduction)
+### 1. Installation
 
-### Key Features
-- **Smart Connections**: Semantic search, 50+ tags, MOC files, quick start guide
-- **Intelligent Doc Upserts**: Query before creating (>70% similarity), auto-consolidation
-- **Architecture Docs**: 6 templates, 98-item validation checklist, initialization task
-- **Memory System**: Simplified to filesystem-only, enhanced semantic metadata
+**Via Marketplace (Recommended):**
+```bash
+# Add the PRISM marketplace
+/plugin marketplace add resolve-io/.prism
 
-### Previous Updates
-- **1.6.0**: Documentation validation system and PRISM methodology checklist
-- **1.5.0**: Obsidian-based context memory with Smart Connections preparation
-- **1.4.0**: Hooks Manager skill with 15 commands and security documentation
-- **1.3.0**: Complete token documentation and parameter consistency
+# Install the plugin
+/plugin install prism-devtools
+```
 
-See [CHANGELOG.md](CHANGELOG.md) for complete version history.
-
-## Installation
-
-### Via Marketplace (Recommended)
-
-1. Open Claude Code
-2. Add the PRISM marketplace:
-   ```
-   /plugin marketplace add resolve-io/.prism
-   ```
-3. Install the plugin:
-   ```
-   /plugin install prism-devtools@resolve-io
-   ```
-   Or with short form:
-   ```
-   /plugin install prism-devtools
-   ```
-   Or interactively: `/plugin` → Browse Plugins → prism-devtools
-4. Restart Claude Code
-
-### Manual Installation (For Development)
-
+**Manual Installation (Development):**
 ```bash
 # Clone to your Claude Code plugins directory
 cd ~/.claude-code/plugins  # macOS/Linux
@@ -57,159 +28,141 @@ git clone https://github.com/resolve-io/.prism.git prism-devtools
 
 Then restart Claude Code to activate the plugin.
 
+### 2. First Steps
+
+**Choose your workflow entry point:**
+
+```bash
+# Planning a feature
+/sm                      # Story Master - plan and size stories
+
+# Implementing code
+/dev story-001           # Developer - implement with quality gates
+
+# Quality review
+/qa story-001            # QA - validate quality and test coverage
+
+# System design
+/architect               # Architect - design systems and patterns
+```
+
+**Or let skills auto-activate:**
+- Say "design the architecture" → Architect skill activates
+- Say "implement the story" → Dev skill activates
+- Say "validate the quality" → QA skill activates
+
+### 3. Learn More
+
+📚 **[Complete Documentation](docs/index.md)** - Everything about PRISM, organized by role and task
+
+**Popular Guides:**
+- [Core Development Workflow](workflows/core-development-cycle.md) - The main PRISM process
+- [Sub-Agent System](docs/sub-agent-user-guide.md) - Automated validation (saves ~1.3h per story)
+- [PRISM Methodology](PRISM-METHODOLOGY.md) - The five principles
+- [Claude Code Integration](docs/guides/claude-code-overview.md) - How PRISM leverages Claude Code
+
 ## What is PRISM?
 
-**PRISM** is a software engineering methodology that combines proven practices:
-- **P**redictability (PSP/TSP)
-- **R**esilience (TDD/XP)
-- **I**ntentionality (Clean Code)
-- **S**ustainability (Agile)
-- **M**aintainability (DDD)
+PRISM is a software engineering methodology that combines proven practices into a unified framework:
 
-See `PRISM-METHODOLOGY.md` for details.
+- **P**redictability (PSP/TSP) - Structured processes, measurement, quality gates
+- **R**esiliency (TDD/XP) - Test-driven development, extreme programming
+- **I**ntentionality (Clean Code/SOLID) - Clear, purposeful design decisions
+- **S**ustainability (XP/Craftsmanship) - Long-term maintainable practices
+- **M**aintainability (DDD) - Domain-driven design for complex logic
 
-## Sub-Agent System
+**In Practice:** PRISM provides workflows, automation, agent personas, and quality gates that enforce these principles automatically.
 
-PRISM includes **10 specialized sub-agents** that automatically validate your work at critical checkpoints:
+> **Note:** PRISM is a Claude Code plugin and automation system, not a web application. It has no technology stack - it operates entirely within Claude Code's architecture using skills, agents, hooks, and workflows.
 
-### Story Master (SM) - 5 Sub-Agents
-- **story-structure-validator**: Checks 9 required sections, YAML frontmatter
-- **story-content-validator**: Validates AC measurability, task sizing (quality score 0-100)
-- **epic-alignment-checker**: Detects scope creep, verifies requirement coverage
-- **architecture-compliance-checker**: Ensures approved tech stack, patterns, boundaries
-- **epic-analyzer**: Analyzes epics and suggests story decomposition
+## Key Features
 
-### Developer (Dev) - 3 Sub-Agents
-- **file-list-auditor**: Verifies File List matches git changes
-- **test-runner**: Executes test suites (Jest, pytest, RSpec, JUnit, go test)
-- **lint-checker**: Runs linters (ESLint, Pylint, RuboCop, Prettier, Black)
+### Automated Quality Validation
+**10 specialized sub-agents** validate your work at critical checkpoints:
+- 5 for Story Masters (structure, content, alignment, compliance, decomposition)
+- 3 for Developers (file tracking, test running, linting)
+- 2 for QA (requirements tracing, quality gates)
 
-### Quality Assurance (QA) - 2 Sub-Agents
-- **requirements-tracer**: Traces PRD → Epic → Story → Code → Tests
-- **qa-gate-manager**: Creates gate YAML files (PASS/CONCERNS/FAIL/WAIVED)
+**Impact:** ~1.3 hours saved per story, 100% compliance, <5% rework rate
 
-**Time Savings**: ~1.3 hours per story (26min SM + 15min Dev + 45min QA)
+### Role-Based Agent System
+7 specialized agent personas for different roles:
+- `/architect` - System design and architecture
+- `/sm` - Story planning with PSP/PROBE sizing
+- `/dev` - Feature development with TDD
+- `/qa` - Quality assurance and testing
+- `/po` - Product owner and requirements
+- `/peer` - Code review and mentoring
+- `/support` - Issue validation and reproduction
 
-**Quality Improvements**: 100% compliance, <5% rework rate, 95%+ traceability
+### Workflow Automation
+- **Hooks** - Python-based automation that enforces workflow integrity
+- **Workflows** - Multi-step orchestrated processes (YAML + Mermaid diagrams)
+- **Tasks** - 28 reusable operations (risk assessment, test design, tracing, etc.)
+- **Templates** - Document generation (PRD, stories, architecture, QA gates)
+- **Checklists** - 10 quality gate checklists
 
-See [Sub-Agent User Guide](docs/sub-agent-user-guide.md) for details.
+### Progressive Disclosure
+All documentation follows token-efficient loading:
+- Level 1: Metadata (~100 tokens)
+- Level 2: Core content (<2k tokens)
+- Level 3: Detailed docs (loaded as needed)
 
-## Directory Structure
+## What's New
 
-```
-.prism/
-├── .claude/agents/      # Sub-agents for automated validation (10 agents)
-│   ├── story-structure-validator.md
-│   ├── story-content-validator.md
-│   ├── epic-alignment-checker.md
-│   ├── architecture-compliance-checker.md
-│   ├── epic-analyzer.md
-│   ├── file-list-auditor.md
-│   ├── test-runner.md
-│   ├── lint-checker.md
-│   ├── requirements-tracer.md
-│   └── qa-gate-manager.md
-├── skills/              # Claude Code skills (auto-activate)
-│   ├── architect/       # System architecture & design
-│   ├── dev/             # Full-stack development
-│   ├── po/              # Product owner & story management
-│   ├── sm/              # Story master & PSP sizing
-│   ├── qa/              # Quality assurance & testing
-│   ├── peer/            # Code review & mentoring
-│   ├── support/         # Issue validation & support
-│   └── skill-builder/   # Skill development tools
-├── commands/            # Slash commands (/architect, /dev, etc.)
-├── tasks/               # Reusable workflow tasks
-├── templates/           # Document templates (PRD, stories, etc.)
-├── checklists/          # Quality gates and validation
-├── docs/                # Knowledge base and reference docs
-│   └── sub-agent-user-guide.md  # How to use sub-agents
-├── utils/               # Utilities (Jira integration, etc.)
-├── workflows/           # Multi-step workflows
-└── core-config.yaml     # Project configuration
-```
+### Version 1.7.1
+📝 **Documentation Clarity** - Clarified PRISM is a Claude Code application, not a web app
+✅ **System Architecture Layers** - Renamed to avoid confusion with web tech stacks
+✅ **Test Artifact Labeling** - All test documents clearly marked as fictional examples
 
-## Using PRISM
+### Recent Updates
+- **1.7.0**: Smart Connections Integration, Documentation Optimization, Architecture System
+- **1.6.0**: Documentation validation system and PRISM methodology checklist
+- **1.5.0**: Obsidian-based context memory with Smart Connections
+- **1.4.0**: Hooks Manager skill with security documentation
+- **1.3.0**: Complete token documentation and parameter consistency
 
-### Automatic Skills
+📋 **[Complete Changelog](CHANGELOG.md)**
 
-Skills activate automatically based on context:
-- Mention "design architecture" → Architect skill activates
-- Mention "implement story" → Dev skill activates
-- Mention "validate issue" → Support skill activates
-- etc.
+## System Components
 
-### Slash Commands
+### Agents & Commands
+- **Skills** (`/skills/`) - Auto-activating agent personas with progressive disclosure
+- **Commands** (`/commands/`) - 7 slash commands to invoke agents directly
+- **Sub-Agents** (`.claude/agents/`) - 10 validators for automated quality checks
 
-Invoke agents directly:
-```
-/architect    # System design and architecture
-/dev          # Development and implementation
-/qa           # Quality assurance and testing
-/po           # Product owner and requirements
-/sm           # Story sizing and planning
-/peer         # Code review and mentoring
-/support      # Issue validation and support
-```
+### Automation & Workflows
+- **Hooks** (`/hooks/`) - Python scripts that enforce workflow integrity
+- **Workflows** (`/workflows/`) - YAML-based multi-step orchestration
+- **Tasks** (`/tasks/`) - 28 reusable operations
 
-Each command activates the corresponding agent persona.
+### Documentation & Standards
+- **Templates** (`/templates/`) - Document generation patterns
+- **Checklists** (`/checklists/`) - 10 quality validation checklists
+- **Docs** (`/docs/`) - Complete system documentation
 
 ## Configuration
 
 Edit `core-config.yaml` to configure:
 - Project paths and structure
-- Jira integration (if used)
+- Jira integration (optional)
 - Team preferences
 - Custom workflows
 
-## Key Files
-
-- `core-config.yaml` - Project configuration
-- `PRISM-METHODOLOGY.md` - Methodology documentation
-- `SECURITY.md` - Security best practices and credential management
-- `docs/prism-workflow.md` - Complete development workflow
-- `docs/prism-kb.md` - PRISM knowledge base
-- `utils/jira-integration.md` - Jira setup (optional)
-
 ## Jira Integration (Optional)
 
-All agents support Jira integration for fetching issue context.
+Enable Jira integration for fetching issue context:
 
-### Setup
-
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Get your Jira API token from: https://id.atlassian.com/manage-profile/security/api-tokens
-
-3. Edit `.env` and add your credentials:
-   ```
+1. Copy `.env.example` to `.env`
+2. Get API token: https://id.atlassian.com/manage-profile/security/api-tokens
+3. Add credentials to `.env`:
+   ```env
    JIRA_EMAIL=your.email@company.com
    JIRA_API_TOKEN=your-api-token-here
    ```
+4. Update `core-config.yaml` if needed
 
-4. The `.env` file is automatically gitignored and will never be committed.
-
-5. Update `core-config.yaml` if using a different Jira instance:
-   ```yaml
-   jira:
-     enabled: true
-     baseUrl: https://your-company.atlassian.net
-     defaultProject: YOUR-PROJECT
-   ```
-
-### Usage
-
-All agents automatically detect Jira issue keys:
-```
-/architect PLAT-123    # Fetch epic context
-/dev PROJ-456          # Fetch story details
-/support BUG-789       # Fetch bug details
-```
-
-See `utils/jira-integration.md` for complete documentation.
+See [Jira Integration Guide](utils/jira-integration.md) for details.
 
 ## Validation
 
@@ -220,40 +173,63 @@ npm install
 node validate-skill.js ../architect
 ```
 
-## Documentation
+## Directory Structure
 
-Each skill contains:
-- `SKILL.md` - Quick reference (<2k tokens)
-- `reference/` - Detailed guides (loaded as needed)
-
-Main documentation:
-- `docs/index.md` - Documentation hub and sub-agent system guide
-- `docs/guides/claude-code-overview.md` - How PRISM leverages Claude Code architecture (with links to all components)
-- `docs/prism-workflow.md` - Development process
-- `docs/prism-kb.md` - PRISM knowledge base
-- `docs/coding-standards-reference.md` - Coding standards and security practices
-- `docs/test-*.md` - Testing frameworks and strategies
+```
+.prism/
+├── .claude/agents/      # 10 sub-agents for automated validation
+├── skills/              # Agent personas (architect, dev, qa, sm, po, peer, support)
+├── commands/            # Slash commands (/architect, /dev, etc.)
+├── hooks/               # Workflow automation (Python)
+├── workflows/           # Multi-step processes (YAML + Mermaid)
+├── tasks/               # 28 reusable operations
+├── templates/           # Document generation
+├── checklists/          # 10 quality checklists
+├── docs/                # Complete documentation
+│   └── index.md         # Documentation hub
+├── utils/               # Jira integration, etc.
+└── core-config.yaml     # Project configuration
+```
 
 ## Security
 
 PRISM follows secure development practices:
-- All credentials stored in environment variables (`.env` files, gitignored)
-- Read-only access to external APIs (Jira, etc.)
-- User permission controls for all network requests
-- No credentials in source code or documentation
+- All credentials in environment variables (`.env` files, gitignored)
+- Read-only API access
+- User permission controls for network requests
+- No credentials in source code
 
-### Reporting Security Issues
+**Reporting Security Issues:**
+- Do NOT open public GitHub issues
+- Email security concerns to maintainers
+- Include detailed reproduction steps
 
-If you discover a security vulnerability:
-1. **Do NOT** open a public GitHub issue
-2. Email security concerns to the maintainers
-3. Include detailed reproduction steps
-4. Allow reasonable time for fixes before disclosure
+## Documentation
 
-For detailed security practices, see:
-- `utils/jira-integration.md` - Credential management
-- `docs/coding-standards-reference.md` - Security standards
+### Getting Started
+- **[Complete Documentation](docs/index.md)** - Main documentation hub
+- **[Quick Start by Role](docs/index.md#getting-started-by-role)** - Jump to your role
+- **[Core Development Workflow](workflows/core-development-cycle.md)** - The PRISM process
+
+### Key Guides
+- **[PRISM Methodology](PRISM-METHODOLOGY.md)** - The five principles
+- **[Sub-Agent User Guide](docs/sub-agent-user-guide.md)** - Automated validation
+- **[Sub-Agent Quick Reference](docs/sub-agent-quick-reference.md)** - Cheat sheet
+- **[Claude Code Integration](docs/guides/claude-code-overview.md)** - Architecture guide
+
+### Building Skills
+- **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills
+- **[Progressive Disclosure](skills/skill-builder/reference/progressive-disclosure.md)** - Token optimization pattern
+
+## Support
+
+- **Documentation Issues**: Check [docs/index.md](docs/index.md) for navigation
+- **Skill Issues**: See [Sub-Agent Quick Reference](docs/sub-agent-quick-reference.md#common-issues--quick-fixes)
+- **Workflow Issues**: Read [Workflow README](workflows/README.md#troubleshooting)
+- **Hook Issues**: Check [Hooks README](hooks/README.md#troubleshooting)
 
 ---
 
-**PRISM™** - Refracting complexity into clarity
+**PRISM™** - *Refracting complexity into clarity*
+
+*Predictability · Resiliency · Intentionality · Sustainability · Maintainability*

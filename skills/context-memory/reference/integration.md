@@ -247,4 +247,4 @@ analysis = recall_file(str(relative_path))
 
 ---
 
-**Version:** 1.7.0
+**Version:** 1.7.1

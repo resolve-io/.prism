@@ -314,6 +314,8 @@ The `story-content-validator` provides a 0-100 quality score:
 
 **Purpose:** Ensure approved tech stack and patterns.
 
+> **Note:** This validates projects PRISM manages, not PRISM itself. PRISM is a Claude Code plugin - this validator ensures user projects follow their own architecture standards.
+
 **What it checks:**
 - Only approved technologies used
 - Patterns match architecture decisions
@@ -670,4 +672,4 @@ Based on PRISM usage across teams:
 ---
 
 **Last Updated:** 2025-11-10
-**PRISM Version:** 1.7.0
+**PRISM Version:** 1.7.1

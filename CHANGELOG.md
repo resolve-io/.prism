@@ -5,6 +5,16 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2025-11-10
+
+### Changed
+- **Documentation Clarity** - Clarified PRISM is a Claude Code application, not a web app
+  - Renamed "The System Stack" to "System Architecture Layers" in docs/index.md
+  - Added prominent notes in README.md and docs/index.md explaining PRISM has no technology stack
+  - Added clarification to architecture-compliance-checker documentation
+  - Added "TEST ARTIFACT ONLY" notices to all test documents (epic-999, tech-stack.md, etc.)
+  - Clarified that tech stack references are for projects PRISM manages, not PRISM itself
+
 ## [1.7.0] - 2025-01-05
 
 ### Added

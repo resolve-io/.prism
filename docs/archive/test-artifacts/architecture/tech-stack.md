@@ -1,5 +1,7 @@
 # Technology Stack - Approved Technologies
 
+> **TEST ARTIFACT ONLY:** This document is a test fixture for validating the `architecture-compliance-checker` sub-agent. It represents a fictional web application project, not PRISM itself. PRISM is a Claude Code plugin with no technology stack - it operates using Claude Code's architecture (skills, agents, hooks, workflows).
+
 ## Backend
 - **Runtime**: Node.js 18+ LTS
 - **Framework**: Express 4.x

@@ -1,7 +1,7 @@
 ---
 name: context-memory
 description: Python utility API for storing and retrieving project context in Obsidian vault markdown notes
-version: 1.7.0
+version: 1.7.1
 ---
 
 # Context Memory - Utility API Reference
@@ -299,4 +299,4 @@ pip install python-frontmatter pyyaml
 
 ---
 
-**Version:** 1.7.0 - Pure utility API for Obsidian storage
+**Version:** 1.7.1 - Pure utility API for Obsidian storage

@@ -327,4 +327,4 @@ golint ./...     # Go
 ---
 
 **Last Updated:** 2025-11-10
-**PRISM Version:** 1.7.0
+**PRISM Version:** 1.7.1

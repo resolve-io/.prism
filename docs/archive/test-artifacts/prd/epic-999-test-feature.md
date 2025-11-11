@@ -1,5 +1,7 @@
 # Epic: User Profile Management System
 
+> **TEST ARTIFACT ONLY:** This is a fictional web application PRD used to validate PRISM sub-agents. It does not represent PRISM itself, which is a Claude Code plugin with no technology stack.
+
 ## Epic ID: EPIC-999
 
 ## Status: Planning

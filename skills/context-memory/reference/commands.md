@@ -322,4 +322,4 @@ except Exception as e:
 
 ---
 
-**Version:** 1.7.0
+**Version:** 1.7.1

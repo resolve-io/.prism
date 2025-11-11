@@ -1,5 +1,7 @@
 # Story: Activity History Tracking and Display
 
+> **TEST ARTIFACT ONLY:** This is a fictional story used to validate PRISM sub-agents. The referenced tech stack is for testing purposes only - PRISM itself is a Claude Code plugin with no technology stack.
+
 ## Status: Draft
 
 ## Story
