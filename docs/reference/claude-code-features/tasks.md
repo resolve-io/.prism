@@ -672,7 +672,7 @@ Input:
 - [requirements-trace](../../tasks/requirements-trace.md) - Traceability
 
 **Task Usage:**
-- [Core Development Cycle](../../workflows/core-development-cycle.md) - Tasks in workflow
+- [Core Development Cycle](../workflows/core-development-cycle.md) - Tasks in workflow
 - [SM Command](../../commands/sm.md) - Tasks in command
 - [QA Skill](../../skills/qa/SKILL.md) - Tasks in skill
 

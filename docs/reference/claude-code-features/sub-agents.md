@@ -39,11 +39,11 @@ Result: 4k tokens used in isolation, implementation context clean
 
 ### Token Savings
 
-| Task | Without Sub-Agent | With Sub-Agent | Savings |
-|------|------------------|----------------|---------|
-| Story validation | 14k tokens | 4k + 200 | 70% |
-| Test execution | 20k tokens | 5k + 500 | 75% |
-| Requirements trace | 30k tokens | 8k + 800 | 73% |
+| Task               | Without Sub-Agent | With Sub-Agent | Savings |
+| ------------------ | ----------------- | -------------- | ------- |
+| Story validation   | 14k tokens        | 4k + 200       | 70%     |
+| Test execution     | 20k tokens        | 5k + 500       | 75%     |
+| Requirements trace | 30k tokens        | 8k + 800       | 73%     |
 
 **Impact:** ~1.3 hours saved per story from efficiency gains.
 
@@ -441,7 +441,7 @@ This is an overview. For complete details:
 - [.claude/agents/](../../.claude/agents/) directory
 
 **Workflow Integration:**
-- [Core Development Cycle](../../workflows/core-development-cycle.md)
+- [Core Development Cycle](../workflows/core-development-cycle.md)
 
 ---
 

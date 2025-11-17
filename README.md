@@ -56,7 +56,7 @@ Then restart Claude Code to activate the plugin.
 📚 **[Complete Documentation](docs/index.md)** - Everything about PRISM, organized by role and task
 
 **Popular Guides:**
-- [Core Development Workflow](workflows/core-development-cycle.md) - The main PRISM process
+- [Core Development Workflow](docs/reference/workflows/core-development-cycle.md) - The main PRISM process
 - [Sub-Agent System](docs/sub-agent-user-guide.md) - Automated validation (saves ~1.3h per story)
 - [PRISM Methodology](PRISM-METHODOLOGY.md) - The five principles
 - [Claude Code Integration](docs/guides/claude-code-overview.md) - How PRISM leverages Claude Code
@@ -77,7 +77,7 @@ PRISM is a software engineering methodology that combines proven practices into 
 >
 > **What PRISM is built with:**
 > - Claude Code features: Skills, sub-agents, hooks, workflows, slash commands
-> - [Core Development Workflow](workflows/core-development-cycle.md): Story Master → Dev → QA → Peer
+> - [Core Development Workflow](docs/reference/workflows/core-development-cycle.md): Story Master → Dev → QA → Peer
 > - Python automation, YAML configs, Markdown templates
 >
 > **What PRISM is NOT:**
@@ -218,7 +218,7 @@ PRISM follows secure development practices:
 ### Getting Started
 - **[Complete Documentation](docs/index.md)** - Main documentation hub
 - **[Quick Start by Role](docs/index.md#getting-started-by-role)** - Jump to your role
-- **[Core Development Workflow](workflows/core-development-cycle.md)** - The PRISM process
+- **[Core Development Workflow](docs/reference/workflows/core-development-cycle.md)** - The PRISM process
 
 ### Key Guides
 - **[PRISM Methodology](PRISM-METHODOLOGY.md)** - The five principles
@@ -234,7 +234,7 @@ PRISM follows secure development practices:
 
 - **Documentation Issues**: Check [docs/index.md](docs/index.md) for navigation
 - **Skill Issues**: See [Sub-Agent Quick Reference](docs/sub-agent-quick-reference.md#common-issues--quick-fixes)
-- **Workflow Issues**: Read [Workflow README](workflows/README.md#troubleshooting)
+- **Workflow Issues**: Read [Workflow README](docs/reference/workflows/README.md#troubleshooting)
 - **Hook Issues**: Check [Hooks README](hooks/README.md#troubleshooting)
 
 ---

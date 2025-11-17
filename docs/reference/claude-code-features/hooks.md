@@ -83,11 +83,11 @@ Any hook returns BLOCK?
 
 ### Core Workflow Hooks
 
-| Hook | Event | Purpose | Response |
-|------|-------|---------|----------|
-| `enforce-story-context.py` | PreToolUse | Requires story context for `/dev`, `/qa` | BLOCK if no active story |
-| `track-current-story.py` | PostToolUse | Captures current story from commands | Updates context file |
-| `validate-story-sections.py` | PreToolUse | Ensures story has required sections | WARN if incomplete |
+| Hook                         | Event       | Purpose                                  | Response                 |
+| ---------------------------- | ----------- | ---------------------------------------- | ------------------------ |
+| `enforce-story-context.py`   | PreToolUse  | Requires story context for `/dev`, `/qa` | BLOCK if no active story |
+| `track-current-story.py`     | PostToolUse | Captures current story from commands     | Updates context file     |
+| `validate-story-sections.py` | PreToolUse  | Ensures story has required sections      | WARN if incomplete       |
 
 ### How They Integrate
 

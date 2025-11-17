@@ -62,7 +62,7 @@ Peer Phase:
 
 ## PRISM's Core Development Workflow
 
-The **[Core Development Cycle](../../workflows/core-development-cycle.md)** is PRISM's primary workflow:
+The **[Core Development Cycle](../workflows/core-development-cycle.md)** is PRISM's primary workflow:
 
 ```
 ┌──────────────┐
@@ -312,7 +312,7 @@ Different paths based on validation results.
 
 ### Full Workflow
 
-See **[Core Development Cycle](../../workflows/core-development-cycle.md)** for complete implementation.
+See **[Core Development Cycle](../workflows/core-development-cycle.md)** for complete implementation.
 
 ### Key Phases
 
@@ -614,15 +614,15 @@ quality_gates:
 - **[Commands](./slash-commands.md)** - Activate workflow phases
 - **[Sub-Agents](./sub-agents.md)** - Quality gate validators
 - **[Tasks](./tasks.md)** - Workflow building blocks
-- **[Core Development Cycle](../../workflows/core-development-cycle.md)** - Primary PRISM workflow
+- **[Core Development Cycle](../workflows/core-development-cycle.md)** - Primary PRISM workflow
 
 ---
 
 ## Examples in PRISM
 
 **Workflow Implementations:**
-- [Core Development Cycle](../../workflows/core-development-cycle.md)
-- [All Workflows](../../workflows/README.md)
+- [Core Development Cycle](../workflows/core-development-cycle.md)
+- [All Workflows](../workflows/README.md)
 
 **Workflow Directory:**
 ```

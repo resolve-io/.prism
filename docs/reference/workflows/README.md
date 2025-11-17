@@ -14,11 +14,13 @@ Workflows are defined in YAML files that orchestrate:
 ### Directory Layout
 
 ```
-workflows/
+docs/reference/workflows/
 ├── README.md                           # This file
-├── core-development-cycle.md           # Main PRISM development process
-├── strangler-pattern-migration.yaml    # Brownfield migration workflow
-└── [other-workflows].yaml              # Additional workflows
+├── core-development-cycle.md           # Main PRISM development process (visual documentation)
+└── ../../workflows/
+    ├── core-development-cycle.yaml     # Executable workflow definition
+    ├── strangler-pattern-migration.yaml # Brownfield migration workflow
+    └── [other-workflows].yaml          # Additional workflows
 ```
 
 ## Workflow Components
@@ -345,7 +347,7 @@ Each workflow uses two complementary files:
 workflow:
   id: workflow-name
   name: Human-Readable Workflow Name
-  documentation: workflows/workflow-name.md  # Link to visual docs
+  documentation: docs/reference/workflows/workflow-name.md  # Link to visual docs
 
   sequence:
     - step: draft_story
@@ -415,11 +417,14 @@ graph TD
 
 **File Structure:**
 ```
-workflows/
-├── core-development-cycle.yaml    # Executable: skill commands, dependencies
-├── core-development-cycle.md      # Visual: Mermaid diagrams, scenarios
-├── strangler-pattern-migration.yaml
-└── strangler-pattern-migration.md
+.prism/
+├── workflows/
+│   ├── core-development-cycle.yaml    # Executable: skill commands, dependencies
+│   └── strangler-pattern-migration.yaml
+└── docs/reference/workflows/
+    ├── core-development-cycle.md      # Visual: Mermaid diagrams, scenarios
+    ├── strangler-pattern-migration.md # (if exists)
+    └── README.md                      # This file
 ```
 
 ## Best Practices
@@ -597,7 +602,7 @@ Workflows integrate with the PRISM development cycle:
 4. **Quality Gates** → QA skills
 5. **Review** → Peer skills
 
-See [core-development-cycle.md](core-development-cycle.md) for the complete process.
+See [core-development-cycle.md](./core-development-cycle.md) for the complete process.
 
 ## Additional Resources
 

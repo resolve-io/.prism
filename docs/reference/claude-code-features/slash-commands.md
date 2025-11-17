@@ -278,7 +278,7 @@ Commands **activate workflow-specific operations**:
 - [/qa](../../commands/qa.md)
 
 **Workflow Integration:**
-- [Core Development Cycle](../../workflows/core-development-cycle.md)
+- [Core Development Cycle](../workflows/core-development-cycle.md)
 
 ---
 

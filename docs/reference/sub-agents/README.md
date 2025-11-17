@@ -215,7 +215,7 @@ See: [Extending the System](./implementation/extending.md)
 ## Related Documentation
 
 - [PRISM Methodology](../../PRISM-METHODOLOGY.md) - Five principles framework
-- [Core Development Cycle](../../workflows/core-development-cycle.md) - How sub-agents fit in workflow
+- [Core Development Cycle](../workflows/core-development-cycle.md) - How sub-agents fit in workflow
 - [Commands](../../commands/) - Slash commands that invoke sub-agents
 - [Skills](../../skills/) - Agent personas that reference validators
 - [Hooks](../../hooks/) - Process enforcement layer

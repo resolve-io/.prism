@@ -246,7 +246,7 @@ Skills **reference workflows** for orchestration:
 ```markdown
 ## Workflows
 
-- **Core Development Cycle**: [workflows/core-development-cycle.md](../../workflows/core-development-cycle.md)
+- **Core Development Cycle**: [workflows/core-development-cycle.md](../workflows/core-development-cycle.md)
 - **TDD Workflow**: See reference/tdd-cycle.md
 ```
 
