@@ -11,6 +11,37 @@ version: 2.2.0
 **Restore most recent backup:** `"restore orca database"`
 **Restore specific backup:** `"restore orca database from migration-test"`
 
+## ⚠️ WARNING: NUCLEAR OPERATION - THIS IS NOT MIGRATION ROLLBACK ⚠️
+
+**THIS SKILL IS FOR FULL DATABASE RESTORE ONLY - NOT FOR ROLLING BACK MIGRATIONS!**
+
+### When to Use This Skill:
+- ✅ Restore database to a specific point in time from backup
+- ✅ Recover from database corruption
+- ✅ Reset to a clean development state
+- ✅ Restore production snapshot for testing
+
+### When NOT to Use This Skill:
+- ❌ **Rolling back a single migration** - Use EF Core instead: `dotnet ef database update <PreviousMigration>`
+- ❌ **Undoing recent changes** - Use EF Core migration rollback
+- ❌ **Testing migration changes** - Use the `orca-migration-manager` skill instead
+
+**This operation:**
+- WIPES THE ENTIRE DATABASE (all tables, all data)
+- Restores EVERYTHING from the backup file
+- Is IRREVERSIBLE (you cannot undo this)
+- Should only be used when you need to restore to an exact snapshot in time
+
+**For migration rollback (surgical, reversible):**
+```bash
+# Use EF Core migration commands instead:
+dotnet ef migrations list --project src --startup-project src
+dotnet ef database update <PreviousMigrationName> --project src --startup-project src
+
+# Or use the orca-migration-manager skill:
+/prism-devtools:orca-migration-manager
+```
+
 ## CRITICAL: How to Execute This Skill
 
 **DO NOT write your own PowerShell scripts.** All logic is already implemented in `Restore-DockerVolume.ps1`.
