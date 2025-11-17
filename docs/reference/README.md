@@ -171,5 +171,5 @@ Total: ~2300 tokens vs ~5000 tokens if all in one file
 
 ---
 
-**Last Updated**: 2025-11-10
-**PRISM Version**: 1.7.1
+**Last Updated**: 2025-11-17
+**PRISM Version**: 1.7.2

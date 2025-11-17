@@ -2,7 +2,7 @@
 
 **P**redictability · **R**esiliency · **I**ntentionality · **S**ustainability · **M**aintainability
 
-`Version 1.7.1` | `Last Updated: 2025-11-10`
+`Version 1.7.2` | `Last Updated: 2025-11-17`
 
 ---
 
@@ -50,11 +50,22 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 ### Feature Comparison
 
-| Capability     | Commands   | Skills         | Sub-Agents | Hooks       | Workflows    | Tasks  |
-| -------------- | ---------- | -------------- | ---------- | ----------- | ------------ | ------ |
-| **Activation** | Manual     | Auto           | Checkpoint | Event       | Orchestrated | Called |
-| **Context**    | Full       | Full           | Isolated   | Full        | Sequential   | Varies |
-| **Best for**   | Known role | Unknown intent | Validation | Enforcement | Multi-role   | Reuse  |
+> **Source:** Adapted from IndyDevDan's video "I finally CRACKED Claude Agent Skills"
+
+| Category | Skill | MCP | Subagent | Slash Command |
+|----------|-------|-----|----------|---------------|
+| **Triggered By** | Agent | Both | Both | Engineer |
+| **Context Efficiency** | High | Low | High | High |
+| **Context Persistence** | ✅ | ✅ | ✅ | ✅ |
+| **Parallelizable** | ❌ | ❌ | ❌ | ❌ |
+| **Specializable** | ✅ | ✅ | ✅ | ✅ |
+| **Sharable** | ✅ | ✅ | ✅ | ✅ |
+| **Modularity** | High | High | Mid | Mid |
+| **Tool Permissions** | ✅ | ❌ | ✅ | ✅ |
+| **Can Use Prompts** | ✅ | ✅ | ✅ | ✅ |
+| **Can Use Skills** | ✅ | Kind of | ✅ | ✅ |
+| **Can Use MCP Servers** | ✅ | ✅ | ✅ | ✅ |
+| **Can Use Subagents** | ✅ | ✅ | ✅ | ❌ |
 
 📚 **Learn more:** [Complete Tutorial Series](./reference/claude-code-features/README.md)
 

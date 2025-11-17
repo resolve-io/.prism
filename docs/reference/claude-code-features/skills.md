@@ -2,6 +2,8 @@
 
 > **Level 1**: What skills are and how they differ from commands
 
+📖 **Official Documentation**: [Claude Code Agent Skills](https://code.claude.com/docs/en/skills)
+
 ---
 
 ## What Are Skills?

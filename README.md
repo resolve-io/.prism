@@ -1,6 +1,6 @@
 # PRISM Development System
 
-**Version 1.7.1** - Documentation Clarity Update
+**Version 1.7.2** - Feature Comparison & Workflow Diagrams Update
 
 A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
@@ -119,12 +119,14 @@ All documentation follows token-efficient loading:
 
 ## What's New
 
-### Version 1.7.1
-📝 **Documentation Clarity** - Clarified PRISM is a Claude Code application, not a web app
-✅ **System Architecture Layers** - Renamed to avoid confusion with web tech stacks
-✅ **Test Artifact Labeling** - All test documents clearly marked as fictional examples
+### Version 1.7.2
+📊 **Feature Comparison Table** - Added comprehensive Claude Code features comparison (Skills, MCP, Subagents, Slash Commands)
+🎨 **Workflow Diagrams** - Visual mermaid flowcharts for all three brownfield workflow patterns
+📖 **Official Documentation Links** - Added links to official Claude Code docs in all tutorial pages
+🔗 **Documentation Deduplication** - Cross-referenced workflows.md and core-development-cycle.md to eliminate overlap
 
 ### Recent Updates
+- **1.7.1**: Documentation clarity, system architecture layers, test artifact labeling
 - **1.7.0**: Smart Connections Integration, Documentation Optimization, Architecture System
 - **1.6.0**: Documentation validation system and PRISM methodology checklist
 - **1.5.0**: Obsidian-based context memory with Smart Connections

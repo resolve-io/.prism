@@ -34,6 +34,8 @@ The PRISM development cycle is a **brownfield-focused** workflow for working wit
 
 Based on the [decision tree](../../../workflows/core-development-cycle.yaml#L396-L448) in the YAML, there are three patterns:
 
+> 🎨 **Visual Diagrams**: See [Workflows Tutorial - Brownfield Variations](../claude-code-features/workflows.md#brownfield-workflow-variations) for mermaid flowcharts of these patterns
+
 ### 1. **Full Brownfield Workflow** (Major Enhancements)
 **When:** Major enhancement affecting multiple systems
 

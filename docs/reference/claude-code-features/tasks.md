@@ -2,6 +2,8 @@
 
 > **Level 1**: What tasks are and how they enable reusability
 
+📖 **Official Documentation**: [Claude Code Overview - Tasks](https://code.claude.com/docs/en/overview) | [Common Workflows](https://code.claude.com/docs/en/common-workflows)
+
 ---
 
 ## What Are Tasks?

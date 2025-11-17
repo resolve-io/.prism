@@ -1,0 +1,66 @@
+🎉 *PRISM v1.7.2 Released!* 🎉
+
+We're excited to announce PRISM v1.7.2 with enhanced documentation and visual workflow guides!
+
+---
+
+*📊 NEW: Feature Comparison Table*
+Ever confused about Skills vs MCP vs Subagents vs Slash Commands? We've added a comprehensive comparison across 12 capabilities (triggered by, context efficiency, permissions, composition, etc.)
+
+Based on IndyDevDan's excellent video "I finally CRACKED Claude Agent Skills"
+→ View: https://github.com/resolve-io/.prism/blob/main/docs/index.md#feature-comparison
+
+---
+
+*🎨 NEW: Visual Workflow Diagrams*
+Choose the right brownfield pattern with interactive Mermaid flowcharts:
+
+• *Full Brownfield* - Major enhancements (MANDATORY gates)
+• *Brownfield Story* - Standard changes (CONDITIONAL gates)
+• *Standard Story* - Simple fixes (OPTIONAL gates)
+
+Each diagram shows decision points, color-coded steps, and feedback loops!
+
+Plus a decision matrix based on files affected, system impact, and risk level.
+→ View: https://github.com/resolve-io/.prism/blob/main/docs/reference/claude-code-features/workflows.md#brownfield-workflow-variations
+
+---
+
+*📖 NEW: Official Documentation Links*
+All tutorial pages now link directly to official Claude Code docs:
+
+• Slash Commands → code.claude.com/docs/en/slash-commands
+• Skills → code.claude.com/docs/en/skills
+• Hooks → code.claude.com/docs/en/hooks
+• Sub-Agents → code.claude.com/docs/en/sub-agents
+• Workflows → code.claude.com/docs/en/common-workflows
+• Tasks → code.claude.com/docs/en/overview
+
+No more hunting for the right documentation!
+
+---
+
+*🔗 IMPROVED: Documentation Deduplication*
+Clear separation between tutorial (workflows.md) and practical reference (core-development-cycle.md) with bidirectional cross-references.
+
+---
+
+*🚀 Getting Started*
+
+New users:
+1. Check the feature comparison table
+2. Use the workflow diagrams to choose your pattern
+3. Follow the tutorial series with official doc links
+
+Existing users:
+→ Update: `cd .prism && git pull origin main`
+
+---
+
+*📝 Full details:* https://github.com/resolve-io/.prism/blob/main/CHANGELOG.md#172---2025-11-17
+
+🙏 Thanks to *IndyDevDan* for the inspiration!
+
+Questions? Drop them in #prism-feedback or #prism-support
+
+*PRISM™ - Refracting complexity into clarity* ✨

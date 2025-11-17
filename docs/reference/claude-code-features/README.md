@@ -2,6 +2,8 @@
 
 Progressive tutorials on how PRISM leverages Claude Code's architecture.
 
+📖 **[← Back to Documentation Index](../../index.md)**
+
 ---
 
 ## Overview
@@ -78,5 +80,5 @@ Tasks → Reusable operations
 
 ---
 
-**Last Updated**: 2025-11-10
-**PRISM Version**: 1.7.1
+**Last Updated**: 2025-11-17
+**PRISM Version**: 1.7.2

@@ -11,14 +11,13 @@
             "id": "2895c8a2bcd638e4",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "bases",
               "state": {
-                "file": "index.md",
-                "mode": "source",
-                "source": false
+                "file": "Untitled.base",
+                "viewName": "Table"
               },
-              "icon": "lucide-file",
-              "title": "index"
+              "icon": "lucide-table",
+              "title": "Untitled"
             }
           }
         ]
@@ -184,8 +183,13 @@
   },
   "active": "2895c8a2bcd638e4",
   "lastOpenFiles": [
+    "releases/v1.7.2-slack-announcement.txt",
+    "releases/v1.7.2-announcement.md",
+    "releases",
     "reference/workflows/core-development-cycle.md",
+    "Untitled.base",
     "index.md",
+    "reference/claude-code-features/workflows.md.tmp.51156.1763411595320",
     "reference/README.md",
     "reference/claude-code-features/tasks.md",
     "reference/claude-code-features/workflows.md",
@@ -202,9 +206,6 @@
     "reference/claude-code-features/workflows.md.tmp.28880.1762964605051",
     "reference/claude-code-features/workflows.md.tmp.28880.1762964589158",
     "reference/claude-code-features/slash-commands.md.tmp.28880.1762964559474",
-    "reference/claude-code-features/skills.md.tmp.28880.1762964541546",
-    "reference/workflows/core-development-cycle.md.tmp.28880.1762964408294",
-    "reference/workflows/README.md.tmp.28880.1762964337376",
     "archive/test-artifacts/stories/test/story-001-test.md"
   ]
 }

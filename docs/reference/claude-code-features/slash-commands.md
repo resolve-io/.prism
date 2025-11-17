@@ -2,6 +2,8 @@
 
 > **Level 1**: What slash commands are and when to use them
 
+📖 **Official Documentation**: [Claude Code Slash Commands](https://code.claude.com/docs/en/slash-commands)
+
 ---
 
 ## What Are Slash Commands?

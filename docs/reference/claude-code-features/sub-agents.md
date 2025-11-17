@@ -2,6 +2,8 @@
 
 > **Level 1**: What sub-agents are and why isolation matters
 
+📖 **Official Documentation**: [Claude Code Subagents](https://code.claude.com/docs/en/sub-agents)
+
 ---
 
 ## What Are Sub-Agents?

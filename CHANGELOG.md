@@ -5,6 +5,41 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2025-11-17
+
+### Added
+- **Feature Comparison Table** - Comprehensive comparison of Claude Code features (Skills, MCP, Subagents, Slash Commands)
+  - Added comparison table to docs/index.md with 12 capability rows
+  - Source attribution to IndyDevDan's video "I finally CRACKED Claude Agent Skills"
+  - Covers triggered by, context efficiency, permissions, tool usage, and composition capabilities
+
+- **Workflow Visual Diagrams** - Mermaid flowcharts for brownfield workflow patterns
+  - Full Brownfield Workflow (major enhancements) with color-coded mandatory steps
+  - Brownfield Story Workflow (standard changes) with conditional risk assessment
+  - Standard Story Workflow (simple changes) with optional QA review
+  - Decision matrix table to help choose the right workflow pattern
+  - Added to docs/reference/claude-code-features/workflows.md
+
+- **Official Documentation Links** - Added links to official Claude Code docs in all tutorial pages
+  - Slash Commands: https://code.claude.com/docs/en/slash-commands
+  - Skills: https://code.claude.com/docs/en/skills
+  - Hooks: https://code.claude.com/docs/en/hooks (reference + guide)
+  - Sub-Agents: https://code.claude.com/docs/en/sub-agents
+  - Workflows: https://code.claude.com/docs/en/common-workflows + community resources
+  - Tasks: https://code.claude.com/docs/en/overview
+
+### Changed
+- **Documentation Deduplication** - Cross-referenced workflows.md and core-development-cycle.md
+  - workflows.md now references core-development-cycle.md for detailed command sequences
+  - core-development-cycle.md now references workflows.md for visual diagrams
+  - Clear division: workflows.md = tutorial/visual, core-development-cycle.md = practical/commands
+  - Added bidirectional navigation between documents
+
+- **Documentation Navigation** - Improved interconnection across all documentation
+  - Added back navigation link to docs/reference/claude-code-features/README.md
+  - Verified all 44 links from docs/index.md (100% valid)
+  - Validated all cross-references between workflow documents
+
 ## [1.7.1] - 2025-11-10
 
 ### Changed

@@ -2,6 +2,9 @@
 
 > **Level 1**: What workflows are and how they orchestrate complexity
 
+📖 **Official Documentation**: [Claude Code Common Workflows](https://code.claude.com/docs/en/common-workflows)
+🌐 **Community Resources**: [Awesome Claude Code Workflows](https://github.com/hesreallyhim/awesome-claude-code) | [OneRedOak Workflows](https://github.com/OneRedOak/claude-code-workflows)
+
 ---
 
 ## What Are Workflows?
@@ -592,6 +595,119 @@ quality_gates:
 - Implement feature B
 - Validate feature B  ← Incremental validation
 ```
+
+---
+
+## Brownfield Workflow Variations
+
+PRISM provides three brownfield workflow patterns based on complexity and risk level. These visual diagrams complement the detailed command reference in the [Core Development Cycle](../workflows/core-development-cycle.md#brownfield-workflow-patterns).
+
+> 📖 **Detailed Guide**: See [Core Development Cycle - Brownfield Patterns](../workflows/core-development-cycle.md#brownfield-workflow-patterns) for:
+> - Bash command sequences
+> - When brownfield steps are mandatory
+> - Common scenarios with examples
+> - Testing standards and troubleshooting
+
+### 1. Full Brownfield Workflow (Major Enhancements)
+
+**When to use:** Major enhancement affecting multiple systems
+
+**Required steps:** Risk + Design + Review
+
+```mermaid
+graph TD
+    A[/sm - Draft Story] --> B{User Approves?}
+    B -->|No| A
+    B -->|Yes| C[/qa *risk - Assess Risks]
+    C --> D[Risk Assessment Complete]
+    D --> E[/qa *design - Plan Test Strategy]
+    E --> F[Test Strategy Complete]
+    F --> G[/dev - Implement with TDD]
+    G --> H[Implementation Complete]
+    H --> I[/qa *review - Validate Quality]
+    I --> J{QA Pass?}
+    J -->|No| G
+    J -->|Yes| K[User Verifies & Commits]
+
+    style C fill:#ff6b6b
+    style E fill:#ff6b6b
+    style I fill:#ff6b6b
+    style K fill:#51cf66
+```
+
+**Key points:**
+- ⚠️ **MANDATORY** risk assessment before coding
+- ⚠️ **MANDATORY** test strategy design before coding
+- ⚠️ **MANDATORY** QA review before merge
+- Use for: Multi-system changes, architecture modifications, critical features
+
+### 2. Brownfield Story Workflow (Standard Changes)
+
+**When to use:** More complex than a bug fix, but not a major enhancement
+
+**Required steps:** Risk (conditional) + Review (recommended)
+
+```mermaid
+graph TD
+    A[/sm - Draft Story] --> B{User Approves?}
+    B -->|No| A
+    B -->|Yes| C{Touches Integration Points?}
+    C -->|Yes| D[/qa *risk - Assess Risks]
+    C -->|No| E[/dev - Implement with TDD]
+    D --> E
+    E --> F[Implementation Complete]
+    F --> G[/qa *review - Validate Quality]
+    G --> H{QA Pass?}
+    H -->|No| E
+    H -->|Yes| I[User Verifies & Commits]
+
+    style D fill:#ffd43b
+    style G fill:#74c0fc
+    style I fill:#51cf66
+```
+
+**Key points:**
+- ⚠️ **CONDITIONAL** risk assessment if touching integration points
+- ✅ **RECOMMENDED** QA review for quality assurance
+- Use for: Feature additions, refactoring, multi-file changes
+
+### 3. Standard Story Workflow (Simple Changes)
+
+**When to use:** Simple bug fix in well-understood code
+
+**Required steps:** Review (optional)
+
+```mermaid
+graph TD
+    A[/sm - Draft Story] --> B{User Approves?}
+    B -->|No| A
+    B -->|Yes| C[/dev - Implement with TDD]
+    C --> D[Implementation Complete]
+    D --> E{Want QA Review?}
+    E -->|Yes| F[/qa *review - Quality Check]
+    E -->|No| G[User Verifies & Commits]
+    F --> H{QA Pass?}
+    H -->|No| C
+    H -->|Yes| G
+
+    style F fill:#e0e0e0
+    style G fill:#51cf66
+```
+
+**Key points:**
+- ✓ **OPTIONAL** QA review for extra confidence
+- Use for: Single-file bug fixes, minor tweaks, well-understood changes
+
+### Choosing the Right Workflow
+
+| Factor | Full Brownfield | Standard Story | Simple Change |
+|--------|----------------|----------------|---------------|
+| **Files affected** | 5+ files | 2-4 files | 1-2 files |
+| **Systems impacted** | Multiple | Single | Single |
+| **Integration points** | Yes | Maybe | No |
+| **Risk level** | High | Medium | Low |
+| **Test strategy needed** | Yes | No | No |
+| **QA review** | Mandatory | Recommended | Optional |
 
 ---
 

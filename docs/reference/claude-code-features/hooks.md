@@ -2,6 +2,8 @@
 
 > **Level 1**: What hooks are and how they prevent errors
 
+📖 **Official Documentation**: [Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks) | [Getting Started Guide](https://code.claude.com/docs/en/hooks-guide)
+
 ---
 
 ## What Are Hooks?
