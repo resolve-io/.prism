@@ -132,7 +132,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 - **Tasks:** [Test Design](../tasks/test-design.md), [Risk Profile](../tasks/risk-profile.md)
 - **Templates:** [QA Gate YAML](../templates/)
 
-📖 **Learn More:** [QA Command](../commands/qa.md)
+📖 **Learn More:** [QA Command](../commands/qa.md) · [QA Reference](./reference/qa/README.md)
 
 ---
 
@@ -309,7 +309,7 @@ Smart Connections integration for efficient, non-duplicative documentation:
 | **🚀 Starting a project** | [Core Workflow](./reference/workflows/core-development-cycle.md) · [`/architect`](../commands/architect.md) |
 | **📝 Planning a feature** | [`/sm`](../commands/sm.md) · [Story Checklist](../checklists/story-draft-checklist.md) |
 | **💻 Implementing code** | [`/dev`](../commands/dev.md) · [Code Quality](../checklists/code-quality-checklist.md) |
-| **✅ Testing & QA** | [`/qa`](../commands/qa.md) · [Test Design](../tasks/test-design.md) |
+| **✅ Testing & QA** | [`/qa`](../commands/qa.md) · [QA Reference](./reference/qa/README.md) · [Quality Gates](./reference/qa/concepts/quality-gates.md) |
 | **👁️ Code review** | [`/peer`](../commands/peer.md) · [Peer Review](../checklists/peer-review-checklist.md) |
 
 ---
@@ -334,6 +334,17 @@ Complete technical reference with progressive disclosure:
 - [User Guide](./reference/sub-agents/user-guide.md) - Workflows by role
 - [Quick Reference](./reference/sub-agents/quick-reference.md) - One-page cheat sheet
 - [Implementation](./reference/sub-agents/implementation/) - Technical specs
+
+### ✅ QA System
+- [QA Overview](./reference/qa/README.md) - Quality assurance in PRISM
+- **Concepts:**
+  - [Quality Gates](./reference/qa/concepts/quality-gates.md) - Gate statuses and philosophy
+  - [Gate Creation Process](./reference/qa/concepts/gate-creation-process.md) - How and why gates are created
+- **Reference:**
+  - [Gate Decision Criteria](./reference/qa/reference/gate-decision-criteria.md) - Decision logic and thresholds
+  - [Gate File Structure](./reference/qa/reference/gate-file-structure.md) - YAML schema reference
+- **Guides:**
+  - [QA Workflows](./reference/qa/guides/workflows.md) - Integration into development cycle
 
 ### 📘 Guides
 - [Claude Code Overview](./reference/guides/claude-code-overview.md) - Architecture integration

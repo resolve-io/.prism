@@ -1,6 +1,6 @@
 markdownExploder: true
 qa:
-  qaLocation: docs/qa
+  qaLocation: artifacts/qa
 prd:
   prdFile: docs/prd.md
   prdVersion: v4
