@@ -1,7 +1,7 @@
 ---
 name: jira
 description: Jira integration for fetching issue context (Epics, Stories, Bugs) to enhance development workflows. Use for automatic issue detection, retrieving ticket details, acceptance criteria, and linked dependencies.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Jira Integration
@@ -21,7 +21,7 @@ version: 1.0.0
 **Provides read-only Jira integration** to enrich development workflows:
 
 - **Automatic Detection**: Recognizes issue keys in conversation (PLAT-123, ISSUE-456)
-- **Context Fetching**: Retrieves full issue details via Jira REST API
+- **Context Fetching**: Retrieves full issue details via Jira REST API using curl
 - **Structured Formatting**: Presents issue data in clear, development-ready format
 - **Linked Issues**: Follows Epic → Story → Task relationships
 - **Comment History**: Shows recent comments and customer feedback
@@ -41,7 +41,42 @@ version: 1.0.0
 - **Graceful Degradation**: Continues without Jira if unavailable
 - **Security First**: Credentials via environment variables only
 
+## Implementation Method
+
+The skill uses **curl via Bash tool** to fetch Jira data:
+
+```bash
+curl -s -u "$JIRA_EMAIL:$JIRA_TOKEN" \
+  "https://resolvesys.atlassian.net/rest/api/3/issue/{issueKey}"
+```
+
+**Why curl instead of WebFetch:**
+- WebFetch doesn't support custom authentication headers
+- curl can read credentials directly from environment variables
+- Direct API access with Basic Authentication
+- Reliable and proven approach
+
 ## Quick Start
+
+### Fetch an Issue
+
+**When user mentions issue key:**
+
+1. Detect issue key pattern `[A-Z]+-\d+`
+2. Use curl with Bash tool to fetch from Jira API
+3. Parse JSON response
+4. Format and display structured summary
+
+**Example workflow:**
+```
+User: "jira PLAT-3213"
+
+Agent executes:
+curl -s -u "$JIRA_EMAIL:$JIRA_TOKEN" \
+  "https://resolvesys.atlassian.net/rest/api/3/issue/PLAT-3213"
+
+Parses response and displays formatted issue details
+```
 
 ### Automatic Issue Detection
 
@@ -49,21 +84,9 @@ version: 1.0.0
 
 1. User mentions issue key (e.g., "Let's work on PLAT-456")
 2. Skill detects pattern matching `[A-Z]+-\d+`
-3. Fetches issue details via Jira REST API
+3. Fetches issue details via curl
 4. Displays formatted summary
 5. Proceeds with requested task using context
-
-### Manual Issue Fetch
-
-**Explicit command:**
-
-```
-User: "jira PLAT-789"
-Agent:
-1. Fetches full issue details
-2. Displays structured summary
-3. Optionally fetches linked issues
-```
 
 ### Proactive Inquiry
 
@@ -73,7 +96,7 @@ Agent:
 User: "I need to implement the login feature"
 Agent: "Great! Do you have a JIRA ticket number so I can get more context?"
 User: "PLAT-456"
-Agent: Fetches and displays issue details
+Agent: Fetches and displays issue details via curl
 ```
 
 ## Available Commands
@@ -98,6 +121,79 @@ The skill automatically detects these patterns:
 - **Primary Project**: `PLAT-123` (from core-config.yaml defaultProject)
 - **Any Project**: `[A-Z]+-\d+` format (e.g., JIRA-456, DEV-789)
 - **Multiple Issues**: Detects all issue keys in single message
+
+## Fetching Issues - Implementation
+
+### Step 1: Detect Issue Key
+
+Extract issue key from user message using regex:
+```regex
+[A-Z]+-\d+
+```
+
+### Step 2: Fetch via curl
+
+Use Bash tool to execute curl command:
+
+```bash
+curl -s -u "$JIRA_EMAIL:$JIRA_TOKEN" \
+  "https://resolvesys.atlassian.net/rest/api/3/issue/{ISSUE_KEY}" \
+  2>&1
+```
+
+**Critical points:**
+- Use `$JIRA_EMAIL` and `$JIRA_TOKEN` environment variables
+- Use `-u` flag for Basic Authentication
+- Use `-s` for silent mode (no progress bar)
+- Redirect stderr with `2>&1` to catch errors
+
+### Step 3: Parse JSON Response
+
+Use Python one-liner to extract key fields:
+
+```bash
+curl -s -u "$JIRA_EMAIL:$JIRA_TOKEN" \
+  "https://resolvesys.atlassian.net/rest/api/3/issue/PLAT-123" | \
+python -c "
+import json, sys
+data = json.load(sys.stdin)
+fields = data['fields']
+print('Key:', data['key'])
+print('Type:', fields['issuetype']['name'])
+print('Summary:', fields['summary'])
+print('Status:', fields['status']['name'])
+print('Assignee:', fields.get('assignee', {}).get('displayName', 'Unassigned'))
+"
+```
+
+### Step 4: Format and Display
+
+Format the extracted data as structured markdown:
+
+```markdown
+## 📋 [{ISSUE_KEY}](https://resolvesys.atlassian.net/browse/{ISSUE_KEY})
+
+**Type:** {Type} | **Status:** {Status} | **Priority:** {Priority}
+**Assignee:** {Assignee} | **Reporter:** {Reporter}
+
+### Description
+{Description text}
+
+### Acceptance Criteria
+{Extracted AC or "Not specified"}
+
+### Related Issues
+- Blocks: {list}
+- Blocked by: {list}
+- Parent: [{PARENT}](link)
+
+### Additional Context
+- Labels: {labels}
+- Components: {components}
+- Updated: {date}
+
+[View in Jira](https://resolvesys.atlassian.net/browse/{ISSUE_KEY})
+```
 
 ## Extracted Information
 
@@ -154,68 +250,69 @@ The Jira skill enhances other PRISM skills:
 - Verify implementation matches acceptance criteria
 - Check for architectural alignment
 
-→ [Dependencies Reference](../../shared/reference/dependencies.md)
-
 ## Authentication & Security
 
 **Configuration:**
 
-Credentials are configured in [core-config.yaml](../../core-config.yaml):
+Credentials are configured via Windows environment variables:
+
+```
+JIRA_EMAIL=your.email@resolve.io
+JIRA_TOKEN=your-jira-api-token
+```
+
+**Core config reference** ([core-config.yaml](../../core-config.yaml)):
 
 ```yaml
 jira:
   enabled: true
   baseUrl: https://resolvesys.atlassian.net
   email: ${JIRA_EMAIL}
-  token: ${JIRA_API_TOKEN}
+  token: ${JIRA_TOKEN}
   defaultProject: PLAT
 ```
 
 **Security Best Practices:**
 
-- Credentials read from environment variables (`JIRA_EMAIL`, `JIRA_API_TOKEN`)
-- Never hardcode credentials in code or URLs
-- Never embed credentials in URLs (e.g., `https://user:pass@domain.com`)
-- Use `.env` file (gitignored) for local development
-- WebFetch tool handles authentication headers securely
+- Credentials read from system environment variables
+- Never hardcode credentials in code
+- Basic Authentication via curl `-u` flag
+- Credentials passed securely to curl
 
 **Setup:**
 
-1. Copy `.env.example` to `.env` in repository root
-2. Add your Jira credentials:
-   ```
-   JIRA_EMAIL=your.email@resolve.io
-   JIRA_API_TOKEN=your-api-token-here
-   ```
-3. Generate API token at: https://id.atlassian.com/manage-profile/security/api-tokens
+1. Set Windows environment variables (System level):
+   - `JIRA_EMAIL` = your Atlassian email
+   - `JIRA_TOKEN` = your API token
+2. Generate API token at: https://id.atlassian.com/manage-profile/security/api-tokens
+3. Restart terminal/IDE after setting variables
 
 → [Authentication Reference](./reference/authentication.md)
 
 ## Error Handling
 
+**Authentication Failed:**
+```bash
+# Response: "Client must be authenticated to access this resource."
+# Action: Verify JIRA_EMAIL and JIRA_TOKEN are set correctly
+```
+
 **Issue Not Found (404):**
-```
-Display: "Could not find Jira issue {issueKey}. Please verify the issue key."
-Offer: Search or proceed without Jira context
-```
-
-**Permission Denied (403):**
-```
-Display: "Access denied to {issueKey}. Please check Jira permissions."
-Suggest: Contact Jira admin or proceed without context
+```bash
+# Response: {"errorMessages":["Issue does not exist or you do not have permission to see it."]}
+# Action: Verify issue key spelling and user has permission
 ```
 
-**Network/API Errors:**
-```
-Display: "Unable to connect to Jira. Proceeding without issue context."
-Action: Log error details for troubleshooting
+**Network Error:**
+```bash
+# Response: curl connection error
+# Action: Check network connectivity and Jira availability
 ```
 
-**Missing Configuration:**
-```
-Display: "Jira integration not configured. Set JIRA_EMAIL and JIRA_API_TOKEN."
-Action: Proceed without Jira integration
-```
+**Graceful Degradation:**
+- Display error message to user
+- Offer to proceed without Jira context
+- Never block workflow on Jira failures
 
 → [Error Handling Guide](./reference/error-handling.md)
 
@@ -224,19 +321,19 @@ Action: Proceed without Jira integration
 ### Fetching Issues
 
 ✅ **DO:**
-- Always format output in clear, structured markdown
+- Always use environment variables for credentials
+- Format output in clear, structured markdown
 - Cache fetched issue data for the conversation session
-- Include clickable Jira links: `[PLAT-123](https://resolvesys.atlassian.net/browse/PLAT-123)`
-- Handle missing fields gracefully (not all issues have all fields)
-- Ask user before fetching when ambiguous
-- Respect privacy (only fetch explicitly referenced or approved issues)
+- Include clickable Jira links
+- Handle missing fields gracefully
+- Check authentication before attempting fetch
 
 ❌ **DON'T:**
-- Fetch issues without user knowledge or approval
-- Hardcode credentials in any code or URLs
-- Log sensitive issue data in debug logs
-- Fetch entire project data (use specific JQL queries)
-- Ignore API rate limits (respect Jira's throttling)
+- Hardcode credentials in commands
+- Expose credentials in error messages
+- Skip error handling
+- Fetch entire project data at once
+- Ignore API rate limits
 
 ### Workflow Integration
 
@@ -244,82 +341,49 @@ Action: Proceed without Jira integration
 - Proactively detect issue keys in user messages
 - Display issue summary before proceeding with task
 - Use issue context to inform implementation decisions
-- Check acceptance criteria before marking work complete
-- Reference Jira tickets in commit messages and PRs
+- Reference Jira tickets in commit messages
 
 ❌ **DON'T:**
 - Skip issue detection to save time
-- Assume issue data is always current (refetch if stale)
-- Modify Jira issues programmatically (read-only integration)
-- Use Jira as source of truth for code documentation
+- Assume issue data is always current
+- Modify Jira issues (read-only integration)
 
 → [Best Practices Guide](../../shared/reference/best-practices.md#jira-integration)
 
-## Example Workflows
+## Example Implementation
 
-### Example 1: Story Master Decomposing Epic
+### Complete Issue Fetch
 
+```bash
+# Step 1: Fetch issue data
+ISSUE_DATA=$(curl -s -u "$JIRA_EMAIL:$JIRA_TOKEN" \
+  "https://resolvesys.atlassian.net/rest/api/3/issue/PLAT-3213")
+
+# Step 2: Check for errors
+if echo "$ISSUE_DATA" | grep -q "errorMessages"; then
+  echo "Error fetching issue"
+  exit 1
+fi
+
+# Step 3: Extract and format
+echo "$ISSUE_DATA" | python -c "
+import json, sys
+data = json.load(sys.stdin)
+fields = data['fields']
+
+print(f\"## 📋 [{data['key']}](https://resolvesys.atlassian.net/browse/{data['key']})\")
+print(f\"**Type:** {fields['issuetype']['name']} | **Status:** {fields['status']['name']}\")
+print(f\"**Assignee:** {fields.get('assignee', {}).get('displayName', 'Unassigned')}\")
+print(f\"\n### Summary\")
+print(fields['summary'])
+"
 ```
-User: "Decompose PLAT-789"
-
-Jira Skill Workflow:
-1. Detect "PLAT-789" in user message
-2. Fetch epic details via WebFetch
-   GET /rest/api/3/issue/PLAT-789
-3. Display epic summary:
-   - Title: "User Authentication System"
-   - Description: Full epic description
-   - Acceptance Criteria: Extracted from description
-   - Existing Child Stories: PLAT-790, PLAT-791
-4. Fetch child stories to avoid duplication
-5. Provide context to Story Master skill for decomposition
-```
-
-### Example 2: Developer Starting Implementation
-
-```
-User: "Let's implement the login feature"
-
-Jira Skill Workflow:
-1. Agent: "Great! Do you have a JIRA ticket number so I can get more context?"
-2. User: "PLAT-456"
-3. Detect "PLAT-456" in response
-4. Fetch story details via WebFetch
-5. Display formatted summary:
-   - Type: Story
-   - Summary: "Implement JWT-based login"
-   - Acceptance Criteria: Listed from description
-   - Technical Notes: From comments
-   - Blocking Issues: None
-6. Provide context to Developer skill for implementation
-```
-
-### Example 3: Support Investigating Bug
-
-```
-User: "Customer reported export button not working, PLAT-999"
-
-Jira Skill Workflow:
-1. Detect "PLAT-999" in message
-2. Fetch bug details via WebFetch
-3. Display bug summary:
-   - Type: Bug
-   - Summary: "Export to CSV button throws error"
-   - Description: Customer-reported issue with stack trace
-   - Reproduction Steps: Listed in description
-   - Comments: Customer follow-up details
-   - Priority: High
-   - Related Issues: PLAT-888 (similar export bug)
-4. Provide context to Support skill for investigation
-```
-
-→ [More Examples](../../shared/reference/examples.md#jira-workflows)
 
 ## Reference Documentation
 
 Core references (loaded as needed):
 
-- **[API Reference](./reference/api-reference.md)** - Jira REST API endpoints and usage
+- **[API Reference](./reference/api-reference.md)** - Jira REST API endpoints and curl usage
 - **[Extraction Format](./reference/extraction-format.md)** - Issue data formatting and structure
 - **[Authentication](./reference/authentication.md)** - Security and credential management
 - **[Error Handling](./reference/error-handling.md)** - Handling API errors gracefully
@@ -333,23 +397,20 @@ Shared references:
 
 ## Common Questions
 
+**Q: Why use curl instead of WebFetch?**
+A: WebFetch doesn't support custom authentication headers needed for Jira API. curl with `-u` flag provides reliable Basic Authentication.
+
 **Q: Do I need to manually invoke this skill?**
-A: No! The skill automatically activates when it detects Jira issue keys in conversation. You can also explicitly use `jira {issueKey}` command.
+A: No! The skill automatically activates when it detects Jira issue keys in conversation.
 
 **Q: Is this read-only?**
 A: Yes. This integration only fetches data from Jira, it never creates or modifies issues.
 
-**Q: What if I don't have Jira credentials configured?**
+**Q: What if I don't have credentials configured?**
 A: The skill gracefully degrades. It will inform you that Jira integration is unavailable and proceed without it.
 
-**Q: Can I disable automatic detection?**
-A: Yes, use the `auto-detect off` command to disable automatic issue key detection.
-
-**Q: How do I get a Jira API token?**
-A: Visit https://id.atlassian.com/manage-profile/security/api-tokens, create a token, and add it to your `.env` file.
-
-**Q: Does this work with Jira Server or only Cloud?**
-A: Currently configured for Jira Cloud. Jira Server/Data Center requires different API endpoints but the same principles apply.
+**Q: How do I verify credentials are working?**
+A: Test with: `curl -s -u "$JIRA_EMAIL:$JIRA_TOKEN" "https://resolvesys.atlassian.net/rest/api/3/myself"`
 
 **Q: Can I search for issues using JQL?**
 A: Yes! Use `jira-search "project = PLAT AND type = Bug"` to search using Jira Query Language.
@@ -365,7 +426,8 @@ This skill activates when you mention:
 
 ---
 
-**Skill Version**: 1.0.0
-**Integration Type**: Read-Only
+**Skill Version**: 1.1.0
+**Integration Type**: Read-Only (curl + Bash)
 **Icon**: 🎫
 **Last Updated**: 2025-11-20
+**Method**: curl via Bash tool with Basic Authentication

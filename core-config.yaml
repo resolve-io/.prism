@@ -44,7 +44,7 @@ jira:
   enabled: true
   baseUrl: https://resolvesys.atlassian.net
   email: ${JIRA_EMAIL}
-  token: ${JIRA_API_TOKEN}
+  token: ${JIRA_TOKEN}
   defaultProject: PLAT
   issueKeyPattern: "[A-Z]+-\\d+"
 memory:
