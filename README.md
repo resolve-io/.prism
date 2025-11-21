@@ -1,6 +1,6 @@
 # PRISM Development System
 
-**Version 1.7.2** - Feature Comparison & Workflow Diagrams Update
+**Version 1.7.4** - Jira Integration & Enhanced Workflow Context
 
 A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
@@ -119,13 +119,14 @@ All documentation follows token-efficient loading:
 
 ## What's New
 
-### Version 1.7.2
-📊 **Feature Comparison Table** - Added comprehensive Claude Code features comparison (Skills, MCP, Subagents, Slash Commands)
-🎨 **Workflow Diagrams** - Visual mermaid flowcharts for all three brownfield workflow patterns
-📖 **Official Documentation Links** - Added links to official Claude Code docs in all tutorial pages
-🔗 **Documentation Deduplication** - Cross-referenced workflows.md and core-development-cycle.md to eliminate overlap
+### Version 1.7.4
+🎫 **Jira Integration Skill** - Read-only Jira integration with automatic issue detection and context enrichment
+🔄 **Enhanced PRISM Skills** - All 7 agent personas now integrate seamlessly with Jira for richer context
+🔒 **Security-First Configuration** - Environment variable-based credential management with comprehensive guides
+📖 **Progressive Disclosure Documentation** - Complete Jira integration guide with API reference and examples
 
 ### Recent Updates
+- **1.7.2**: Feature comparison table, workflow diagrams, official documentation links
 - **1.7.1**: Documentation clarity, system architecture layers, test artifact labeling
 - **1.7.0**: Smart Connections Integration, Documentation Optimization, Architecture System
 - **1.6.0**: Documentation validation system and PRISM methodology checklist

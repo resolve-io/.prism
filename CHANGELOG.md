@@ -5,6 +5,99 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2025-11-20
+
+### Added
+- **Jira Integration Skill** - Read-only Jira integration for enriching development workflows
+  - Automatic issue key detection in conversation (recognizes patterns like PLAT-123)
+  - Fetches full issue details via Jira REST API (Epics, Stories, Bugs, Tasks)
+  - Structured formatting for issue data with clickable links
+  - Extracts acceptance criteria, comments, linked issues, and dependencies
+  - Session caching for fetched issues to reduce API calls
+  - Graceful error handling and degradation when Jira unavailable
+  - Security-first approach using environment variables (JIRA_EMAIL, JIRA_API_TOKEN)
+  - Integration with all PRISM skills (SM, Dev, PO, QA, Support, Architect, Peer)
+  - Commands: `jira {issueKey}`, `jira-epic {epicKey}`, `jira-search {jql}`
+  - Configuration via core-config.yaml with baseUrl, email token placeholders, defaultProject
+  - Progressive disclosure structure with reference documentation (API, extraction format, authentication, error handling)
+  - 372 lines of comprehensive skill documentation
+
+### Enhanced
+- **Story Master (SM)** - Epic decomposition enhanced with Jira context
+  - Fetch epic details including acceptance criteria and goals
+  - Retrieve existing child stories to avoid duplication
+  - Use epic context to inform story planning
+
+- **Developer (Dev)** - Implementation enhanced with ticket context
+  - Fetch story/bug details for implementation context
+  - Review technical notes from Jira comments
+  - Check blocking and blocked issues before starting work
+
+- **Product Owner (PO)** - Story validation with acceptance criteria
+  - Fetch story details for validation
+  - Verify acceptance criteria completeness
+  - Review linked dependencies
+
+- **QA** - Testing enhanced with Jira requirements
+  - Fetch acceptance criteria for test planning
+  - Extract test requirements from descriptions
+  - Check linked test issues
+
+- **Support** - Bug investigation with customer context
+  - Fetch bug reproduction steps and stack traces
+  - Review customer comments and follow-ups
+  - Identify related bugs and patterns
+
+- **Architect** - Design decisions with epic context
+  - Fetch epic scope and technical requirements
+  - Review architectural decisions in comments
+  - Check component relationships
+
+- **Peer** - Code review with story alignment
+  - Fetch story context for review
+  - Verify implementation matches acceptance criteria
+  - Check architectural alignment
+
+### Security
+- **Credential Management** - Best practices enforced
+  - Environment variable-based authentication (never hardcoded)
+  - `.env` file support for local development (gitignored)
+  - Secure API token generation guide (Atlassian API tokens)
+  - No credentials in URLs or logs
+  - WebFetch tool handles authentication headers securely
+
+### Documentation
+- **Jira Skill Documentation** - Complete integration guide
+  - When to use: automatic detection, manual fetch, proactive inquiry
+  - Core principles: automated context retrieval, read-only, privacy-respecting
+  - Quick start guide with standard workflow patterns
+  - Issue detection patterns (primary project, any project, multiple issues)
+  - Extracted information (16+ field types)
+  - Integration examples for all 7 PRISM skills
+  - Authentication and security setup guide
+  - Error handling for 404, 403, network errors, missing config
+  - Best practices for fetching and workflow integration
+  - 3 detailed example workflows (Epic decomposition, Story implementation, Bug investigation)
+  - Reference documentation structure (API, extraction, auth, error handling)
+  - Common questions and answers (8 FAQs)
+
+### Validated
+- Jira skill follows progressive disclosure patterns
+- Security best practices implemented and documented
+- Integration points with all PRISM skills documented
+- Error handling covers all common failure scenarios
+- Authentication workflow tested with Atlassian Cloud
+- Configuration format validated in core-config.yaml
+- Version bumped to 1.7.4 in plugin.json
+
+### Benefits
+- **Automatic Context Enrichment** - No manual ticket lookups required
+- **Read-Only Safety** - Non-intrusive, can't modify Jira data
+- **Privacy Respecting** - Only fetches explicitly mentioned issues
+- **Seamless Workflow** - Works with all existing PRISM skills
+- **Graceful Degradation** - Continues working if Jira unavailable
+- **Security First** - Environment variable credentials only
+
 ## [1.7.2] - 2025-11-17
 
 ### Added
