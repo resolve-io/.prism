@@ -1,0 +1,257 @@
+# <!-- Powered by PRISM™ System -->
+template:
+  id: epic-template-v1
+  name: Epic Document
+  version: 1.0
+  output:
+    format: markdown
+    filename: docs/epics/{{epic_id}}-{{epic_slug}}.md
+    title: "Epic {{epic_id}}: {{epic_title}}"
+
+workflow:
+  mode: interactive
+  elicitation: advanced-elicitation
+
+agent_config:
+  editable_sections:
+    - Status
+    - Stories
+    - Risk Analysis
+    - Change Log
+
+sections:
+  - id: epic-header
+    title: Epic Header
+    type: markdown
+    template: |
+      # Epic: {{epic_title}}
+
+      ## Overview
+
+      {{epic_description}}
+    instruction: Generate the epic title and a comprehensive overview paragraph describing the initiative
+    owner: product-owner
+    editors: [product-owner, scrum-master]
+
+  - id: epic-metadata
+    title: Metadata
+    type: markdown-table
+    template: |
+      | Field | Value |
+      |-------|-------|
+      | **Epic ID** | {{epic_id}} |
+      | **Title** | {{epic_title}} |
+      | **Status** | {{status}} |
+      | **Priority** | {{priority}} |
+      | **Target Project** | {{target_project}} |
+      | **Total Story Points** | {{total_points}} |
+      | **Estimated Duration** | {{duration_range}} |
+      | **Created** | {{created_date}} |
+      | **Owner** | {{owner}} |
+    instruction: Fill in epic metadata
+    owner: product-owner
+    editors: [product-owner, scrum-master]
+
+  - id: status
+    title: Status
+    type: choice
+    choices: [Draft, Ready, InProgress, Blocked, Done, Cancelled]
+    instruction: Select the current status of the epic
+    owner: scrum-master
+    editors: [scrum-master]
+
+  - id: business-value
+    title: Business Value
+    type: paragraphs
+    instruction: |
+      Describe the business value this epic delivers:
+      - What problem does it solve?
+      - Who benefits from this work?
+      - How does it align with organizational goals?
+      - What is the expected outcome or impact?
+    elicit: true
+    owner: product-owner
+    editors: [product-owner]
+
+  - id: goals
+    title: Goals & Success Criteria
+    type: bullet-list
+    instruction: |
+      Define measurable goals and success criteria:
+      - What must be true for this epic to be considered successful?
+      - What metrics or KPIs will indicate success?
+      - What are the acceptance criteria at the epic level?
+    elicit: true
+    owner: product-owner
+    editors: [product-owner, scrum-master]
+
+  - id: scope
+    title: Scope
+    instruction: Define what is in and out of scope
+    sections:
+      - id: in-scope
+        title: In Scope
+        type: bullet-list
+        instruction: List items that ARE included in this epic
+      - id: out-of-scope
+        title: Out of Scope
+        type: bullet-list
+        instruction: List items explicitly NOT included (to prevent scope creep)
+
+  - id: current-state-analysis
+    title: Current State Analysis
+    condition: epic_type in [migration, upgrade, refactor]
+    instruction: |
+      For migration/upgrade epics, document:
+      - Current versions and configurations
+      - Components affected by the change
+      - Breaking changes identified
+      - Compatibility considerations
+    owner: scrum-master
+    editors: [scrum-master, dev-agent]
+
+  - id: risk-analysis
+    title: Risk Analysis
+    type: markdown-table
+    template: |
+      | Risk | Category | Probability | Impact | Mitigation |
+      |------|----------|-------------|--------|------------|
+      | {{risk_description}} | {{Technical/Integration/Timeline/Resource}} | {{High/Medium/Low}} | {{High/Medium/Low}} | {{mitigation_strategy}} |
+    instruction: |
+      Identify and assess risks:
+      - Technical: Complexity, unknowns, new technologies
+      - Integration: Dependencies on external systems
+      - Timeline: Factors that could cause delays
+      - Resource: Availability of skills or people
+    elicit: true
+    owner: scrum-master
+    editors: [scrum-master]
+
+  - id: integration-points
+    title: Integration Points
+    type: bullet-list
+    instruction: |
+      Document integration touchpoints:
+      - Existing system components affected
+      - External APIs or services involved
+      - Other epics or ongoing work dependencies
+      - CI/CD and deployment considerations
+    owner: scrum-master
+    editors: [scrum-master, dev-agent]
+
+  - id: dependencies
+    title: Dependencies
+    instruction: List dependencies that must be resolved
+    sections:
+      - id: external-dependencies
+        title: External Dependencies
+        type: bullet-list
+        instruction: Dependencies outside the team's control
+      - id: internal-dependencies
+        title: Internal Dependencies
+        type: bullet-list
+        instruction: Dependencies on other team work or epics
+
+  - id: story-summary
+    title: Story Summary
+    type: markdown-table
+    template: |
+      | # | Story | Size | Points | Status | Dependencies |
+      |---|-------|------|--------|--------|--------------|
+      | {{story_num}} | {{story_title}} | {{S/M/L}} | {{points}} | {{status}} | {{deps}} |
+    instruction: |
+      Summary table of all stories in execution order.
+      Stories should be:
+      - Logically sequenced (no forward dependencies)
+      - Sized appropriately (2-8 points each)
+      - Delivering vertical slices of functionality
+    owner: scrum-master
+    editors: [scrum-master]
+
+  - id: stories
+    title: Stories
+    repeatable: true
+    instruction: |
+      Define each story with:
+      - User story format (As a... I want... So that...)
+      - Acceptance criteria
+      - Size estimate (PROBE method)
+      - Task breakdown
+      - Dependencies on other stories
+    sections:
+      - id: story-detail
+        title: "Story {{epic_id}}.{{story_num}}: {{story_title}}"
+        template: |
+          **As a** {{persona}},
+          **I want to** {{action}},
+          **so that** {{benefit}}.
+
+          **Acceptance Criteria:**
+          {{acceptance_criteria}}
+
+          **Size:** {{size}} ({{points}} points)
+          **Estimated Hours:** {{hours_range}}
+          **Dependencies:** {{story_dependencies}}
+        owner: scrum-master
+        editors: [scrum-master, dev-agent]
+
+  - id: execution-order
+    title: Recommended Execution Order
+    type: numbered-list
+    instruction: |
+      Define the recommended order for story execution.
+      Include parallel execution opportunities where stories have no dependencies.
+      Format: "Story X → Story Y → [Story Z & Story W parallel] → Story V"
+    owner: scrum-master
+    editors: [scrum-master]
+
+  - id: definition-of-done
+    title: Epic Definition of Done
+    type: checklist
+    template: |
+      - [ ] All stories completed and accepted
+      - [ ] All acceptance criteria met
+      - [ ] Integration testing passed
+      - [ ] Performance requirements validated
+      - [ ] Security review completed
+      - [ ] Documentation updated
+      - [ ] Deployed to production
+      - [ ] Stakeholder sign-off received
+    instruction: Criteria that must be met for the epic to be considered complete
+    owner: scrum-master
+    editors: [scrum-master]
+
+  - id: psp-estimation
+    title: PSP Estimation Summary
+    instruction: Aggregated estimation data for the epic
+    sections:
+      - id: estimation-summary
+        title: Estimation Summary
+        template: |
+          - Total Story Points: {{total_points}}
+          - Story Count: {{story_count}}
+          - Size Distribution: {{size_breakdown}}
+          - Estimated Hours: {{total_optimistic}}-{{total_likely}}-{{total_pessimistic}}
+          - Confidence: {{overall_confidence}}
+        owner: scrum-master
+        editors: [scrum-master]
+
+  - id: change-log
+    title: Change Log
+    type: table
+    columns: [Date, Version, Description, Author]
+    instruction: Track changes made to this epic document
+    owner: scrum-master
+    editors: [scrum-master, product-owner]
+
+  - id: references
+    title: References
+    type: bullet-list
+    instruction: |
+      Links to related documents:
+      - PRD (if derived from PRD)
+      - Architecture documents
+      - Technical specifications
+      - External documentation
+    owner: scrum-master
+    editors: [scrum-master, dev-agent]
