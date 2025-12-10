@@ -13,6 +13,7 @@ package-lock.json
 # IDE and editor files
 .vscode/
 .idea/
+.obsidian/
 *.swp
 *.swo
 *~
