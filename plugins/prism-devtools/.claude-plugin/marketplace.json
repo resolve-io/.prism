@@ -1,16 +1,15 @@
 {
   "name": "prism",
-  "description": "PRISM methodology marketplace - software engineering workflow coordination",
+  "description": "Claude Code plugins for the PRISM development methodology",
   "owner": {
-    "name": "Resolve Systems",
+    "name": "Resolve",
     "email": "jesse@resolve.io"
   },
-  "version": "1.0.0",
   "plugins": [
     {
       "name": "prism-devtools",
       "description": "Comprehensive development toolkit for building Claude Code plugins and skills with progressive disclosure patterns, validation tools, PRISM methodology agents, and Obsidian-powered long-term memory with Smart Connections semantic search",
-      "source": "./plugins/prism-devtools",
+      "source": "./",
       "version": "1.7.4",
       "author": {
         "name": "PRISM Development Team"
@@ -27,11 +26,13 @@
         "methodology",
         "tdd",
         "agile",
+        "psp",
         "obsidian",
         "memory",
         "knowledge-management",
         "smart-connections",
-        "semantic-search"
+        "semantic-search",
+        "ai-embeddings"
       ]
     }
   ]

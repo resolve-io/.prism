@@ -1,0 +1,508 @@
+# PRISM Core Development Cycle Workflow
+# Complete workflow from planning through deployment
+# Supports both greenfield and brownfield projects
+
+# ============================================================================
+# STORY CONTEXT PATTERN
+# ============================================================================
+#
+# This workflow creates a story file in the draft_story step and ALL subsequent
+# steps work on that SAME story file throughout the entire lifecycle:
+#
+#   draft_story → Creates story file with SM-determined naming
+#                 Example: docs/stories/platform-1.auth-improvements-2.md
+#                 └─ Output: story_file = actual path to created file
+#                     ↓
+#   All subsequent steps → Use: $draft_story.output.story_file
+#                           (risk_assessment, test_design, validate_story,
+#                            implement_tasks, qa_review, address_review_issues,
+#                            update_gate)
+#
+# The story file is the SINGLE SOURCE OF TRUTH that flows through all phases:
+# Planning → Development → Review → Completion
+#
+# TOKEN RESOLUTION:
+# - {epic} and {story} in documentation are TEMPLATE PLACEHOLDERS showing
+#   the file naming pattern, NOT runtime variables
+# - The SM agent determines actual epic/story identifiers during draft execution
+# - The actual file path is captured in draft_story.output.story_file
+# - All subsequent steps receive the concrete path via $draft_story.output.story_file
+#
+# ============================================================================
+
+workflow:
+  id: core-development-cycle
+  name: PRISM Core Development Cycle
+  description: >-
+    Complete development workflow supporting both greenfield (new) and brownfield (existing codebase)
+    projects. Follows PRISM methodology: Predictability (PSP/TSP), Resilience (TDD/XP),
+    Intentionality (Clean Code), Sustainability (Agile), and Maintainability (DDD).
+  version: 1.3.0
+  type: universal  # Supports both greenfield and brownfield
+
+  # Companion documentation with visual diagrams, scenarios, and decision trees
+  documentation: workflows/core-development-cycle.md
+
+  # Main development sequence
+  sequence:
+    # ============================================================================
+    # PLANNING PHASE
+    # ============================================================================
+
+    - step: review_previous_notes
+      agent: sm
+      action: planning-review
+      description: Review previous story dev/QA notes for context
+      notes: |
+        Story Master reviews completed work to inform next story
+        Maps to planning-review command in skills/sm/SKILL.md
+
+    - step: draft_story
+      agent: sm
+      action: draft
+      requires: review_previous_notes
+      description: Draft next story from sharded epic + architecture
+      output:
+        story_file: "Path to created story file (e.g., docs/stories/epic-1.story-3.md)"
+      notes: |
+        Maps to draft command in skills/sm/SKILL.md
+        Command: *draft (no parameters)
+
+        Creates story in docs/stories/ following template
+        Applies PSP/PROBE sizing methodology
+
+        The SM agent determines the epic and story identifiers based on:
+        - Existing epic context from sharded epic document
+        - Next available story number in sequence
+        - Story naming convention: docs/stories/{epic-id}.{story-id}.md
+
+        CRITICAL: The actual story file path is returned in output.story_file
+        and ALL subsequent steps reference this via $draft_story.output.story_file
+
+        Example: If SM creates "docs/stories/platform-1.auth-improvements-2.md"
+        then story_file = "docs/stories/platform-1.auth-improvements-2.md"
+
+    # ============================================================================
+    # TDD RED PHASE
+    # ============================================================================
+    # Tests MUST exist and FAIL before any implementation begins.
+    # This is the core of PRISM Resilience principle.
+
+    - step: write_failing_tests
+      agent: qa
+      action: write-failing-tests
+      requires: draft_story
+      input:
+        story_file: $draft_story.output.story_file
+      description: TDD RED - Identify/extend existing tests or create new failing tests
+      notes: |
+        MANDATORY TDD RED PHASE: Create failing tests BEFORE implementation
+        Maps to write-failing-tests command in skills/qa/SKILL.md
+        Command: *write-failing-tests {story}
+
+        PROCESS (in order):
+
+        1. IDENTIFY EXISTING TESTS
+           - Search for existing test files covering affected code areas
+           - Find test suites that can be extended (don't duplicate)
+           - Check integration/E2E tests that may need new scenarios
+           - Follow project test organization patterns
+
+        2. EXTEND OR CREATE
+           - If existing tests found: EXTEND them with new test cases
+           - If no existing tests: CREATE new test files following best practices
+           - Follow project naming conventions and test structure
+           - Reference skills/qa/reference/test-framework.md for patterns
+
+        3. WRITE FAILING TESTS
+           - Implement each acceptance criterion as a test assertion
+           - Tests MUST FAIL initially (RED state)
+           - Failure must be assertion failure, NOT syntax/import error
+           - Each test clearly maps to an acceptance criterion
+
+        4. VERIFY RED STATE
+           - Run tests to confirm they FAIL correctly
+           - Document test file locations in story
+           - Update story "TDD Tests" section with:
+             - Test file paths (new or extended)
+             - Test names and acceptance criteria mapping
+             - Expected failure reasons
+
+        BEST PRACTICES:
+        - Prefer extending existing test files over creating new ones
+        - Follow existing test patterns in the codebase
+        - One test per acceptance criterion minimum
+        - Descriptive test names that explain the requirement
+        - Tests should be runnable in isolation
+
+        CRITICAL: Tests must FAIL cleanly (assertion failures only).
+        Syntax errors, import errors, or runtime errors are NOT valid RED state.
+
+    - step: red_gate
+      description: Approval gate for RED phase - verify failing tests before implementation
+      requires: write_failing_tests
+      type: gate
+      loop_back_to: review_previous_notes
+      notes: |
+        GATE: TDD RED Phase Complete
+
+        Commands:
+        - /prism-approve  →  Proceed to GREEN phase (implementation)
+        - /prism-reject   →  Loop back to step 1 (planning)
+
+        Before approving, verify:
+        - [ ] Tests fail with assertion errors (not syntax/import errors)
+        - [ ] Each acceptance criterion has test coverage
+        - [ ] Story requirements are clear and testable
+
+        If rejected, workflow loops back to review_previous_notes to redo planning.
+
+    # ============================================================================
+    # DEVELOPMENT PHASE
+    # ============================================================================
+
+    - step: implement_tasks
+      agent: dev
+      action: develop-story
+      requires: red_gate
+      input:
+        story_file: $draft_story.output.story_file
+      description: Implement code to make failing tests pass (TDD GREEN phase)
+      notes: |
+        TDD GREEN PHASE: Make the failing tests pass
+        Maps to develop-story command in skills/dev/SKILL.md
+        Command: *develop-story (works on current story file in context)
+
+        CRITICAL: Tests already exist and are FAILING from previous phase.
+        Developer's job is to write MINIMAL code to make tests GREEN.
+
+        Development Process (TDD GREEN + REFACTOR):
+        1. Read story file and TDD Tests section
+        2. Set PSP tracking Started timestamp
+        3. For each failing test:
+           a. Write MINIMAL code to make test pass (GREEN)
+           b. Run test to confirm it passes
+           c. Refactor if needed (keep tests green)
+           d. Run full test suite to ensure no regressions
+        4. For each task: Implement → Verify tests pass → Mark complete
+        5. Run all validations (tests, linting, type checking)
+        6. Update story File List with all changes
+        7. Mark story as 'Ready for Review' with completion notes
+
+        PRISM Resilience Principle:
+        - Tests exist BEFORE code (RED phase complete)
+        - Write minimal code to pass (GREEN)
+        - Refactor with confidence (tests protect you)
+        - All tests must pass before proceeding
+
+        The develop-story command handles validation and marking
+        ready for review as part of its workflow.
+
+    # ============================================================================
+    # REVIEW PHASE
+    # ============================================================================
+
+    - step: verify_green_state
+      agent: qa
+      action: verify-green-state
+      requires: implement_tasks
+      input:
+        story_file: $draft_story.output.story_file
+      description: QA verifies all tests pass, linting clean, build succeeds
+      notes: |
+        TDD GREEN STATE VERIFICATION: Confirm implementation is complete.
+
+        Process:
+        1. RUN all tests for the story (unit, integration, e2e)
+        2. VERIFY all tests PASS (GREEN state confirmed)
+        3. RUN linting checks
+        4. RUN type checks (if applicable)
+        5. VERIFY build succeeds
+        6. CHECK for any regressions in existing tests
+
+        PASS if: All tests pass, linting clean, build succeeds
+        FAIL if: Any test fails, lint errors, or build errors
+
+        Report findings. If GREEN state confirmed, proceed to completion gate.
+
+    # ============================================================================
+    # COMPLETION PHASE
+    # ============================================================================
+
+    - step: green_gate
+      description: Final approval gate - commit and mark story done
+      requires: verify_green_state
+      type: gate
+      notes: |
+        GATE: TDD GREEN Phase Complete - Workflow Done
+
+        TDD Cycle Complete:
+        - RED: Failing tests written ✓
+        - GREEN: Implementation passes tests ✓
+        - QA: Tests + lint verified ✓
+
+        Command:
+        - /prism-approve  →  Complete workflow and cleanup
+
+        Before approving:
+        1. Commit all changes (implementation + tests)
+        2. Use meaningful commit message with PRISM attribution
+        3. Mark story status as 'Done'
+
+        /prism-approve cleans up state file and completes the workflow.
+
+# ============================================================================
+# ARTIFACTS
+# ============================================================================
+
+artifacts:
+  created:
+    - location: "docs/stories/{epic}.{story}.md (template pattern)"
+      actual: "Determined by SM agent during draft, e.g., docs/stories/platform-1.auth-2.md"
+      template: story-template.md
+      description: User story with tasks, acceptance criteria, dev notes
+      agent: sm
+      notes: |
+        {epic} and {story} are template placeholders.
+        SM agent determines actual values during execution.
+
+    - location: "docs/qa/assessments/{epic}.{story}-risk-{YYYYMMDD}.md (template pattern)"
+      actual: "Generated by QA agent, e.g., docs/qa/assessments/platform-1.auth-2-risk-20250124.md"
+      template: risk-assessment-template.md
+      description: Risk profile with probability × impact scoring
+      agent: qa
+      optional: true
+      notes: |
+        {epic}.{story} extracted from story file path.
+        {YYYYMMDD} generated by QA skill as current date.
+
+    - location: "docs/qa/assessments/{epic}.{story}-test-design-{YYYYMMDD}.md (template pattern)"
+      actual: "Generated by QA agent, e.g., docs/qa/assessments/platform-1.auth-2-test-design-20250124.md"
+      template: test-design-template.md
+      description: Test strategy and coverage plan
+      agent: qa
+      optional: true
+      notes: |
+        {epic}.{story} extracted from story file path.
+        {YYYYMMDD} generated by QA skill as current date.
+
+    - location: "docs/qa/gates/{epic}.{story}-{slug}.yml (template pattern)"
+      actual: "Generated by QA agent, e.g., docs/qa/gates/platform-1.auth-2-comprehensive-review.yml"
+      description: Quality gate decision (PASS/CONCERNS/FAIL/WAIVED)
+      agent: qa
+      optional: true
+      notes: |
+        {epic}.{story} extracted from story file path.
+        {slug} generated by QA skill based on review type.
+
+  required:
+    - docs/prd.md (or equivalent requirements)
+    - docs/architecture.md (system design)
+    - Sharded epic with story sequence
+
+# ============================================================================
+# VALIDATION
+# ============================================================================
+
+validation:
+  success_criteria:
+    - All acceptance criteria met
+    - All tests passing (unit, integration, e2e)
+    - Linting and type checking passing
+    - Code review approved (if requested)
+    - QA gate decision (if requested)
+    - Changes committed to version control
+    - Story marked as Done
+
+  quality_gates:
+    - name: Development Complete
+      criteria:
+        - All tasks marked complete
+        - All tests passing
+        - File List updated
+        - Completion notes documented
+
+    - name: Review Approved
+      criteria:
+        - User verified implementation
+        - QA review passed (if requested)
+        - All identified issues addressed
+
+    - name: Ready to Deploy
+      criteria:
+        - Regression tests passing
+        - Linting passing
+        - Changes committed
+        - Gate decision recorded (if applicable)
+
+# ============================================================================
+# DECISION TREES
+# ============================================================================
+
+decision_trees:
+  project_type:
+    question: "Do you have a large codebase or monorepo?"
+    branches:
+      - condition: "Yes"
+        recommendation: "PRD-First Approach"
+        notes: "Create PRD → Document only affected areas"
+
+      - condition: "No - codebase well-known"
+        recommendation: "PRD-First Approach"
+
+      - condition: "No - codebase unknown"
+        recommendation: "Document-First Approach"
+
+  brownfield_workflow:
+    question: "Is this a major enhancement affecting multiple systems?"
+    branches:
+      - condition: "Yes"
+        recommendation: "Full Brownfield Workflow"
+        required_steps:
+          - risk_assessment
+          - test_design
+          - qa_review
+        notes: "ALWAYS run Test Architect risk + design first"
+
+      - condition: "No - more than simple bug fix"
+        recommendation: "Brownfield Story Workflow"
+        required_steps:
+          - risk_assessment  # If touching integration points
+          - qa_review
+        notes: "Run *risk if touching critical paths"
+
+      - condition: "No - simple bug fix"
+        recommendation: "Standard Story Workflow"
+        optional_steps:
+          - qa_review  # Still recommended
+        notes: "QA review recommended for quality assurance"
+
+  legacy_code_decision:
+    question: "Does the change touch legacy code?"
+    branches:
+      - condition: "Yes"
+        recommendation: "Test Architect MANDATORY"
+        required_steps:
+          - risk_assessment  # Identify regression potential
+          - test_design      # Plan test coverage
+          - qa_review        # Validate no breakage
+
+      - condition: "No"
+        recommendation: "Test Architect RECOMMENDED"
+        optional_steps:
+          - qa_review  # Ensure quality standards
+
+# ============================================================================
+# BROWNFIELD SPECIFIC GUIDANCE
+# ============================================================================
+
+brownfield:
+  when_mandatory:
+    - Large codebase or monorepo modifications
+    - Changes touching legacy code
+    - API modifications or integrations
+    - Data migrations
+    - Performance-critical changes
+    - Security-sensitive changes
+    - Multiple system integrations
+
+  required_steps:
+    - risk_assessment: "BEFORE development starts"
+    - test_design: "BEFORE writing code"
+    - qa_review: "BEFORE merging"
+
+  testing_standards:
+    regression_coverage:
+      - "Every touched legacy module needs tests"
+      - "Minimum 80% coverage of affected code paths"
+      - "Critical paths require 100% coverage"
+
+    performance_baselines:
+      - "Must maintain or improve current metrics"
+      - "Document acceptable degradation thresholds"
+      - "Include performance tests in CI/CD"
+
+    rollback_procedures:
+      - "Every change needs a rollback plan"
+      - "Rollback must be tested"
+      - "Document rollback triggers and process"
+
+    feature_flags:
+      - "All risky changes behind toggles"
+      - "Test both enabled and disabled states"
+      - "Document flag removal plan"
+
+# ============================================================================
+# PROGRESSIVE DISCLOSURE REFERENCES
+# ============================================================================
+
+progressive_disclosure:
+  skill_structure:
+    - level: core
+      files:
+        - skills/{agent}/SKILL.md
+      size: "<2k tokens"
+      purpose: "List available commands, quick reference"
+
+    - level: detailed
+      files:
+        - skills/{agent}/reference/commands.md
+        - skills/{agent}/reference/{topic}.md
+      size: "Variable"
+      purpose: "Detailed command instructions, loaded as needed"
+
+    - level: specialized
+      files:
+        - skills/{agent}/reference/tasks/{task-name}.md
+        - skills/{agent}/reference/checklists/{checklist-name}.md
+      size: "Variable"
+      purpose: "Specific task instructions, loaded when referenced"
+
+  loading_pattern:
+    - "Workflow references action (e.g., create-architecture)"
+    - "Loads skills/{agent}/SKILL.md (core commands)"
+    - "Progressively loads reference/*.md as needed"
+    - "Only loads what's necessary for current step"
+
+# ============================================================================
+# NOTES
+# ============================================================================
+
+notes: |
+  This workflow orchestrates the complete PRISM development cycle with flexibility
+  for both greenfield and brownfield projects.
+
+  KEY PRINCIPLES:
+
+  1. **Adaptive Workflow**: Optional steps based on project risk and complexity
+  2. **Progressive Disclosure**: Skills load detailed instructions as needed
+  3. **Brownfield Safety**: Test Architect involvement for legacy code changes
+  4. **Quality Gates**: Clear checkpoints with user control
+  5. **PRISM Methodology**: All five principles applied throughout
+
+  SKILL COMMAND MAPPING:
+
+  All workflow actions map to commands defined in skills/{agent}/SKILL.md:
+  - sm: draft, planning-review, decompose, estimate, resize
+  - po: story-checklist, create-story, validate-story-draft, shard-doc
+  - dev: develop-story, run-tests
+  - qa: risk-profile, test-design, review, gate
+  - architect: document-project, create-architecture
+
+  Each command loads its core definition from SKILL.md, then progressively loads
+  detailed instructions from reference/ directory as needed.
+
+  BROWNFIELD DECISION FLOW:
+
+  - High-risk story? → *risk + *design BEFORE coding
+  - Before merge? → *review for comprehensive QA
+  - After fixes? → *gate to update decision
+
+  Use this workflow as the foundation for all PRISM development, adapting the
+  optional steps based on project needs and risk assessment.
+
+  STORY CONTEXT: All steps after draft_story receive the story file path via
+  input.story_file parameter, ensuring the entire workflow works on the same
+  story file from creation through completion.
+
+version: 1.3.0
