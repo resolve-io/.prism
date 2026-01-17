@@ -1,4 +1,4 @@
-﻿---
+---
 name: trace-requirements
 description: Use to trace requirements through implementation. Maps acceptance criteria to code and tests.
 ---
@@ -7,6 +7,21 @@ description: Use to trace requirements through implementation. Maps acceptance c
 # trace-requirements
 
 Map story requirements to E2E integration test cases for comprehensive end-to-end traceability and workflow validation.
+
+## When to Use
+
+- When mapping acceptance criteria to test cases
+- During QA review to verify coverage
+- When creating traceability matrix for stories
+- When validating all requirements have tests
+
+## Quick Start
+
+1. Extract testable requirements from acceptance criteria
+2. Map each requirement to E2E integration tests
+3. Create traceability matrix with test file references
+4. Calculate coverage percentage
+5. Identify and document any coverage gaps
 
 ## Purpose
 

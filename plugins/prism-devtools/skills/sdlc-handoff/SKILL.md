@@ -1,13 +1,28 @@
-﻿---
+---
 name: sdlc-handoff
 version: 1.0.0
 description: Use for SDLC phase transitions. Ensures proper handoff between development phases with documentation.
 ---
-<!-- Powered by Prism Coreâ„¢ -->
+<!-- Powered by Prism Core™ -->
 
 # sdlc-handoff
 
 Create complete handoff package for Dev and QA teams to handle customer issue through proper SDLC process.
+
+## When to Use
+
+- When customer issue is validated and ready for development
+- When transitioning from Support to Dev/QA teams
+- When creating SDLC workflow documentation for issues
+- When coordinating cross-team handoffs
+
+## Quick Start
+
+1. Compile complete issue package (validation, investigation, impact)
+2. Create SDLC workflow document with executive summary
+3. Generate Dev story with technical requirements
+4. Create QA testing checklist with acceptance criteria
+5. Schedule collaboration sync if high priority
 
 ## Purpose
 

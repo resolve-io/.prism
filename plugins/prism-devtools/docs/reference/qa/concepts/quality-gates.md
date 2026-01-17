@@ -552,7 +552,7 @@ LLMs enable thorough analysis fast. Use that power where it matters.
 
 ### Related Systems
 - **[Sub-Agent System](../../sub-agents/README.md)** - How validators work
-- **[QA Commands](../../../commands/qa.md)** - Command reference
+- **[QA Commands](../../../../commands/qa.md)** - Command reference
 
 ---
 

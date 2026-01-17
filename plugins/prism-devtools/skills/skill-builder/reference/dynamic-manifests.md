@@ -2,7 +2,7 @@
 
 > **Definition**: A runtime capability discovery system that allows clients to query available tools, resources, and features dynamically without requiring restarts or static configuration.
 
-**Navigation**: [← Progressive Disclosure](./progressive-disclosure.md) | [↑ Best Practices](../README.md) | [Deferred Loading →](./deferred-loading.md)
+**Navigation**: [← Progressive Disclosure](./progressive-disclosure.md) | [↑ Best Practices](../SKILL.md) | [Deferred Loading →](./deferred-loading.md)
 
 ---
 
@@ -995,6 +995,6 @@ See: [Deferred Loading: Lazy Initialization](./deferred-loading.md#lazy-initiali
 
 ---
 
-**Navigation**: [← Progressive Disclosure](./progressive-disclosure.md) | [↑ Best Practices](../README.md) | [Deferred Loading →](./deferred-loading.md)
+**Navigation**: [← Progressive Disclosure](./progressive-disclosure.md) | [↑ Best Practices](../SKILL.md) | [Deferred Loading →](./deferred-loading.md)
 
 **Last Updated**: 2025-10-20

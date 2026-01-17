@@ -231,7 +231,7 @@ qa:
 /qa *review docs/stories/epic-1/story-3-feature.md  # Optional but recommended
 ```
 
-📖 **Full Command Reference**: [commands/qa.md](../../commands/qa.md)
+📖 **Full Command Reference**: [commands/qa.md](../../../commands/qa.md)
 
 ---
 
@@ -252,22 +252,22 @@ PRISM QA tracks key quality indicators:
 ## 🔗 Related Documentation
 
 ### Core System
-- [PRISM Methodology](../../PRISM-METHODOLOGY.md) - Overall philosophy
+- [PRISM Methodology](../../../PRISM-METHODOLOGY.md) - Overall philosophy
 - [Core Development Workflow](../workflows/core-development-cycle.md) - Complete cycle
 - [Sub-Agent System](../sub-agents/README.md) - Validation architecture
 
-### QA Tasks
-- [qa-gate.md](../../tasks/qa-gate.md) - Gate creation task
-- [review-story.md](../../tasks/review-story.md) - Review workflow task
-- [risk-profile.md](../../tasks/risk-profile.md) - Risk assessment task
-- [test-design.md](../../tasks/test-design.md) - Test planning task
-- [trace-requirements.md](../../tasks/trace-requirements.md) - Traceability task
+### QA Skills
+- [qa-gate](../../../skills/qa-gate/SKILL.md) - Gate creation skill
+- [review-story](../../../skills/review-story/SKILL.md) - Review workflow skill
+- [risk-profile](../../../skills/risk-profile/SKILL.md) - Risk assessment skill
+- [test-design](../../../skills/test-design/SKILL.md) - Test planning skill
+- [trace-requirements](../../../skills/trace-requirements/SKILL.md) - Traceability skill
 
 ### Templates
-- [qa-gate-tmpl.yaml](../../templates/qa-gate-tmpl.yaml) - Gate file template
+- [qa-gate-tmpl.yaml](../../../templates/qa-gate-tmpl.yaml) - Gate file template
 
 ### Examples
-- [story-001-post-implementation-gate.yaml](../../artifacts/qa/gates/story-001-post-implementation-gate.yaml) - Real gate example
+- [story-001-post-implementation-gate.yaml](../../../artifacts/qa/gates/story-001-post-implementation-gate.yaml) - Real gate example
 
 ---
 
@@ -277,7 +277,7 @@ PRISM QA tracks key quality indicators:
 
 1. **Understand Quality Gates** → [concepts/quality-gates.md](./concepts/quality-gates.md)
 2. **Learn How Gates Are Created** → [concepts/gate-creation-process.md](./concepts/gate-creation-process.md)
-3. **Practice with an Example** → [Example Gate](../../artifacts/qa/gates/story-001-post-implementation-gate.yaml)
+3. **Practice with an Example** → [Example Gate](../../../artifacts/qa/gates/story-001-post-implementation-gate.yaml)
 4. **Explore Workflows** → [guides/workflows.md](./guides/workflows.md)
 
 ### Ready to Review?
@@ -295,7 +295,7 @@ The QA agent (Quinn) will guide you through the review process.
 | Section | Links |
 |---------|-------|
 | **← Back** | [Reference Documentation](../README.md) |
-| **↑ Up** | [PRISM Documentation](../index.md) |
+| **↑ Up** | [PRISM Documentation](../../index.md) |
 | **Core Topics** | [Quality Gates](./concepts/quality-gates.md) · [Gate Creation](./concepts/gate-creation-process.md) · [Decision Criteria](./reference/gate-decision-criteria.md) · [Workflows](./guides/workflows.md) |
 
 ---

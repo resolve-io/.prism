@@ -1,4 +1,4 @@
-﻿---
+---
 name: test-design
 version: 1.0.0
 description: Use to design test strategies and create test specifications. Documents testing approaches for stories.
@@ -8,6 +8,21 @@ description: Use to design test strategies and create test specifications. Docum
 # test-design
 
 Create comprehensive E2E integration test scenarios with complete user journey validation for story implementation.
+
+## When to Use
+
+- When designing test strategy for a new story
+- Before implementing tests to plan coverage
+- When documenting test specifications for QA
+- When applying test level framework decisions
+
+## Quick Start
+
+1. Analyze story requirements and acceptance criteria
+2. Apply test level framework (integration primary, unit supporting)
+3. Assign priorities using test priorities matrix
+4. Create test scenarios with Given-When-Then documentation
+5. Generate test specification document
 
 ## Inputs
 

@@ -1,4 +1,4 @@
-﻿---
+---
 name: review-story
 version: 1.0.0
 description: Use to perform comprehensive test architecture review with quality gate decision. Creates both story updates and detailed gate files.
@@ -8,6 +8,21 @@ description: Use to perform comprehensive test architecture review with quality 
 # review-story
 
 Perform a comprehensive test architecture review with quality gate decision. This adaptive, risk-aware review creates both a story update and a detailed gate file.
+
+## When to Use
+
+- When a story is ready for QA review (status: Review)
+- After developer completes all tasks and updates File List
+- When comprehensive quality assessment is needed
+- Before story can advance to Done status
+
+## Quick Start
+
+1. Verify story status is "Review" and tests are passing
+2. Run risk assessment to determine review depth
+3. Analyze requirements traceability, code quality, and test architecture
+4. Create gate file with PASS/CONCERNS/FAIL decision
+5. Update story's QA Results section with findings
 
 ## Inputs
 

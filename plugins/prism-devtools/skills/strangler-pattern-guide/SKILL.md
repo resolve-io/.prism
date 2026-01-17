@@ -1,4 +1,4 @@
-﻿---
+---
 name: strangler-pattern-guide
 version: 1.0.0
 description: Use as reference guide for strangler pattern implementation. Provides patterns and best practices for legacy migrations.

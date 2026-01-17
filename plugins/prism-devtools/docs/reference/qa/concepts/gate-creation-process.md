@@ -900,7 +900,7 @@ Teams own their quality bar. Gates inform decisions, not dictate them.
 
 ### Related Systems
 - **[Sub-Agent System](../../sub-agents/README.md)** - Validator architecture
-- **[QA Commands](../../../commands/qa.md)** - Command reference
+- **[QA Commands](../../../../commands/qa.md)** - Command reference
 
 ---
 

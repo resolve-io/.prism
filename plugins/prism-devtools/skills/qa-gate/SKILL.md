@@ -1,4 +1,4 @@
-﻿---
+---
 name: qa-gate
 description: Use to create or update quality gate decision files for stories. Provides clear pass/fail decisions with actionable feedback.
 version: 1.0.0
@@ -8,6 +8,21 @@ version: 1.0.0
 # qa-gate
 
 Create or update a quality gate decision file for a story based on review findings.
+
+## When to Use
+
+- After story review to record pass/fail decision
+- When updating gate status based on fixes
+- When documenting quality assessment results
+- As part of PRISM TDD workflow at gate checkpoints
+
+## Quick Start
+
+1. Review story findings (manual or via review-story)
+2. Determine gate decision (PASS, CONCERNS, FAIL, or WAIVED)
+3. Create YAML file at `qa.qaLocation/gates/{epic}.{story}-*.yml`
+4. Include status_reason and any top_issues
+5. Set reviewer and timestamp
 
 ## Purpose
 

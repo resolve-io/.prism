@@ -1,4 +1,4 @@
-﻿---
+---
 name: nfr-assess
 description: Use to assess non-functional requirements (security, performance, reliability, maintainability) through E2E integration testing patterns.
 version: 1.0.0
@@ -8,6 +8,21 @@ version: 1.0.0
 # nfr-assess
 
 E2E integration-focused NFR validation targeting the core four: security, performance, reliability, maintainability through real system testing.
+
+## When to Use
+
+- During QA gate review for story validation
+- When assessing non-functional requirements
+- When evaluating security, performance, reliability, or maintainability
+- Before story completion to verify NFR compliance
+
+## Quick Start
+
+1. Provide story ID (e.g., "1.3")
+2. Select NFRs to assess (default: security, performance, reliability, maintainability)
+3. Run E2E integration tests for each selected NFR
+4. Generate YAML block for gate file's `nfr_validation` section
+5. Save markdown assessment to assessments folder
 
 ## Inputs
 

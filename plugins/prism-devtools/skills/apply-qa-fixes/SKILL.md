@@ -1,4 +1,4 @@
-﻿---
+---
 name: apply-qa-fixes
 description: Use when Dev agent needs to implement fixes based on QA gate results. Reads QA outputs, creates prioritized fix plans, and applies code/test changes to address identified issues.
 version: 1.0.0
@@ -8,6 +8,23 @@ version: 1.0.0
 # apply-qa-fixes
 
 Implement fixes based on QA results (gate and assessments) for a specific story. This task is for the Dev agent to systematically consume QA outputs and apply code/test changes while only updating allowed sections in the story file.
+
+## When to Use
+
+- After QA gate returns FAIL or CONCERNS status
+- When QA assessment identifies coverage gaps
+- When NFR validation shows failing requirements
+- After code review identifies issues needing fixes
+- When traceability analysis reveals uncovered acceptance criteria
+
+## Quick Start
+
+1. Load QA gate YAML and assessment markdowns for the story
+2. Build prioritized fix plan (high severity first, then NFRs, then coverage gaps)
+3. Apply code fixes and add missing tests
+4. Run `deno lint` and `deno test -A` until clean
+5. Update allowed story sections (Dev Agent Record, File List, Change Log)
+6. Set status to "Ready for Review" or "Ready for Done"
 
 ## Purpose
 

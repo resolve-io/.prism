@@ -5,8 +5,7 @@
 **Purpose:** Validation checklist for strangler pattern migration steps.
 
 **Related Resources:**
-- **Implementation Task:** [strangler-pattern.md](../tasks/strangler-pattern.md)
-- **Workflow:** [strangler-pattern-migration.yaml](../workflows/strangler-pattern-migration.yaml)
+- **Skill Documentation:** [Strangler Pattern Guide SKILL.md](../SKILL.md)
 
 **Instructions:** Mark `[x]` for completed, `[N/A]` if not applicable.
 

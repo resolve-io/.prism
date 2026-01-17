@@ -161,7 +161,7 @@ Delegate to these at appropriate checkpoints.
 5. Sub-agent returns result, unloads
 6. Main agent continues with minimal token usage
 
-**See:** [Progressive Disclosure Pattern](../../best-practices/progressive-disclosure.md)
+**See:** [Progressive Disclosure Pattern](../../../../skills/skill-builder/reference/progressive-disclosure.md)
 
 ---
 

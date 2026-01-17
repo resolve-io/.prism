@@ -2,7 +2,7 @@
 
 > **Definition**: A performance optimization pattern that postpones the initialization, loading, or execution of resources until they are actually needed, reducing startup time and memory consumption.
 
-**Navigation**: [← Dynamic Manifests](./dynamic-manifests.md) | [↑ Best Practices](../README.md) | [← Progressive Disclosure](./progressive-disclosure.md)
+**Navigation**: [← Dynamic Manifests](./dynamic-manifests.md) | [↑ Best Practices](../SKILL.md) | [← Progressive Disclosure](./progressive-disclosure.md)
 
 ---
 
@@ -1062,6 +1062,6 @@ Key principle: **Don't pay for what you don't use**
 
 ---
 
-**Navigation**: [← Dynamic Manifests](./dynamic-manifests.md) | [↑ Best Practices](../README.md) | [← Progressive Disclosure](./progressive-disclosure.md)
+**Navigation**: [← Dynamic Manifests](./dynamic-manifests.md) | [↑ Best Practices](../SKILL.md) | [← Progressive Disclosure](./progressive-disclosure.md)
 
 **Last Updated**: 2025-10-20

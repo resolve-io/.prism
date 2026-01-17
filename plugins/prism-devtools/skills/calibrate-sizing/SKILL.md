@@ -1,4 +1,4 @@
-﻿---
+---
 name: calibrate-sizing
 description: Use to improve story sizing accuracy by analyzing historical estimation data. Identifies patterns, updates size definitions, and refines PROBE proxy selections.
 version: 1.0.0
@@ -6,6 +6,23 @@ version: 1.0.0
 <!-- Powered by PRISMâ„¢ Core -->
 
 # Calibrate Sizing Task
+
+## When to Use
+
+- After completing 10+ stories to analyze estimation accuracy
+- When estimation variance is consistently high (>30%)
+- Before starting a new project phase or quarter
+- When team composition changes significantly
+- When introducing new technology stack
+
+## Quick Start
+
+1. Load completed stories from last 10-20 completions
+2. Run variance analysis (actual vs estimated)
+3. Identify over/under estimation patterns
+4. Update size category definitions based on actual data
+5. Refresh PROBE proxy library with recent examples
+6. Generate calibration report
 
 ## Purpose
 

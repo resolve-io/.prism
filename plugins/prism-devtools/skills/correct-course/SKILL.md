@@ -1,4 +1,4 @@
-﻿---
+---
 name: correct-course
 description: Use when handling sprint changes or scope adjustments. Analyzes change impacts, re-estimates affected stories, and adjusts sprint capacity using PRISM principles.
 version: 1.0.0
@@ -6,6 +6,15 @@ version: 1.0.0
 <!-- Powered by PRISMâ„¢ Core -->
 
 # Correct Course Task
+
+## Quick Start
+
+1. Acknowledge change trigger with user
+2. Load current sprint stories and estimations
+3. Calculate velocity impact using PRISM analysis
+4. Re-estimate affected stories with PROBE method
+5. Generate sprint change proposal
+6. Update estimation history with lessons learned
 
 ## Purpose
 

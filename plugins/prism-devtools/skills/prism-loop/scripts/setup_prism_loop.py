@@ -6,13 +6,17 @@ Usage:
     python setup_prism_loop.py [--skip STEP1,STEP2] [--start-at STEP]
 """
 
+import os
 import sys
 import shlex
+import shutil
 from pathlib import Path
 from datetime import datetime
 
 STATE_DIR = Path(".claude")
 STATE_FILE = STATE_DIR / "prism-loop.local.md"
+CONTEXT_DIR = Path(".context")
+PRISM_TEMPLATES = Path(r"C:\Dev\.prism\plugins\prism-devtools\templates\.context")
 
 # Workflow steps - TDD Flow: Planning → RED Gate → GREEN (DEV+QA) → Green Gate (Final)
 # Step types: agent (auto-progress), gate (pause for /prism-approve)
@@ -44,11 +48,93 @@ def parse_arguments(args: list[str]) -> dict:
     return result
 
 
+def check_context_system() -> dict:
+    """
+    Check if .context system is initialized.
+    Returns status dict with 'initialized' bool and details.
+    """
+    result = {
+        "initialized": False,
+        "has_core": False,
+        "has_safety": False,
+        "has_workflows": False,
+        "missing": []
+    }
+
+    if not CONTEXT_DIR.exists():
+        result["missing"].append(".context/")
+        return result
+
+    # Check for key files
+    core_files = ["core/persona-rules.md", "core/commit-format.md"]
+    safety_files = ["safety/destructive-ops.md", "safety/file-write-limits.md"]
+    workflow_files = ["workflows/git-branching.md", "workflows/code-review.md"]
+
+    result["has_core"] = all((CONTEXT_DIR / f).exists() for f in core_files)
+    result["has_safety"] = all((CONTEXT_DIR / f).exists() for f in safety_files)
+    result["has_workflows"] = all((CONTEXT_DIR / f).exists() for f in workflow_files)
+
+    for f in core_files + safety_files + workflow_files:
+        if not (CONTEXT_DIR / f).exists():
+            result["missing"].append(f)
+
+    result["initialized"] = result["has_core"] and result["has_safety"] and result["has_workflows"]
+    return result
+
+
+def initialize_context_system() -> bool:
+    """
+    Initialize .context system from PRISM templates.
+    Returns True if successful.
+    """
+    if not PRISM_TEMPLATES.exists():
+        print(f"Warning: PRISM templates not found at {PRISM_TEMPLATES}")
+        return False
+
+    try:
+        # Create directories
+        dirs = ["core", "safety", "workflows", "project",
+                "cache/mcp-responses", "cache/terminal-logs", "cache/session-history"]
+        for d in dirs:
+            (CONTEXT_DIR / d).mkdir(parents=True, exist_ok=True)
+
+        # Copy template files
+        files_to_copy = [
+            ("index.yaml", "index.yaml"),
+            (".gitignore", ".gitignore"),
+            ("core/persona-rules.md", "core/persona-rules.md"),
+            ("core/commit-format.md", "core/commit-format.md"),
+            ("safety/destructive-ops.md", "safety/destructive-ops.md"),
+            ("safety/file-write-limits.md", "safety/file-write-limits.md"),
+            ("safety/citation-integrity.md", "safety/citation-integrity.md"),
+            ("workflows/git-branching.md", "workflows/git-branching.md"),
+            ("workflows/code-review.md", "workflows/code-review.md"),
+            ("project/architecture.md", "project/architecture.md"),
+        ]
+
+        for src, dst in files_to_copy:
+            src_path = PRISM_TEMPLATES / src
+            dst_path = CONTEXT_DIR / dst
+            if src_path.exists() and not dst_path.exists():
+                shutil.copy2(src_path, dst_path)
+
+        return True
+    except Exception as e:
+        print(f"Error initializing context: {e}")
+        return False
+
+
+def get_session_id() -> str:
+    """Get unique session identifier from Claude Code SSE port."""
+    return os.environ.get("CLAUDE_CODE_SSE_PORT", "unknown")
+
+
 def create_state_file(config: dict):
     """Create the PRISM loop state file."""
     STATE_DIR.mkdir(exist_ok=True)
 
     timestamp = datetime.now().isoformat()
+    session_id = get_session_id()
 
     content = f"""---
 active: true
@@ -60,6 +146,7 @@ story_file: ""
 paused_for_manual: false
 prompt: "{config.get("prompt", "").replace('"', '\\"')}"
 started_at: "{timestamp}"
+session_id: "{session_id}"
 ---
 
 # PRISM Workflow Loop
@@ -130,12 +217,30 @@ def main():
         print("Run /cancel-prism first to start a new workflow.")
         sys.exit(1)
 
+    # Check and initialize .context system
+    context_status = check_context_system()
+    if not context_status["initialized"]:
+        print("Initializing PRISM .context system...")
+        if initialize_context_system():
+            print("✓ .context system initialized")
+        else:
+            print("⚠ Could not fully initialize .context - continuing anyway")
+        print("")
+
     create_state_file(config)
 
     prompt = config.get("prompt", "")
 
     print("PRISM Workflow Loop INITIALIZED")
     print("")
+
+    # Show context status
+    print("Context System:")
+    print(f"  Core rules: {'✓' if context_status['has_core'] or CONTEXT_DIR.exists() else '✗'}")
+    print(f"  Safety rules: {'✓' if context_status['has_safety'] or CONTEXT_DIR.exists() else '✗'}")
+    print(f"  Workflow rules: {'✓' if context_status['has_workflows'] or CONTEXT_DIR.exists() else '✗'}")
+    print("")
+
     if prompt:
         print(f"Prompt: {prompt}")
         print("")
@@ -149,6 +254,7 @@ def main():
         print(f"")
         print(f"Context: {prompt}")
     print("")
+    print("Context files available at .context/")
     print("The stop hook will auto-progress through agent steps.")
     print("Gates pause for /prism-approve")
 

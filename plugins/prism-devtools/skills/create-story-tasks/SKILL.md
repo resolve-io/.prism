@@ -1,4 +1,4 @@
-﻿---
+---
 name: create-story-tasks
 description: Use to decompose user stories into individual development tasks. Creates task documents that can be assigned, estimated, and tracked.
 version: 1.0.0
@@ -8,6 +8,22 @@ version: 1.0.0
 # create-story-tasks
 
 Break down a user story into individual development tasks, creating task documents for each.
+
+## When to Use
+
+- After user story is drafted and approved
+- When preparing work breakdown for sprint planning
+- When story needs granular task estimation
+- When assigning work to multiple developers
+- When tracking progress at task level
+
+## Quick Start
+
+1. Load user story from docs/stories/
+2. Analyze story scope and acceptance criteria
+3. Map ACs to implementation work and dependencies
+4. Generate task breakdown (2-8 hour tasks)
+5. Create task documents with estimates
 
 ## Purpose
 

@@ -120,9 +120,7 @@ smart_connections:
 
 ## Resources
 
-- [Full Task Documentation](../tasks/optimize-for-smart-connections.md)
 - [Smart Connections Plugin](https://smartconnections.app/)
-- [PRISM Memory System](../skills/context-memory/SKILL.md)
 
 ---
 

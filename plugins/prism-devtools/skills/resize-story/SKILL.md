@@ -1,4 +1,4 @@
-﻿---
+---
 name: resize-story
 version: 1.0.0
 description: Use when a story needs to be resized based on new information. Adjusts estimates and splits/combines stories as needed.
@@ -6,6 +6,21 @@ description: Use when a story needs to be resized based on new information. Adju
 <!-- Powered by PRISMâ„¢ Core -->
 
 # Resize Story Task
+
+## When to Use
+
+- When story estimation exceeds 3 days (split needed)
+- When story estimation is under 0.5 days (combine candidate)
+- When new information changes story complexity
+- During sprint planning when stories need right-sizing
+
+## Quick Start
+
+1. Analyze current story estimation and complexity
+2. Determine if too large (>24h) or too small (<4h)
+3. For large stories: identify split points at natural boundaries
+4. For small stories: identify candidates to combine
+5. Update estimations using PROBE method
 
 ## Purpose
 

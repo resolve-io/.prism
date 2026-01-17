@@ -593,7 +593,7 @@ Draft → Validate → Implement → Audit → Review → Gate
 
 ### Hooks Integration
 
-Sub-agents work alongside [workflow hooks](../hooks/README.md):
+Sub-agents work alongside [workflow hooks](../../../hooks/README.md):
 - **Hooks** enforce process (story context, required sections)
 - **Sub-agents** validate quality (structure, content, tests)
 
@@ -644,7 +644,7 @@ Based on PRISM usage across teams:
 **Solution:**
 - Read sub-agent definition: `.claude/agents/{name}.md`
 - Check example output in agent file
-- Consult [Quick Reference](./sub-agent-quick-reference.md)
+- Consult [Quick Reference](./quick-reference.md)
 
 ### Conflicting results
 
@@ -664,10 +664,10 @@ Based on PRISM usage across teams:
 
 ## Next Steps
 
-- **Quick answers:** See [Sub-Agent Quick Reference](./sub-agent-quick-reference.md)
-- **Architecture details:** Read [Implementation Playbook](./sub-agent-implementation-playbook.md)
+- **Quick answers:** See [Sub-Agent Quick Reference](./quick-reference.md)
+- **Architecture details:** Read [Implementation](./implementation/)
 - **Workflow integration:** Review [Core Development Cycle](../workflows/core-development-cycle.md)
-- **Hook automation:** Check [Hooks Documentation](../hooks/README.md)
+- **Hook automation:** Check [Hooks Documentation](../../../hooks/README.md)
 
 ---
 

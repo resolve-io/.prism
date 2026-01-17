@@ -42,7 +42,7 @@ Sub-agents are discovered only when needed, reducing startup overhead.
 - Dev skill: 2,200 tokens (was 4,100 before optimization)
 - QA skill: 1,900 tokens (was 3,800 before optimization)
 
-See: [Progressive Disclosure Pattern](../../best-practices/progressive-disclosure.md)
+See: [Progressive Disclosure Pattern](../../../../skills/skill-builder/reference/progressive-disclosure.md)
 
 ---
 

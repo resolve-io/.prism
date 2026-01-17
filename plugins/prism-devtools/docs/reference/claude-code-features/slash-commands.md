@@ -43,13 +43,12 @@ Slash commands are **manual triggers** that load a specific agent role with full
 
 | Command | Role | Purpose | Entry Point |
 |---------|------|---------|-------------|
-| `/architect` | System Architect | Design architecture, tech decisions | [Architect Command](../../commands/architect.md) |
-| `/sm` | Story Master | Plan stories, PSP estimation | [SM Command](../../commands/sm.md) |
-| `/dev` | Developer | Implement features, TDD workflow | [Dev Command](../../commands/dev.md) |
-| `/qa` | QA Engineer | Test strategy, quality gates | [QA Command](../../commands/qa.md) |
-| `/po` | Product Owner | Requirements, backlog | [PO Command](../../commands/po.md) |
-| `/peer` | Peer Reviewer | Code review, mentoring | [Peer Command](../../commands/peer.md) |
-| `/support` | Support Engineer | Issue validation, Playwright | [Support Command](../../commands/support.md) |
+| `/architect` | System Architect | Design architecture, tech decisions | [Architect Command](../../../commands/architect.md) |
+| `/sm` | Story Master | Plan stories, PSP estimation | [SM Command](../../../commands/sm.md) |
+| `/dev` | Developer | Implement features, TDD workflow | [Dev Command](../../../commands/dev.md) |
+| `/qa` | QA Engineer | Test strategy, quality gates | [QA Command](../../../commands/qa.md) |
+| `/po` | Product Owner | Requirements, backlog | [PO Command](../../../commands/po.md) |
+| `/support` | Support Engineer | Issue validation, Playwright | [Support Command](../../../commands/support.md) |
 
 ---
 
@@ -274,10 +273,10 @@ Commands **activate workflow-specific operations**:
 ## Examples in PRISM
 
 **Command Definitions:**
-- [/architect](../../commands/architect.md)
-- [/sm](../../commands/sm.md)
-- [/dev](../../commands/dev.md)
-- [/qa](../../commands/qa.md)
+- [/architect](../../../commands/architect.md)
+- [/sm](../../../commands/sm.md)
+- [/dev](../../../commands/dev.md)
+- [/qa](../../../commands/qa.md)
 
 **Workflow Integration:**
 - [Core Development Cycle](../workflows/core-development-cycle.md)

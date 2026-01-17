@@ -189,5 +189,11 @@ Verify:
 
 ---
 
+## Reference Documentation
+
+- **[PRISM Agent Strategy](./reference/prism-agent-strategy.md)** - Artifact-centric agent design patterns for PRISM workflows
+
+---
+
 **Last Updated**: 2025-10-27
 **Version**: 1.0.0

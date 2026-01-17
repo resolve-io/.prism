@@ -1,4 +1,4 @@
-﻿---
+---
 name: investigate-root-cause
 description: Use for root cause analysis of bugs or issues. Systematically investigates problems to identify underlying causes.
 version: 1.0.0
@@ -8,6 +8,21 @@ version: 1.0.0
 # investigate-root-cause
 
 Deep investigation to find the root cause of a validated customer issue using code analysis and debugging.
+
+## When to Use
+
+- After validating that a customer issue is reproducible
+- When Playwright validation shows consistent failure
+- When error messages need tracing to source code
+- Before creating fix specifications for Dev agent
+
+## Quick Start
+
+1. Review validation evidence (errors, screenshots, logs)
+2. Search codebase for error signatures
+3. Trace through call paths and data flow
+4. Identify affected components
+5. Document root cause and affected areas
 
 ## Purpose
 

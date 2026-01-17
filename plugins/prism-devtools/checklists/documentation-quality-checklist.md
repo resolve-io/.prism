@@ -65,8 +65,8 @@ For documents >150 lines, use at least one:
 ## Cross-Reference Integrity
 
 ### Internal Links
-- [ ] All `[text](path)` links resolve to existing files
-- [ ] All `[text](path#anchor)` anchors exist in target files
+- [ ] All markdown links resolve to existing files
+- [ ] All anchor links have valid targets in destination files
 - [ ] Relative paths are correct (`./`, `../`)
 - [ ] No broken links to moved/renamed files
 

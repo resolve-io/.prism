@@ -1,12 +1,27 @@
-﻿---
+---
 name: validate-issue
 description: Use to validate reported issues. Confirms reproducibility and documents validation evidence.
 ---
-<!-- Powered by Prism Coreâ„¢ -->
+<!-- Powered by Prism Core™ -->
 
 # validate-issue
 
 Validate customer-reported issues using Playwright-MCP to reproduce and document the problem with evidence.
+
+## When to Use
+
+- When customer reports a bug or issue
+- When issue needs reproduction for confirmation
+- When documenting evidence for development team
+- As first step in issue triage process
+
+## Quick Start
+
+1. Gather issue details from customer report
+2. Initialize Playwright session with application URL
+3. Reproduce customer steps with screenshots
+4. Capture evidence (screenshots, console, network)
+5. Document validation result (confirmed/not-reproducible)
 
 ## Purpose
 

@@ -1,10 +1,25 @@
-﻿---
+---
 name: story-decomposition
 description: Use to break down large stories into optimally-sized stories (1-3 days). Applies PSP measurement discipline.
 ---
 <!-- Powered by PRISMâ„¢ Core -->
 
 # Story Decomposition Task
+
+## When to Use
+
+- When a story estimate exceeds 3 days
+- When story complexity requires breakdown
+- During sprint planning for story right-sizing
+- When applying PSP measurement discipline to large stories
+
+## Quick Start
+
+1. Load story context and historical sizing data
+2. Analyze story components using decomposition patterns
+3. Create sub-stories with independent value
+4. Validate each sub-story is 1-3 days
+5. Apply PROBE estimation to confirm sizing
 
 ## Purpose
 

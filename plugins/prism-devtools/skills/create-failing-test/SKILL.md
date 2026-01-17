@@ -1,4 +1,4 @@
-﻿---
+---
 name: create-failing-test
 description: Use to create failing tests before implementing features (TDD approach). Ensures test-first development workflow.
 version: 1.0.0
@@ -6,6 +6,22 @@ version: 1.0.0
 <!-- Powered by PRISMâ„¢ Core -->
 
 # Create Failing Test Task
+
+## When to Use
+
+- Before implementing a new feature (TDD approach)
+- When documenting a customer-reported bug
+- When QA needs exact reproduction steps
+- When validating issue before assigning to Dev
+- When creating acceptance criteria for fixes
+
+## Quick Start
+
+1. Gather evidence from validation (screenshots, errors, steps)
+2. Define test preconditions (data, environment, config)
+3. Write exact reproduction steps
+4. Define assertions (expected vs actual behavior)
+5. Package test specification for Dev/QA handoff
 
 ## Purpose
 

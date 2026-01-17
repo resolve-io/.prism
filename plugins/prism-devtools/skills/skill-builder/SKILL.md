@@ -142,7 +142,7 @@ All detailed content lives in bundled files (Level 3):
 ## Common Questions
 
 **Q: Where do I start?**
-A: Read the [3-level table](#-core-principle-the-3-level-pattern) above, then follow [Skill Creation Process](./reference/skill-creation-process.md)
+A: Read the [3-level table](#core-principle-the-3-level-pattern) above, then follow [Skill Creation Process](./reference/skill-creation-process.md)
 
 **Q: My SKILL.md is too long. What do I do?**
 A: Move details to `reference/*.md` files (Level 3). Keep SKILL.md body <2k tokens.

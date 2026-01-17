@@ -160,14 +160,13 @@ Total: ~2300 tokens vs ~5000 tokens if all in one file
 
 **Core PRISM**:
 - [Main Index](../index.md) - Start here
-- [PRISM Methodology](../PRISM-METHODOLOGY.md) - Five principles
-- [Workflows](../workflows/) - Multi-step processes
+- [PRISM Methodology](../../PRISM-METHODOLOGY.md) - Five principles
+- [Workflows](../../workflows/) - Multi-step processes
 
 **Implementation**:
-- [Commands](../commands/) - Slash commands
-- [Skills](../skills/) - Agent personas
-- [Hooks](../hooks/) - Process enforcement
-- [Tasks](../tasks/) - Reusable operations
+- [Commands](../../commands/) - Slash commands
+- [Skills](../../skills/) - Agent personas
+- [Hooks](../../hooks/) - Process enforcement
 
 ---
 

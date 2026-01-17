@@ -16,9 +16,14 @@ These hooks ensure:
 | Hook | Type | Purpose | Blocks? |
 |------|------|---------|---------|
 | `enforce-story-context.py` | PreToolUse | Ensure workflow commands have active story | ✅ Yes |
+| `context-loader.py` | PreToolUse | Remind Claude about relevant context modules | ❌ No |
 | `track-current-story.py` | PostToolUse | Capture story file as current context | ❌ No |
 | `validate-story-updates.py` | PostToolUse | Validate story file updates | ❌ No (warns) |
 | `validate-required-sections.py` | PostToolUse | Verify all required PRISM sections | ✅ Yes (critical errors) |
+| `save-large-responses.py` | PostToolUse | Save large MCP responses (>50 lines) to files | ❌ No |
+| `log-terminal-output.py` | PostToolUse | Log test/build output for grep searching | ❌ No |
+| `capture-session-history.py` | Stop | Save key decisions for context recovery | ❌ No |
+| `prism_stop_hook.py` | Stop | PRISM workflow loop orchestration | ✅ Yes (workflow) |
 
 ### Configuration
 
@@ -180,9 +185,51 @@ The hooks are automatically loaded by Claude Code from the `hooks/` directory wh
    ```
 3. Or run `*draft` to create new story
 
+## Context Management Hooks (v1.8.0)
+
+These hooks implement Cursor-style dynamic context discovery:
+
+### Large Response Saver
+
+`save-large-responses.py` - Saves tool outputs >50 lines to `.context/tool-responses/`
+
+**Monitored Tools**: MCP tools, Read, Grep, Glob
+
+**Benefits**:
+- Prevents context bloat from large tool responses
+- Responses remain accessible via file reference
+- Auto-cleanup keeps last 50 files
+
+### Terminal Output Logger
+
+`log-terminal-output.py` - Saves test/build output to `.context/terminal/`
+
+**Logged Commands**: npm test, pytest, dotnet test, go test, eslint, etc.
+
+**Benefits**:
+- Searchable with grep: `grep "ERROR" .context/terminal/*.log`
+- No need to re-run tests to see previous output
+- Auto-cleanup keeps last 30 files
+
+### Session History Capture
+
+`capture-session-history.py` - Saves workflow state to `.context/history/`
+
+**Tracked**:
+- PRISM workflow state (current step, story file)
+- Recent git changes
+- Workflow log events
+
+**Benefits**:
+- Recovery after context compaction
+- Session continuity across restarts
+- Auto-cleanup keeps last 20 files
+
+---
+
 ## Version
 
-**PRISM Hook System Version**: 1.0.0
+**PRISM Hook System Version**: 1.1.0
 
 **Compatible with**:
 - PRISM Core Development Cycle: v1.3.0+
@@ -197,4 +244,4 @@ For issues or questions:
 
 ---
 
-**Last Updated**: 2025-10-24
+**Last Updated**: 2026-01-16

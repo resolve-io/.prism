@@ -318,11 +318,11 @@ golint ./...     # Go
 
 ## Resources
 
-- **Detailed Guide:** [Sub-Agent User Guide](./sub-agent-user-guide.md)
-- **Architecture:** [Implementation Playbook](./sub-agent-implementation-playbook.md)
+- **Detailed Guide:** [Sub-Agent User Guide](./user-guide.md)
+- **Architecture:** [Implementation](./implementation/)
 - **Workflows:** [Core Development Cycle](../workflows/core-development-cycle.md)
-- **Hooks:** [Workflow Automation](../hooks/README.md)
-- **Claude Code:** [Architecture Overview](./guides/claude-code-overview.md)
+- **Hooks:** [Hooks Documentation](../../../hooks/README.md)
+- **Claude Code:** [Architecture Overview](../guides/claude-code-overview.md)
 
 ---
 

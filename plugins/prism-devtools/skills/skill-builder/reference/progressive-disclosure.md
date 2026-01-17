@@ -2,7 +2,7 @@
 
 > **Definition**: A design pattern that sequences information and actions across multiple screens to reduce cognitive load and improve user experience.
 
-**Navigation**: [← Back to Best Practices](../README.md) | [Next: Dynamic Manifests →](./dynamic-manifests.md)
+**Navigation**: [← Back to Best Practices](../SKILL.md) | [Next: Dynamic Manifests →](./dynamic-manifests.md)
 
 ---
 
@@ -543,7 +543,7 @@ Implemented via:
 - Lazy loading (when to load)
 - Context awareness (what to show)
 
-See: [Best Practices: MCP Applications](../README.md#real-world-applications)
+See: [Skill Builder](../SKILL.md) for practical examples
 
 ---
 
@@ -615,6 +615,6 @@ Measure:
 
 ---
 
-**Navigation**: [← Back to Best Practices](../README.md) | [Next: Dynamic Manifests →](./dynamic-manifests.md)
+**Navigation**: [← Back to Best Practices](../SKILL.md) | [Next: Dynamic Manifests →](./dynamic-manifests.md)
 
 **Last Updated**: 2025-10-20

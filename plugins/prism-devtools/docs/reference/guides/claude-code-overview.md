@@ -63,13 +63,12 @@ Claude Code features build on each other in layers:
 
 | Command | Purpose | Location |
 |---------|---------|----------|
-| `/architect` | System design & architecture | [`commands/architect.md`](../../commands/architect.md) |
-| `/dev` | Full-stack development | [`commands/dev.md`](../../commands/dev.md) |
-| `/qa` | Quality assurance & testing | [`commands/qa.md`](../../commands/qa.md) |
-| `/sm` | Story sizing & planning | [`commands/sm.md`](../../commands/sm.md) |
-| `/po` | Product owner & requirements | [`commands/po.md`](../../commands/po.md) |
-| `/peer` | Code review & mentoring | [`commands/peer.md`](../../commands/peer.md) |
-| `/support` | Issue validation & T3 support | [`commands/support.md`](../../commands/support.md) |
+| `/architect` | System design & architecture | [`commands/architect.md`](../../../commands/architect.md) |
+| `/dev` | Full-stack development | [`commands/dev.md`](../../../commands/dev.md) |
+| `/qa` | Quality assurance & testing | [`commands/qa.md`](../../../commands/qa.md) |
+| `/sm` | Story sizing & planning | [`commands/sm.md`](../../../commands/sm.md) |
+| `/po` | Product owner & requirements | [`commands/po.md`](../../../commands/po.md) |
+| `/support` | Issue validation & T3 support | [`commands/support.md`](../../../commands/support.md) |
 
 **Example:** The `/dev` command delegates to specialized subagents during development.
 
@@ -87,32 +86,32 @@ Claude Code features build on each other in layers:
 
 | Subagent | Purpose | Location |
 |----------|---------|----------|
-| `story-structure-validator` | Checks 9 required sections, YAML frontmatter | [`.claude/agents/story-structure-validator.md`](../../.claude/agents/story-structure-validator.md) |
-| `story-content-validator` | Validates AC quality, task sizing (0-100 score) | [`.claude/agents/story-content-validator.md`](../../.claude/agents/story-content-validator.md) |
-| `epic-alignment-checker` | Detects scope creep, verifies requirements | [`.claude/agents/epic-alignment-checker.md`](../../.claude/agents/epic-alignment-checker.md) |
-| `architecture-compliance-checker` | Ensures approved tech/patterns | [`.claude/agents/architecture-compliance-checker.md`](../../.claude/agents/architecture-compliance-checker.md) |
-| `epic-analyzer` | AI-powered story decomposition | [`.claude/agents/epic-analyzer.md`](../../.claude/agents/epic-analyzer.md) |
+| `story-structure-validator` | Checks 9 required sections, YAML frontmatter | [`agents/story-structure-validator.md`](../../../agents/story-structure-validator.md) |
+| `story-content-validator` | Validates AC quality, task sizing (0-100 score) | [`agents/story-content-validator.md`](../../../agents/story-content-validator.md) |
+| `epic-alignment-checker` | Detects scope creep, verifies requirements | [`agents/epic-alignment-checker.md`](../../../agents/epic-alignment-checker.md) |
+| `architecture-compliance-checker` | Ensures approved tech/patterns | [`agents/architecture-compliance-checker.md`](../../../agents/architecture-compliance-checker.md) |
+| `epic-analyzer` | AI-powered story decomposition | [`agents/epic-analyzer.md`](../../../agents/epic-analyzer.md) |
 
 ### Developer (Dev) Validators
 
 | Subagent | Purpose | Location |
 |----------|---------|----------|
-| `file-list-auditor` | Verifies File List matches git changes | [`.claude/agents/file-list-auditor.md`](../../.claude/agents/file-list-auditor.md) |
-| `test-runner` | Runs test suites (Jest, pytest, RSpec, etc.) | [`.claude/agents/test-runner.md`](../../.claude/agents/test-runner.md) |
-| `lint-checker` | Runs linters and formatters | [`.claude/agents/lint-checker.md`](../../.claude/agents/lint-checker.md) |
+| `file-list-auditor` | Verifies File List matches git changes | [`agents/file-list-auditor.md`](../../../agents/file-list-auditor.md) |
+| `test-runner` | Runs test suites (Jest, pytest, RSpec, etc.) | [`agents/test-runner.md`](../../../agents/test-runner.md) |
+| `lint-checker` | Runs linters and formatters | [`agents/lint-checker.md`](../../../agents/lint-checker.md) |
 
 ### QA Validators
 
 | Subagent | Purpose | Location |
 |----------|---------|----------|
-| `requirements-tracer` | Traces PRD → Epic → Story → Code → Tests | [`.claude/agents/requirements-tracer.md`](../../.claude/agents/requirements-tracer.md) |
-| `qa-gate-manager` | Creates gate YAML files (PASS/CONCERNS/FAIL) | [`.claude/agents/qa-gate-manager.md`](../../.claude/agents/qa-gate-manager.md) |
+| `requirements-tracer` | Traces PRD → Epic → Story → Code → Tests | [`agents/requirements-tracer.md`](../../../agents/requirements-tracer.md) |
+| `qa-gate-manager` | Creates gate YAML files (PASS/CONCERNS/FAIL) | [`agents/qa-gate-manager.md`](../../../agents/qa-gate-manager.md) |
 
 **Key insight:** Subagents keep the main conversation clean by offloading specialized work to isolated contexts. This prevents "context poisoning."
 
 **Impact:** ~1.3 hours saved per story through automated validation.
 
-**Learn more:** [Sub-Agent User Guide](../sub-agent-user-guide.md), [Official docs](https://docs.claude.com/claude-code/features/subagents)
+**Learn more:** [Sub-Agent User Guide](../sub-agents/user-guide.md), [Official docs](https://docs.claude.com/claude-code/features/subagents)
 
 ---
 
@@ -120,26 +119,26 @@ Claude Code features build on each other in layers:
 
 **What they are:** JSON-configured handlers that trigger automatically on lifecycle events like `PreToolUse`, `PostToolUse`, `SessionStart`.
 
-**How PRISM uses it:** 6 active hooks enforcing the [core development cycle](../../workflows/core-development-cycle.md):
+**How PRISM uses it:** 6 active hooks enforcing the [core development cycle](../workflows/core-development-cycle.md):
 
 ### Active Hooks
 
-Configuration: [`.claude/settings.json`](../../.claude/settings.json)
+Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 
 | Hook | Event | Purpose | Script |
 |------|-------|---------|--------|
-| Story context enforcement | `PreToolUse(Bash)` | Require story context for workflow commands | [`hooks/enforce-story-context.py`](../../hooks/enforce-story-context.py) |
-| Story tracking | `PostToolUse(Write)` | Track current story for context | [`hooks/track-current-story.py`](../../hooks/track-current-story.py) |
-| Story validation | `PostToolUse(Edit)` | Validate story file updates | [`hooks/validate-story-updates.py`](../../hooks/validate-story-updates.py) |
-| Section validation | `PostToolUse(Edit\|Write)` | Verify required sections exist | [`hooks/validate-required-sections.py`](../../hooks/validate-required-sections.py) |
-| File context capture | `PostToolUse(Edit\|Write)` | Capture changes for memory | [`hooks/capture-file-context.py`](../../hooks/capture-file-context.py) |
-| Commit context capture | `PostToolUse(Bash)` | Capture git commits for memory | [`hooks/capture-commit-context.py`](../../hooks/capture-commit-context.py) |
+| Story context enforcement | `PreToolUse(Bash)` | Require story context for workflow commands | [`hooks/enforce-story-context.py`](../../../hooks/enforce-story-context.py) |
+| Story tracking | `PostToolUse(Write)` | Track current story for context | [`hooks/track-current-story.py`](../../../hooks/track-current-story.py) |
+| Story validation | `PostToolUse(Edit)` | Validate story file updates | [`hooks/validate-story-updates.py`](../../../hooks/validate-story-updates.py) |
+| Section validation | `PostToolUse(Edit\|Write)` | Verify required sections exist | [`hooks/validate-required-sections.py`](../../../hooks/validate-required-sections.py) |
+| File context capture | `PostToolUse(Edit\|Write)` | Capture changes for memory | [`hooks/capture-file-context.py`](../../../hooks/capture-file-context.py) |
+| Commit context capture | `PostToolUse(Bash)` | Capture git commits for memory | [`hooks/capture-commit-context.py`](../../../hooks/capture-commit-context.py) |
 
 **Key insight:** Hooks enforce process without requiring manual intervention. They run fast shell commands, not LLM inference.
 
 **Example:** `enforce-story-context.py` blocks git commits unless you're working within a story context, ensuring traceability.
 
-**Learn more:** [`hooks/README.md`](../../hooks/README.md), [Official docs](https://docs.claude.com/claude-code/features/hooks)
+**Learn more:** [`hooks/README.md`](../../../hooks/README.md), [Official docs](https://docs.claude.com/claude-code/features/hooks)
 
 ---
 
@@ -147,27 +146,17 @@ Configuration: [`.claude/settings.json`](../../.claude/settings.json)
 
 **What they are:** Folders with `SKILL.md` descriptors that activate **automatically** when their description matches task context.
 
-**How PRISM uses it:** 8 agent personas + 3 meta-skills:
+**How PRISM uses it:** 30+ task-specific skills that extend persona capabilities.
 
-### Agent Personas
-
-| Skill | Activates When | Location |
-|-------|----------------|----------|
-| `architect` | System design, architecture, tech selection | [`skills/architect/SKILL.md`](../../skills/architect/SKILL.md) |
-| `dev` | Feature implementation, TDD, story execution | [`skills/dev/SKILL.md`](../../skills/dev/SKILL.md) |
-| `qa` | Test strategy, quality gates, NFR validation | [`skills/qa/SKILL.md`](../../skills/qa/SKILL.md) |
-| `sm` | Story sizing, PSP estimation, epic breakdown | [`skills/sm/SKILL.md`](../../skills/sm/SKILL.md) |
-| `po` | Requirements, backlog, story validation | [`skills/po/SKILL.md`](../../skills/po/SKILL.md) |
-| `peer` | Code review, mentoring, quality feedback | [`skills/peer/SKILL.md`](../../skills/peer/SKILL.md) |
-| `support` | Issue validation, T3 support, SDLC handoff | [`skills/support/SKILL.md`](../../skills/support/SKILL.md) |
+> **Note:** Agent personas (`/architect`, `/dev`, `/qa`, `/sm`, `/po`, `/support`) are **slash commands**, not skills. See [Section 2: Slash Commands](#2-slash-commands) for persona details.
 
 ### Meta-Skills (Build the system)
 
 | Skill | Purpose | Location |
 |-------|---------|----------|
-| `skill-builder` | Create optimized skills using progressive disclosure | [`skills/skill-builder/SKILL.md`](../../skills/skill-builder/SKILL.md) |
-| `hooks-manager` | Manage hook configurations, test patterns | [`skills/hooks-manager/SKILL.md`](../../skills/hooks-manager/SKILL.md) |
-| `agent-builder` | Create custom subagent definitions | [`skills/agent-builder/SKILL.md`](../../skills/agent-builder/SKILL.md) |
+| `skill-builder` | Create optimized skills using progressive disclosure | [`skills/skill-builder/SKILL.md`](../../../skills/skill-builder/SKILL.md) |
+| `hooks-manager` | Manage hook configurations, test patterns | [`skills/hooks-manager/SKILL.md`](../../../skills/hooks-manager/SKILL.md) |
+| `agent-builder` | Create custom subagent definitions | [`skills/agent-builder/SKILL.md`](../../../skills/agent-builder/SKILL.md) |
 
 **Key insight:** Skills activate automatically based on task context. Unlike slash commands, you never invoke them manually—Claude detects when they're relevant.
 
@@ -214,7 +203,7 @@ Configuration: [`.claude/settings.json`](../../.claude/settings.json)
 
 **Key insight:** Plugins make sophisticated AI workflows shareable. Install once, get the entire quality system.
 
-**Learn more:** [README.md](../../README.md), [Official docs](https://docs.claude.com/claude-code/plugins)
+**Learn more:** [README.md](../../../README.md), [Official docs](https://docs.claude.com/claude-code/plugins)
 
 ---
 
@@ -231,7 +220,7 @@ Configuration: [`.claude/settings.json`](../../.claude/settings.json)
 /support BUG-789           # Fetches bug details
 ```
 
-**Setup:** See [`utils/jira-integration.md`](../../utils/jira-integration.md)
+**Setup:** See [`utils/jira-integration.md`](../../../utils/jira-integration.md)
 
 **Key insight:** MCP connects external systems. Each server adds tools/resources/prompts as slash commands (e.g., `/mcp__github__create-issue`).
 
@@ -283,18 +272,18 @@ PRISM demonstrates progressive disclosure at multiple levels:
 
 **Token efficiency:** The `hooks-manager` skill was optimized from 363→179 lines (51% reduction) using progressive disclosure patterns.
 
-**Learn more:** [`skills/skill-builder/reference/progressive-disclosure.md`](../../skills/skill-builder/reference/progressive-disclosure.md)
+**Learn more:** [`skills/skill-builder/reference/progressive-disclosure.md`](../../../skills/skill-builder/reference/progressive-disclosure.md)
 
 ---
 
 ## Additional Resources
 
 - **Official Docs:** [https://docs.claude.com/claude-code](https://docs.claude.com/claude-code)
-- **PRISM Docs:** [Documentation Index](../index.md)
-- **Sub-agents:** [User Guide](../sub-agent-user-guide.md) | [Quick Reference](../sub-agent-quick-reference.md)
-- **Hooks:** [Hooks README](../../hooks/README.md) | [Hooks Manager Skill](../../skills/hooks-manager/SKILL.md)
-- **Skills:** [Skill Builder](../../skills/skill-builder/SKILL.md)
-- **Workflows:** [Core Development Cycle](../../workflows/core-development-cycle.md)
+- **PRISM Docs:** [Documentation Index](../../index.md)
+- **Sub-agents:** [User Guide](../sub-agents/user-guide.md) | [Quick Reference](../sub-agents/quick-reference.md)
+- **Hooks:** [Hooks README](../../../hooks/README.md) | [Hooks Manager Skill](../../../skills/hooks-manager/SKILL.md)
+- **Skills:** [Skill Builder](../../../skills/skill-builder/SKILL.md)
+- **Workflows:** [Core Development Cycle](../workflows/core-development-cycle.md)
 
 ---
 

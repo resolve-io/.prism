@@ -699,7 +699,7 @@ Gate Pass Rate Trend
 - **[Sub-Agent System](../../sub-agents/README.md)** - Validator architecture
 
 ### Commands
-- **[QA Commands](../../../commands/qa.md)** - Full command reference
+- **[QA Commands](../../../../commands/qa.md)** - Full command reference
 
 ---
 
@@ -709,7 +709,7 @@ Gate Pass Rate Trend
 |---------|-------|
 | **← Back** | [QA Overview](../README.md) |
 | **Related** | [Core Workflow](../../workflows/core-development-cycle.md) · [Quality Gates](../concepts/quality-gates.md) |
-| **Commands** | [QA Commands](../../../commands/qa.md) |
+| **Commands** | [QA Commands](../../../../commands/qa.md) |
 
 ---
 

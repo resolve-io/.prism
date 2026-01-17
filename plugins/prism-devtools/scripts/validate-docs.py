@@ -53,6 +53,14 @@ class Category(Enum):
     CLAUDE_CODE_FEATURES = "claude_code_features"
 
 
+# Directories excluded from validation
+# docs/ contains human-readable documentation ABOUT PRISM, not part of the PRISM system
+EXCLUDED_FROM_DISCLOSURE = {
+    'docs/',           # Human documentation about PRISM (not PRISM instructions)
+    'node_modules/',   # Third-party dependencies (skip anywhere in path)
+}
+
+
 @dataclass
 class Heading:
     """Represents a markdown heading"""
@@ -148,7 +156,16 @@ class DocumentationScanner:
     def scan(self) -> Dict[str, FileNode]:
         """Recursively scan directory for markdown and YAML files"""
         for file_path in self.root_path.rglob('*'):
-            if not file_path.is_file():
+            # Skip node_modules directories (third-party code)
+            if 'node_modules' in file_path.parts:
+                continue
+
+            # Check if it's a file (handle Windows access errors gracefully)
+            try:
+                if not file_path.is_file():
+                    continue
+            except OSError:
+                # Skip files that can't be accessed (Windows symlinks, junctions, etc.)
                 continue
 
             suffix = file_path.suffix.lower()
@@ -189,6 +206,7 @@ class DocumentationScanner:
         """Parse markdown file to extract headings, links, and features"""
         heading_stack: List[Heading] = []
         max_depth = 0
+        in_code_block = False  # Track fenced code blocks
 
         content = ''.join(file_node.content_lines)
 
@@ -197,6 +215,15 @@ class DocumentationScanner:
         file_node.has_toc = bool(re.search(r'##\s+Table of Contents', content, re.IGNORECASE))
 
         for line_num, line in enumerate(file_node.content_lines, start=1):
+            # Track fenced code blocks (``` or ~~~)
+            if line.strip().startswith('```') or line.strip().startswith('~~~'):
+                in_code_block = not in_code_block
+                continue
+
+            # Skip content inside code blocks
+            if in_code_block:
+                continue
+
             # Extract headings
             heading_match = re.match(r'^(#{1,6})\s+(.+)$', line.strip())
             if heading_match:
@@ -225,8 +252,10 @@ class DocumentationScanner:
                 heading_stack.append(heading)
 
             # Extract links: [text](target) or [text](target#anchor)
+            # First, remove inline code (content between backticks) to avoid false positives
+            line_without_code = re.sub(r'`[^`]+`', '', line)
             link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
-            for match in re.finditer(link_pattern, line):
+            for match in re.finditer(link_pattern, line_without_code):
                 text = match.group(1)
                 target = match.group(2)
 
@@ -375,10 +404,17 @@ class ClaudeCodeFeatureValidator:
         return self.issues
 
     def _validate_agent_structure(self):
-        """Validate .claude/agents/ structure"""
-        agents_dir = self.root_path / '.claude' / 'agents'
+        """Validate agent structure - checks both .claude/agents/ and PRISM agents/ directory"""
+        # Check standard Claude Code location
+        claude_agents_dir = self.root_path / '.claude' / 'agents'
+        # Check PRISM-style agents directory (at root level)
+        prism_agents_dir = self.root_path / 'agents'
 
-        if not agents_dir.exists():
+        # At least one agents directory should exist
+        claude_has_agents = claude_agents_dir.exists()
+        prism_has_agents = prism_agents_dir.exists()
+
+        if not claude_has_agents and not prism_has_agents:
             self.issues.append(ValidationIssue(
                 file=".claude/agents",
                 line=None,
@@ -389,6 +425,9 @@ class ClaudeCodeFeatureValidator:
                 fix_guidance="Create .claude/agents/ directory and define sub-agents"
             ))
             return
+
+        # Use whichever directory exists (prefer PRISM style if both exist)
+        agents_dir = prism_agents_dir if prism_has_agents else claude_agents_dir
 
         # Find all agent files
         agent_files = list(agents_dir.glob('*.md'))
@@ -527,10 +566,22 @@ class ProgressiveDisclosureValidator:
         self.root_path = root_path
         self.issues: List[ValidationIssue] = []
 
+    def _is_excluded(self, rel_path: str) -> bool:
+        """Check if path is in an excluded directory"""
+        for excluded in EXCLUDED_FROM_DISCLOSURE:
+            # Check both start of path and anywhere in path (for node_modules)
+            if rel_path.startswith(excluded) or f'/{excluded}' in f'/{rel_path}':
+                return True
+        return False
+
     def validate(self) -> List[ValidationIssue]:
         """Validate progressive disclosure compliance"""
         for rel_path, file_node in self.files.items():
             if file_node.file_type != 'markdown':
+                continue
+
+            # Skip human documentation directories
+            if self._is_excluded(rel_path):
                 continue
 
             self._validate_heading_hierarchy(file_node)
@@ -636,10 +687,22 @@ class CrossReferenceValidator:
         self.root_path = root_path
         self.issues: List[ValidationIssue] = []
 
+    def _is_excluded(self, rel_path: str) -> bool:
+        """Check if path is in an excluded directory"""
+        for excluded in EXCLUDED_FROM_DISCLOSURE:
+            # Check both start of path and anywhere in path (for node_modules)
+            if rel_path.startswith(excluded) or f'/{excluded}' in f'/{rel_path}':
+                return True
+        return False
+
     def validate(self) -> List[ValidationIssue]:
         """Validate all cross-references"""
         for rel_path, file_node in self.files.items():
             if file_node.file_type != 'markdown':
+                continue
+
+            # Skip human documentation directories
+            if self._is_excluded(rel_path):
                 continue
 
             for link in file_node.internal_links:
@@ -699,17 +762,35 @@ class CrossReferenceValidator:
             return
 
         # Check if target file exists
-        if target_path not in self.files:
-            self.issues.append(ValidationIssue(
-                file=file_node.relative_path,
-                line=link.line_number,
-                category=Category.CROSS_REFERENCE,
-                severity=Severity.CRITICAL,
-                rule_id="CR001",
-                message=f"Broken link: '{link.target}' does not exist",
-                fix_guidance=f"Verify the target file exists or update the link path"
-            ))
-            return
+        # For markdown/yaml files, check our scanned files dict
+        # For other files (scripts, etc.), check if file exists on disk
+        target_extension = Path(target_path).suffix.lower()
+        if target_extension in ['.md', '.yaml', '.yml']:
+            if target_path not in self.files:
+                self.issues.append(ValidationIssue(
+                    file=file_node.relative_path,
+                    line=link.line_number,
+                    category=Category.CROSS_REFERENCE,
+                    severity=Severity.CRITICAL,
+                    rule_id="CR001",
+                    message=f"Broken link: '{link.target}' does not exist",
+                    fix_guidance=f"Verify the target file exists or update the link path"
+                ))
+                return
+        else:
+            # For non-markdown files, check actual file system
+            full_path = self.root_path / target_path
+            if not full_path.exists():
+                self.issues.append(ValidationIssue(
+                    file=file_node.relative_path,
+                    line=link.line_number,
+                    category=Category.CROSS_REFERENCE,
+                    severity=Severity.CRITICAL,
+                    rule_id="CR001",
+                    message=f"Broken link: '{link.target}' does not exist",
+                    fix_guidance=f"Verify the target file exists or update the link path"
+                ))
+            return  # No anchor validation for non-markdown files
 
         # If anchor specified, validate it exists in target file
         if link.anchor:
@@ -954,7 +1035,27 @@ class SkillBuilderPatternValidator:
             # SB010: Check if linked reference file exists
             target_path = self._resolve_link_path(skill_md_path, link.target)
 
-            if target_path not in self.files:
+            # Skip empty/invalid paths and anchor-only links
+            if not target_path or target_path == '#':
+                continue
+
+            # Check if file exists
+            # For markdown/yaml files, check our scanned files dict
+            # For other files (scripts like .ps1, .js, .sh), check filesystem
+            target_extension = Path(target_path).suffix.lower()
+            file_exists = False
+
+            if target_extension in ['.md', '.yaml', '.yml']:
+                file_exists = target_path in self.files
+            else:
+                # For non-markdown files, check actual file system
+                full_path = self.root_path / target_path
+                try:
+                    file_exists = full_path.exists()
+                except OSError:
+                    file_exists = False
+
+            if not file_exists:
                 self.issues.append(ValidationIssue(
                     file=skill_md_path,
                     line=link.line_number,
@@ -1004,15 +1105,21 @@ class SkillBuilderPatternValidator:
 
         content = ''.join(file_node.content_lines).lower()
 
-        # SB016: Check for recommended sections
-        recommended_sections = {
-            'when to use': 'whenToUse or trigger conditions',
-            'what': 'high-level overview',
-            'quick start': 'immediate action path'
-        }
+        # SB016: Check for recommended sections (with common aliases)
+        # Each entry: (primary_name, description, [list of acceptable patterns])
+        recommended_sections = [
+            ('when to use', 'whenToUse or trigger conditions',
+             ['when to use', 'triggers', 'use cases', 'use this when']),
+            ('what', 'high-level overview',
+             ['what this skill does', 'what it does', 'what this does', 'purpose', 'overview', 'description']),
+            ('quick start', 'immediate action path',
+             ['quick start', 'getting started', 'quick reference', 'quick test', 'usage', 'how to use', 'basic usage'])
+        ]
 
-        for section_name, description in recommended_sections.items():
-            if section_name not in content:
+        for section_name, description, patterns in recommended_sections:
+            # Check if any of the patterns exist in content
+            found = any(pattern in content for pattern in patterns)
+            if not found:
                 self.issues.append(ValidationIssue(
                     file=skill_md_path,
                     line=None,
@@ -1124,10 +1231,10 @@ class SkillBuilderPatternValidator:
                     file=cycle[0],
                     line=None,
                     category=Category.CROSS_REFERENCE,
-                    severity=Severity.CRITICAL,
+                    severity=Severity.INFO,  # Circular refs are often intentional for navigation
                     rule_id="SB013",
                     message=f"Circular reference detected: {cycle_str}",
-                    fix_guidance="Remove one of the links to break the cycle"
+                    fix_guidance="Consider if this cycle is intentional for navigation, or remove one link to break the cycle"
                 ))
 
     def _dfs_detect_cycles(self, path: str, visited: Set[str], path_stack: List[str]) -> List[List[str]]:
@@ -1165,23 +1272,19 @@ class SkillBuilderPatternValidator:
         if not link_target:
             return None
 
-        current_dir = str(Path(current_file).parent)
+        current_dir = Path(current_file).parent
 
-        if link_target.startswith('./'):
-            # Relative to current directory
-            resolved = str(Path(current_dir) / link_target[2:])
-        elif link_target.startswith('../'):
-            # Relative to parent directory
-            resolved = str(Path(current_dir) / link_target)
-        elif link_target.startswith('/'):
+        if link_target.startswith('/'):
             # Absolute from root
             resolved = link_target[1:]
         else:
-            # Relative to current directory
-            resolved = str(Path(current_dir) / link_target)
+            # Relative path (handles ./, ../, and implicit relative)
+            combined = current_dir / link_target
+            # Normalize path to remove .. and . components
+            resolved = os.path.normpath(str(combined))
 
-        # Normalize path
-        resolved = str(Path(resolved)).replace('\\', '/')
+        # Normalize path separators
+        resolved = resolved.replace('\\', '/')
 
         return resolved
 

@@ -1,4 +1,4 @@
-﻿---
+---
 name: probe-estimation
 description: Use to apply PROBE (PROxy-Based Estimation) method for story sizing. Uses historical data for accurate effort estimation.
 version: 1.0.0
@@ -6,6 +6,21 @@ version: 1.0.0
 <!-- Powered by PRISMâ„¢ Core -->
 
 # PROBE Estimation Task
+
+## When to Use
+
+- When estimating effort for a new story
+- During sprint planning for sizing stories
+- When comparing story complexity to historical work
+- When calibrating estimation accuracy over time
+
+## Quick Start
+
+1. Load historical story data (if available)
+2. Map story to size category (VS, S, M, L, VL)
+3. Compare against proxy stories
+4. Calculate estimated hours
+5. Document estimation rationale
 
 ## Purpose
 

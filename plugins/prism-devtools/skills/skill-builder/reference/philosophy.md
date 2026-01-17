@@ -4,27 +4,27 @@
 
 **Token-Optimized Structure**:
 - This file: ~628 tokens (overview & navigation)
-- [best-practices.md](./best-practices.md): ~920 tokens (quick reference for building skills)
+- [quick-reference.md](./quick-reference.md): ~920 tokens (quick reference for building skills)
 - Topic files: 1.4k-2.2k tokens each (deep dives loaded as-needed)
 
-**📑 Navigation**: See [INDEX.md](./INDEX.md) for complete file reference and navigation patterns.
+**📑 Navigation**: See [quick-reference.md](./quick-reference.md) for complete file reference and navigation patterns.
 
 ---
 
 ## 🎯 Quick Start (Level 1)
 
 ### Building a New Skill?
-→ **[Skill Creation Process](./reference/skill-creation-process.md)** - Follow this step-by-step guide
+→ **[Skill Creation Process](./skill-creation-process.md)** - Follow this step-by-step guide
 
 ### Learning Patterns?
 Choose your learning path:
 
-- **[Progressive Disclosure](./topics/progressive-disclosure.md)** - Learn the core UX/architectural pattern
-- **[Dynamic Manifests](./topics/dynamic-manifests.md)** - Implement runtime capability discovery
-- **[Deferred Loading](./topics/deferred-loading.md)** - Optimize resource initialization
+- **[Progressive Disclosure](./progressive-disclosure.md)** - Learn the core UX/architectural pattern
+- **[Dynamic Manifests](./dynamic-manifests.md)** - Implement runtime capability discovery
+- **[Deferred Loading](./deferred-loading.md)** - Optimize resource initialization
 
 ### Need Quick Reference?
-→ **[best-practices.md](./best-practices.md)** - Checklists, templates, and common pitfalls
+→ **[quick-reference.md](./quick-reference.md)** - Checklists, templates, and common pitfalls
 
 ---
 
@@ -70,19 +70,19 @@ Progressive Disclosure + Dynamic Manifests + Deferred Loading:
 ## 📖 Learning Path
 
 ### For Beginners
-1. Start with **[Progressive Disclosure](./topics/progressive-disclosure.md#what-is-it)** - Understand the philosophy
-2. See **[Simple Examples](./topics/progressive-disclosure.md#simple-examples)**
-3. Review **[Quick Start](./topics/dynamic-manifests.md#quick-start)**
+1. Start with **[Progressive Disclosure](./progressive-disclosure.md#what-is-it)** - Understand the philosophy
+2. See **[Simple Examples](./progressive-disclosure.md#simple-examples)**
+3. Review **[Quick Start](./dynamic-manifests.md#quick-start)**
 
 ### For Practitioners
-1. Read **[Implementation Patterns](./topics/progressive-disclosure.md#implementation-patterns)**
-2. Configure **[Dynamic Manifests](./topics/dynamic-manifests.md#configuration)**
-3. Optimize with **[Deferred Loading](./topics/deferred-loading.md#strategies)**
+1. Read **[Implementation Patterns](./progressive-disclosure.md#implementation-patterns)**
+2. Configure **[Dynamic Manifests](./dynamic-manifests.md#configuration)**
+3. Optimize with **[Deferred Loading](./deferred-loading.md#strategies)**
 
 ### For Architects
-1. Study **[Architectural Principles](./topics/progressive-disclosure.md#architectural-principles)**
-2. Design **[Capability Systems](./topics/dynamic-manifests.md#capability-systems)**
-3. Implement **[Advanced Optimization](./topics/deferred-loading.md#advanced-techniques)**
+1. Study **[Architectural Principles](./progressive-disclosure.md#architectural-principles)**
+2. Design **[Capability Systems](./dynamic-manifests.md#capability-systems)**
+3. Implement **[Advanced Optimization](./deferred-loading.md#advanced-techniques)**
 
 ---
 
@@ -180,19 +180,19 @@ Track these to measure success:
 
 Ready to go deeper? Click any topic:
 
-1. **[Progressive Disclosure](./topics/progressive-disclosure.md)**
+1. **[Progressive Disclosure](./progressive-disclosure.md)**
    - Design philosophy
    - UX patterns
    - Information architecture
    - Cognitive load management
 
-2. **[Dynamic Manifests](./topics/dynamic-manifests.md)**
+2. **[Dynamic Manifests](./dynamic-manifests.md)**
    - Configuration guide
    - Endpoint implementation
    - Registry patterns
    - MCP-specific setup
 
-3. **[Deferred Loading](./topics/deferred-loading.md)**
+3. **[Deferred Loading](./deferred-loading.md)**
    - Lazy initialization
    - Code splitting
    - Resource optimization
@@ -216,7 +216,7 @@ Want immediate improvements? Start here:
   }
 }
 ```
-See [Dynamic Manifests: Quick Start](./topics/dynamic-manifests.md#quick-start)
+See [Dynamic Manifests: Quick Start](./dynamic-manifests.md#quick-start)
 
 ### 15-Minute Win: Implement Lazy Loading
 ```python
@@ -227,7 +227,7 @@ def load_expensive_resource():
     # Only loads on first call
     return initialize_resource()
 ```
-See [Deferred Loading: Basic Patterns](./topics/deferred-loading.md#basic-patterns)
+See [Deferred Loading: Basic Patterns](./deferred-loading.md#basic-patterns)
 
 ### 30-Minute Win: Progressive Disclosure UI
 ```markdown
@@ -243,7 +243,7 @@ See [Deferred Loading: Basic Patterns](./topics/deferred-loading.md#basic-patter
 # Level 3: Expert (separate page)
 See [Advanced Guide](./advanced.md)
 ```
-See [Progressive Disclosure: UI Patterns](./topics/progressive-disclosure.md#ui-patterns)
+See [Progressive Disclosure: UI Patterns](./progressive-disclosure.md#ui-patterns)
 
 ---
 
@@ -258,13 +258,13 @@ See [Progressive Disclosure: UI Patterns](./topics/progressive-disclosure.md#ui-
 ## 🆘 Troubleshooting
 
 **Problem**: Changes not appearing without restart
-**Solution**: Check [Dynamic Manifests: Configuration](./topics/dynamic-manifests.md#configuration)
+**Solution**: Check [Dynamic Manifests: Configuration](./dynamic-manifests.md#configuration)
 
 **Problem**: High memory usage at startup
-**Solution**: Review [Deferred Loading: Strategies](./topics/deferred-loading.md#strategies)
+**Solution**: Review [Deferred Loading: Strategies](./deferred-loading.md#strategies)
 
 **Problem**: Users overwhelmed by options
-**Solution**: Apply [Progressive Disclosure: Principles](./topics/progressive-disclosure.md#principles)
+**Solution**: Apply [Progressive Disclosure: Principles](./progressive-disclosure.md#architectural-principles)
 
 ---
 

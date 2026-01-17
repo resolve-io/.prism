@@ -48,10 +48,10 @@ artifacts/
 
 ## Related Directories
 
-- **[docs/](../docs/)** - System documentation (NOT operational artifacts)
-- **[templates/](../templates/)** - Document templates
-- **[tasks/](../tasks/)** - Reusable task definitions
-- **[workflows/](../workflows/)** - Workflow orchestration
+- **[docs/](../docs/index.md)** - System documentation (NOT operational artifacts)
+- **[templates/](../templates/README.md)** - Document templates
+- **[skills/](../skills/README.md)** - Reusable skill definitions
+- **[workflows/](../workflows/README.md)** - Workflow orchestration
 
 ---
 
@@ -62,7 +62,7 @@ Completed stories and old validation reports should be archived periodically:
 - QA Gates: Keep current sprint + last sprint, archive older
 - Validation: Archive after 90 days unless reference needed
 
-See: [Archive Documentation](../docs/archive/README.md)
+Archive documentation will be added in a future update.
 
 ---
 

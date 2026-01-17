@@ -1,8 +1,8 @@
 # Agent Skills Best Practices - Quick Reference
 
-> **Quick access guide** for building efficient, maintainable Claude Code skills. For detailed architectural patterns, see [README.md](./README.md).
+> **Quick access guide** for building efficient, maintainable Claude Code skills. For detailed architectural patterns, see [philosophy.md](./philosophy.md).
 
-**📑 Navigation**: [INDEX.md](./INDEX.md) | [README.md](./README.md) | [Skill Creation Process](./reference/skill-creation-process.md)
+**📑 Navigation**: [quick-reference.md](./quick-reference.md) | [philosophy.md](./philosophy.md) | [Skill Creation Process](./skill-creation-process.md)
 
 ---
 
@@ -27,10 +27,10 @@
 
 ## 📑 Navigation
 
-- **[README.md](./README.md)** - Comprehensive guide with architectural patterns
-- **[Progressive Disclosure](./topics/progressive-disclosure.md)** - Design philosophy & UX patterns
-- **[Dynamic Manifests](./topics/dynamic-manifests.md)** - Runtime capability discovery
-- **[Deferred Loading](./topics/deferred-loading.md)** - Lazy initialization & optimization
+- **[philosophy.md](./philosophy.md)** - Comprehensive guide with architectural patterns
+- **[Progressive Disclosure](./progressive-disclosure.md)** - Design philosophy & UX patterns
+- **[Dynamic Manifests](./dynamic-manifests.md)** - Runtime capability discovery
+- **[Deferred Loading](./deferred-loading.md)** - Lazy initialization & optimization
 
 ---
 
@@ -256,19 +256,19 @@ except AuthenticationError:
 - Skill has optional advanced features
 - Documentation is extensive
 - Users have varying expertise levels
-- See: [topics/progressive-disclosure.md](./topics/progressive-disclosure.md)
+- See: [topics/progressive-disclosure.md](./progressive-disclosure.md)
 
 ### Use Dynamic Manifests When:
 - Capabilities change based on context
 - Features depend on user permissions
 - Tools should appear/disappear dynamically
-- See: [topics/dynamic-manifests.md](./topics/dynamic-manifests.md)
+- See: [topics/dynamic-manifests.md](./dynamic-manifests.md)
 
 ### Use Deferred Loading When:
 - Skill has heavy dependencies
 - Not all features used every time
 - Startup time matters
-- See: [topics/deferred-loading.md](./topics/deferred-loading.md)
+- See: [topics/deferred-loading.md](./deferred-loading.md)
 
 ---
 
@@ -332,7 +332,7 @@ python main_tool.py --test-mode
 
 **Building a new skill?** Follow the systematic process:
 
-→ **[Skill Creation Process Guide](./reference/skill-creation-process.md)** - Complete walkthrough from planning to deployment
+→ **[Skill Creation Process Guide](./skill-creation-process.md)** - Complete walkthrough from planning to deployment
 
 Includes:
 - 5-phase process (Planning → Structure → Implementation → Testing → Refinement)
@@ -345,7 +345,7 @@ Includes:
 
 ## 📚 Additional Resources
 
-- [Skill Creation Process](./reference/skill-creation-process.md) - Step-by-step guide with example
+- [Skill Creation Process](./skill-creation-process.md) - Step-by-step guide with example
 - [Anthropic: Equipping Agents with Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills)
 - [Skills Documentation](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview)
 - [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
@@ -357,6 +357,6 @@ Includes:
 
 For comprehensive guides on architectural patterns, implementation details, and advanced techniques, see:
 
-→ **[README.md](./README.md)** - Start here for the complete best practices guide
+→ **[philosophy.md](./philosophy.md)** - Start here for the complete best practices guide
 
 **Last Updated**: 2025-10-20

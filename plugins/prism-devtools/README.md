@@ -72,9 +72,9 @@ cd .prism
 
 **Popular Guides:**
 - [Core Development Workflow](docs/reference/workflows/core-development-cycle.md) - The main PRISM process
-- [Sub-Agent System](docs/sub-agent-user-guide.md) - Automated validation (saves ~1.3h per story)
+- [Sub-Agent System](docs/reference/sub-agents/user-guide.md) - Automated validation (saves ~1.3h per story)
 - [PRISM Methodology](PRISM-METHODOLOGY.md) - The five principles
-- [Claude Code Integration](docs/guides/claude-code-overview.md) - How PRISM leverages Claude Code
+- [Claude Code Integration](docs/reference/guides/claude-code-overview.md) - How PRISM leverages Claude Code
 
 ## What is PRISM?
 
@@ -116,7 +116,6 @@ PRISM is a software engineering methodology that combines proven practices into 
 - `/dev` - Feature development with TDD
 - `/qa` - Quality assurance and testing
 - `/po` - Product owner and requirements
-- `/peer` - Code review and mentoring
 - `/support` - Issue validation and reproduction
 
 ### Workflow Automation
@@ -240,9 +239,9 @@ PRISM follows secure development practices:
 
 ### Key Guides
 - **[PRISM Methodology](PRISM-METHODOLOGY.md)** - The five principles
-- **[Sub-Agent User Guide](docs/sub-agent-user-guide.md)** - Automated validation
-- **[Sub-Agent Quick Reference](docs/sub-agent-quick-reference.md)** - Cheat sheet
-- **[Claude Code Integration](docs/guides/claude-code-overview.md)** - Architecture guide
+- **[Sub-Agent User Guide](docs/reference/sub-agents/user-guide.md)** - Automated validation
+- **[Sub-Agent Quick Reference](docs/reference/sub-agents/quick-reference.md)** - Cheat sheet
+- **[Claude Code Integration](docs/reference/guides/claude-code-overview.md)** - Architecture guide
 
 ### Building Skills
 - **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills
@@ -251,7 +250,7 @@ PRISM follows secure development practices:
 ## Support
 
 - **Documentation Issues**: Check [docs/index.md](docs/index.md) for navigation
-- **Skill Issues**: See [Sub-Agent Quick Reference](docs/sub-agent-quick-reference.md#common-issues--quick-fixes)
+- **Skill Issues**: See [Sub-Agent Quick Reference](docs/reference/sub-agents/quick-reference.md#common-issues-quick-fixes)
 - **Workflow Issues**: Read [Workflow README](docs/reference/workflows/README.md#troubleshooting)
 - **Hook Issues**: Check [Hooks README](hooks/README.md#troubleshooting)
 

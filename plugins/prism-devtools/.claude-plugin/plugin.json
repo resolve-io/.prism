@@ -1,8 +1,23 @@
 {
-    "author":  {
-                   "name":  "Resolve Systems"
-               },
-    "description":  "PRISM methodology plugin - software engineering workflow coordination with Dev, QA, Architecture, and Product Owner agents following Predictability, Resiliency, Intentionality, Sustainability, and Maintainability principles",
-    "name":  "prism-devtools",
-    "version":  "1.0.0"
+  "name": "prism-devtools",
+  "version": "2.0.0",
+  "description": "PRISM methodology plugin - software engineering workflow coordination with Dev, QA, Architecture, and Product Owner agents following Predictability, Resiliency, Intentionality, Sustainability, and Maintainability principles",
+  "author": {
+    "name": "Resolve Systems",
+    "email": "jesse@resolve.io"
+  },
+  "homepage": "https://github.com/resolve-io/.prism",
+  "license": "MIT",
+  "keywords": [
+    "prism",
+    "tdd",
+    "workflow",
+    "sdlc",
+    "qa",
+    "devops",
+    "agents",
+    "methodology",
+    "agile",
+    "psp"
+  ]
 }

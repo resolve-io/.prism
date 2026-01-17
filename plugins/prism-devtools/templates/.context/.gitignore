@@ -1,0 +1,14 @@
+# Cache folder - runtime data, not version controlled
+cache/
+
+# Session-specific files
+*.local.md
+*.local.yaml
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
+.DS_Store
+Thumbs.db

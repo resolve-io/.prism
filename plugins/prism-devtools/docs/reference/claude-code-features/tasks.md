@@ -117,7 +117,7 @@ TDD workflow:
 | **code-review-checklist** | Generate review items | Changed files | Checklist |
 | **refactoring-suggestions** | Identify improvements | Code files | Refactoring tasks |
 
-**[All 28 Tasks](../../tasks/)** - Complete task directory
+**[All 28 Tasks](../../../skills/)** - Complete task directory
 
 ---
 
@@ -664,19 +664,18 @@ Input:
 
 ## Examples in PRISM
 
-**All Tasks:**
-- [tasks/ directory](../../tasks/) - 28 reusable tasks
+**All Skills:**
+- [skills/ directory](../../../skills/) - 30+ reusable skills
 
-**Key Tasks:**
-- [probe-estimation](../../tasks/probe-estimation.md) - Story sizing
-- [test-design](../../tasks/test-design.md) - Test strategy
-- [risk-profile](../../tasks/risk-profile.md) - Risk assessment
-- [requirements-trace](../../tasks/requirements-trace.md) - Traceability
+**Key Skills:**
+- [probe-estimation](../../../skills/probe-estimation/SKILL.md) - Story sizing
+- [test-design](../../../skills/test-design/SKILL.md) - Test strategy
+- [risk-profile](../../../skills/risk-profile/SKILL.md) - Risk assessment
+- [trace-requirements](../../../skills/trace-requirements/SKILL.md) - Traceability
 
-**Task Usage:**
-- [Core Development Cycle](../workflows/core-development-cycle.md) - Tasks in workflow
-- [SM Command](../../commands/sm.md) - Tasks in command
-- [QA Skill](../../skills/qa/SKILL.md) - Tasks in skill
+**Skill Usage:**
+- [Core Development Cycle](../workflows/core-development-cycle.md) - Skills in workflow
+- [SM Command](../../../commands/sm.md) - Skills invoked by command
 
 ---
 

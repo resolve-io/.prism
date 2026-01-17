@@ -1,0 +1,94 @@
+# PRISM Dynamic Context System
+# This manifest defines context modules and their loading triggers
+
+version: 1.0.0
+description: PRISM dynamic context discovery for project-level context management
+
+# Core context files - always loaded at session start
+core:
+  always_load:
+    - path: core/persona-rules.md
+      description: PRISM persona persistence rules
+      tokens: ~100
+    - path: core/commit-format.md
+      description: Git commit message format (PLAT-XXXX)
+      tokens: ~80
+
+# Safety context - load on destructive operation triggers
+safety:
+  on_demand:
+    - path: safety/destructive-ops.md
+      description: File deletion safeguards and incident lessons
+      tokens: ~600
+      triggers:
+        - Remove-Item
+        - rm
+        - del
+        - powershell
+        - delete
+        - rmdir
+    - path: safety/file-write-limits.md
+      description: File write chunking rules (≤30 lines)
+      tokens: ~250
+      triggers:
+        - Write
+        - large_file
+        - ">30 lines"
+    - path: safety/citation-integrity.md
+      description: Read before you cite rule
+      tokens: ~100
+      triggers:
+        - WebFetch
+        - cite
+        - reference
+        - link
+
+# Workflow context - load for specific activities
+workflows:
+  on_demand:
+    - path: workflows/git-branching.md
+      description: Git branch naming and push policy
+      tokens: ~220
+      triggers:
+        - git branch
+        - git checkout
+        - git push
+        - create branch
+    - path: workflows/code-review.md
+      description: PR review persistence rules
+      tokens: ~320
+      triggers:
+        - gh pr
+        - code review
+        - review-pr
+        - pull request
+
+# Project-specific context - customize per project
+project:
+  on_demand:
+    - path: project/architecture.md
+      description: Project-specific architecture notes
+      tokens: ~variable
+      triggers:
+        - architecture
+        - design
+        - structure
+
+# Cache folders for runtime data (gitignored)
+cache:
+  mcp_responses: cache/mcp-responses/
+  terminal_logs: cache/terminal-logs/
+  session_history: cache/session-history/
+
+# Usage instructions
+usage: |
+  Context modules load automatically based on triggers or can be read manually.
+
+  To list available context:
+    cat .context/index.yaml
+
+  To read a specific module:
+    cat .context/core/persona-rules.md
+
+  To check what's in cache:
+    ls .context/cache/

@@ -3,11 +3,11 @@
 ## Core Insight: Shared Artifacts as Single Source of Truth
 
 In PRISM, each agent (SM, Dev, QA, PO, Architect) works on the **same shared artifacts**:
-- [docs/prd.md](docs/prd.md) and [docs/prd/](docs/prd/) shards
-- [docs/architecture.md](docs/architecture.md) and [docs/architecture/](docs/architecture/) shards
-- [docs/stories/](docs/stories/) - individual story files
-- [docs/qa/assessments/](docs/qa/assessments/) - quality reports
-- [docs/qa/gates/](docs/qa/gates/) - gate decisions
+- `docs/prd.md` and `docs/prd/` shards
+- `docs/architecture.md` and `docs/architecture/` shards
+- `docs/stories/` - individual story files
+- `docs/qa/assessments/` - quality reports
+- `docs/qa/gates/` - gate decisions
 
 This creates a unique opportunity: **sub-agents can be artifact-specialized rather than role-specialized**.
 
@@ -112,7 +112,7 @@ As a [user] I want [feature] So that [benefit]
 - ALWAYS document changes
 - NEVER mark story "Done" (only QA can)
 - Status flow: Approved → InProgress → Review
-- Reference [docs/architecture/](docs/architecture/) for patterns
+- Reference `docs/architecture/` for patterns
 - Follow coding standards from architecture
 
 ## Output Format

@@ -1,4 +1,4 @@
-﻿---
+---
 name: initialize-project-memory
 description: Use to set up Obsidian vault and populate it with existing codebase knowledge. Enables context memory for AI development.
 version: 1.0.0
@@ -6,6 +6,20 @@ version: 1.0.0
 # Task: Initialize Project Memory
 
 Set up Obsidian vault and populate it with existing codebase knowledge.
+
+## When to Use
+
+- When setting up context memory for a new project
+- When enabling AI-assisted development with persistent knowledge
+- When migrating project knowledge to Obsidian format
+- When starting a project that needs pattern tracking
+
+## Quick Start
+
+1. Install dependencies (`pip install python-frontmatter`)
+2. Run `python skills/context-memory/utils/init_vault.py`
+3. Verify vault created at `docs/memory/`
+4. Optionally configure `PRISM_OBSIDIAN_VAULT` for custom location
 
 ## Prerequisites
 

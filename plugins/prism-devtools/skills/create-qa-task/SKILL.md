@@ -1,4 +1,4 @@
-﻿---
+---
 name: create-qa-task
 description: Use to create QA task documents. Generates test specifications and validation requirements for QA team.
 version: 1.0.0
@@ -8,6 +8,14 @@ version: 1.0.0
 # create-qa-task
 
 Generate a test specification document for the QA agent to implement based on validated customer issue.
+
+## Quick Start
+
+1. Review validation results (Playwright report, screenshots, errors)
+2. Create test specification with objective and scope
+3. Define test scenarios (happy path, edge cases, error conditions)
+4. Specify test data and environment requirements
+5. Package for QA agent handoff
 
 ## Purpose
 

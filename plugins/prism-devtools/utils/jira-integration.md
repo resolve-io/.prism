@@ -6,7 +6,7 @@
 
 For detailed documentation, see:
 - **[Jira Skill](../skills/jira/SKILL.md)** - Main skill documentation
-- **[Quick Start Guide](../skills/jira/README.md)** - Setup and usage
+- **[Quick Start Guide](../skills/jira/SKILL.md)** - Setup and usage
 - **[API Reference](../skills/jira/reference/api-reference.md)** - REST API details
 - **[Authentication](../skills/jira/reference/authentication.md)** - Security setup
 - **[Error Handling](../skills/jira/reference/error-handling.md)** - Troubleshooting

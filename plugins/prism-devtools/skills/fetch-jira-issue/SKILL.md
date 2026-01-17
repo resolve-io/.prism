@@ -1,4 +1,4 @@
-﻿---
+---
 name: fetch-jira-issue
 description: Use when user mentions a Jira issue key (e.g., PLAT-123) or needs context from Jira. Retrieves and formats issue details for PRISM agent workflows.
 ---
@@ -6,6 +6,14 @@ description: Use when user mentions a Jira issue key (e.g., PLAT-123) or needs c
 
 ## Purpose
 Retrieve and format Jira issue details (Epic, Story, Bug, Task) to provide context for PRISM agent workflows.
+
+## Quick Start
+
+1. Detect or receive Jira issue key (e.g., PLAT-123)
+2. Load Jira config from `core-config.yaml`
+3. Call Jira REST API via curl
+4. Format response for PRISM workflow context
+5. Return structured issue details
 
 ## When to Use
 - User mentions a Jira issue key (e.g., PLAT-123)

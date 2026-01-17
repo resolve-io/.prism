@@ -445,4 +445,4 @@ Adjust verbosity based on use case:
 
 ## Examples
 
-See [Examples](../../../shared/reference/examples.md#jira-workflows) for complete real-world extraction examples.
+See the main [Jira SKILL.md](../SKILL.md) for complete real-world extraction examples.

@@ -80,7 +80,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 > **Goal:** Implement features with automated quality checks and TDD workflow
 
-**🎯 Entry Point:** [Core Development Workflow](./reference/workflows/core-development-cycle.md#development-execution-cycle-brownfield-focus)
+**🎯 Entry Point:** [Core Development Workflow](./reference/workflows/core-development-cycle.md#brownfield-workflow-patterns)
 
 **⌨️ Commands:**
 ```bash
@@ -100,7 +100,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 > **Goal:** Plan and size stories with PSP/PROBE estimation
 
-**🎯 Entry Point:** [Planning Phase](./reference/workflows/core-development-cycle.md#planning-phase)
+**🎯 Entry Point:** [Planning Phase](./reference/workflows/core-development-cycle.md#1-story-approval-after-planning)
 
 **⌨️ Commands:**
 ```bash
@@ -109,7 +109,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 **🛠️ Key Tools:**
 - **Sub-agents:** `story-structure-validator`, `story-content-validator`, `epic-alignment-checker`, `architecture-compliance-checker`, `epic-analyzer`
-- **Tasks:** [PROBE Estimation](../tasks/probe-estimation.md)
+- **Skills:** [PROBE Estimation](../skills/probe-estimation/SKILL.md)
 - **Checklists:** [Story Draft](../checklists/story-draft-checklist.md)
 
 📖 **Learn More:** [SM Command](../commands/sm.md)
@@ -120,7 +120,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 > **Goal:** Design test strategy and validate quality gates
 
-**🎯 Entry Point:** [QA Review Phase](./reference/workflows/core-development-cycle.md#qa-review-phase)
+**🎯 Entry Point:** [QA Review Phase](./reference/workflows/core-development-cycle.md#3-qa-review-optional-but-recommended)
 
 **⌨️ Commands:**
 ```bash
@@ -129,8 +129,8 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 **🛠️ Key Tools:**
 - **Sub-agents:** `requirements-tracer`, `qa-gate-manager`
-- **Tasks:** [Test Design](../tasks/test-design.md), [Risk Profile](../tasks/risk-profile.md)
-- **Templates:** [QA Gate YAML](../templates/)
+- **Skills:** [Test Design](../skills/test-design/SKILL.md), [Risk Profile](../skills/risk-profile/SKILL.md)
+- **Templates:** [QA Gate YAML](../templates/qa-gate-tmpl.yaml)
 
 📖 **Learn More:** [QA Command](../commands/qa.md) · [QA Reference](./reference/qa/README.md)
 
@@ -142,7 +142,6 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 |------|---------|---------|
 | **🏛️ Architect** | [`/architect`](../commands/architect.md) | System design and tech decisions |
 | **📋 Product Owner** | [`/po`](../commands/po.md) | Requirements and backlog management |
-| **👁️ Peer Reviewer** | [`/peer`](../commands/peer.md) | Code review and mentoring |
 | **🆘 Support Engineer** | [`/support`](../commands/support.md) | Issue validation with Playwright |
 
 ---
@@ -253,7 +252,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 2. 🔄 Activates relevant workflows
 3. ⚙️ Provides role-specific commands (e.g., `/dev` enables `*develop-story`)
 
-📂 **All Commands:** [Commands Directory](../commands/)
+📂 **All Commands:** [Commands Directory](../commands/README.md)
 
 ---
 
@@ -263,9 +262,9 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| **📋 Tasks** | 28 | [probe-estimation](../tasks/probe-estimation.md), [test-design](../tasks/test-design.md), [risk-profile](../tasks/risk-profile.md), [+25 more](../tasks/) |
-| **📄 Templates** | Multiple | PRD, Architecture, Stories, QA Gates ([Templates](../templates/)) |
-| **✅ Checklists** | 10 | [story-draft](../checklists/story-draft-checklist.md), [code-quality](../checklists/code-quality-checklist.md), [+8 more](../checklists/) |
+| **🧩 Skills** | 28+ | [probe-estimation](../skills/probe-estimation/SKILL.md), [test-design](../skills/test-design/SKILL.md), [risk-profile](../skills/risk-profile/SKILL.md), [+more](../skills/skill-builder/SKILL.md) |
+| **📄 Templates** | Multiple | PRD, Architecture, Stories, QA Gates ([Templates](../templates/README.md)) |
+| **✅ Checklists** | 10 | [story-draft](../checklists/story-draft-checklist.md), [code-quality](../checklists/code-quality-checklist.md), [+8 more](../checklists/README.md) |
 
 ---
 
@@ -310,7 +309,7 @@ Smart Connections integration for efficient, non-duplicative documentation:
 | **📝 Planning a feature** | [`/sm`](../commands/sm.md) · [Story Checklist](../checklists/story-draft-checklist.md) |
 | **💻 Implementing code** | [`/dev`](../commands/dev.md) · [Code Quality](../checklists/code-quality-checklist.md) |
 | **✅ Testing & QA** | [`/qa`](../commands/qa.md) · [QA Reference](./reference/qa/README.md) · [Quality Gates](./reference/qa/concepts/quality-gates.md) |
-| **👁️ Code review** | [`/peer`](../commands/peer.md) · [Peer Review](../checklists/peer-review-checklist.md) |
+| **👁️ Code review** | [Peer Review Checklist](../checklists/peer-review-checklist.md) |
 
 ---
 
@@ -333,7 +332,7 @@ Complete technical reference with progressive disclosure:
 - [Overview](./reference/sub-agents/README.md) - What and how
 - [User Guide](./reference/sub-agents/user-guide.md) - Workflows by role
 - [Quick Reference](./reference/sub-agents/quick-reference.md) - One-page cheat sheet
-- [Implementation](./reference/sub-agents/implementation/) - Technical specs
+- [Implementation](./reference/sub-agents/implementation/README.md) - Technical specs
 
 ### ✅ QA System
 - [QA Overview](./reference/qa/README.md) - Quality assurance in PRISM
@@ -361,7 +360,7 @@ Complete technical reference with progressive disclosure:
 
 | Issue Area | Resource |
 |------------|----------|
-| **🤖 Sub-agents** | [Quick Reference](./reference/sub-agents/quick-reference.md#common-issues--quick-fixes) |
+| **🤖 Sub-agents** | [Quick Reference](./reference/sub-agents/quick-reference.md#common-issues-quick-fixes) |
 | **🔄 Workflows** | [Workflow README](./reference/workflows/README.md#troubleshooting) |
 | **🪝 Hooks** | [Hooks README](../hooks/README.md#troubleshooting) |
 

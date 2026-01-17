@@ -348,7 +348,6 @@ jira:
 - Assume issue data is always current
 - Modify Jira issues (read-only integration)
 
-→ [Best Practices Guide](../../shared/reference/best-practices.md#jira-integration)
 
 ## Example Implementation
 
@@ -383,17 +382,11 @@ print(fields['summary'])
 
 Core references (loaded as needed):
 
+- **[Quick Reference](./reference/README.md)** - Setup guide and quick start
 - **[API Reference](./reference/api-reference.md)** - Jira REST API endpoints and curl usage
 - **[Extraction Format](./reference/extraction-format.md)** - Issue data formatting and structure
 - **[Authentication](./reference/authentication.md)** - Security and credential management
 - **[Error Handling](./reference/error-handling.md)** - Handling API errors gracefully
-
-Shared references:
-
-- **[Commands (All Skills)](../../shared/reference/commands.md)** - Complete command reference
-- **[Dependencies (All Skills)](../../shared/reference/dependencies.md)** - Integration and file structure
-- **[Examples](../../shared/reference/examples.md)** - Real-world Jira integration workflows
-- **[Best Practices](../../shared/reference/best-practices.md)** - Security, privacy, and workflow practices
 
 ## Common Questions
 

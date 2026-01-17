@@ -1,4 +1,4 @@
-﻿---
+---
 name: create-dev-task
 description: Use to generate development task documents for the Dev agent. Creates specifications describing WHAT needs fixing based on validated issues and investigations.
 version: 1.0.0
@@ -8,6 +8,21 @@ version: 1.0.0
 # create-dev-task
 
 Generate a development task document for the Dev agent to implement based on validated issue and investigation.
+
+## When to Use
+
+- After QA or Support has validated and investigated an issue
+- When a bug needs to be assigned to the Dev agent
+- Before sprint planning to prepare development specifications
+- When creating fix specifications from customer-reported issues
+
+## Quick Start
+
+1. Gather investigation results (validation report, root cause, affected components)
+2. Create dev task document with problem statement
+3. Define fix requirements (functional and non-functional)
+4. Add risk assessment and deployment considerations
+5. Package handoff notes for Dev agent
 
 ## Purpose
 

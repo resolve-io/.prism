@@ -1,21 +1,25 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "prism",
+  "version": "2.0.0",
   "description": "Claude Code plugins for the PRISM development methodology",
   "owner": {
-    "name": "Resolve",
+    "name": "Resolve Systems",
     "email": "jesse@resolve.io"
   },
   "plugins": [
     {
       "name": "prism-devtools",
-      "description": "Comprehensive development toolkit for building Claude Code plugins and skills with progressive disclosure patterns, validation tools, PRISM methodology agents, and Obsidian-powered long-term memory with Smart Connections semantic search",
+      "description": "Comprehensive development toolkit for building Claude Code plugins and skills with progressive disclosure patterns, validation tools, PRISM methodology agents (SM, Dev, QA, PO, Architect), TDD workflow orchestration, and Obsidian-powered long-term memory with Smart Connections semantic search",
       "source": "./",
-      "version": "1.7.4",
+      "version": "2.0.0",
       "author": {
-        "name": "PRISM Development Team"
+        "name": "Resolve Systems",
+        "email": "jesse@resolve.io"
       },
       "homepage": "https://github.com/resolve-io/.prism",
       "license": "MIT",
+      "category": "development",
       "keywords": [
         "skill-builder",
         "validation",
@@ -31,8 +35,7 @@
         "memory",
         "knowledge-management",
         "smart-connections",
-        "semantic-search",
-        "ai-embeddings"
+        "semantic-search"
       ]
     }
   ]

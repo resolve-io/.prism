@@ -481,7 +481,7 @@ PRISM provides a skill to manage hooks:
 - Security validation
 - Integration examples
 
-**Learn more:** [Hooks Manager](../../skills/hooks-manager/SKILL.md)
+**Learn more:** [Hooks Manager](../../../skills/hooks-manager/SKILL.md)
 
 ---
 
@@ -503,19 +503,19 @@ PRISM provides a skill to manage hooks:
 - **[Slash Commands](./slash-commands.md)** - Commands that hooks can validate
 - **[Skills](./skills.md)** - Skills that trigger hooks
 - **[Workflows](./workflows.md)** - Workflow phases hooks enforce
-- **[Hooks Manager](../../skills/hooks-manager/SKILL.md)** - Tool for creating hooks
+- **[Hooks Manager](../../../skills/hooks-manager/SKILL.md)** - Tool for creating hooks
 
 ---
 
 ## Examples in PRISM
 
 **Hook Implementations:**
-- [enforce-story-context.py](../../hooks/enforce-story-context.py)
-- [track-current-story.py](../../hooks/track-current-story.py)
-- [Hooks README](../../hooks/README.md)
+- [enforce-story-context.py](../../../hooks/enforce-story-context.py)
+- [track-current-story.py](../../../hooks/track-current-story.py)
+- [Hooks README](../../../hooks/README.md)
 
 **Hook Manager:**
-- [Hooks Manager Skill](../../skills/hooks-manager/SKILL.md)
+- [Hooks Manager Skill](../../../skills/hooks-manager/SKILL.md)
 
 ---
 

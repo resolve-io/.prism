@@ -277,6 +277,11 @@ Story file: {state.get('story_file', 'unknown')}"""
     return {"valid": True, "message": "Unknown validation type", "continue_instruction": None}
 
 
+def get_session_id() -> str:
+    """Get unique session identifier from Claude Code SSE port."""
+    return os.environ.get("CLAUDE_CODE_SSE_PORT", "unknown")
+
+
 def parse_frontmatter(content: str) -> dict:
     """Parse YAML frontmatter from state file."""
     result = {
@@ -289,6 +294,7 @@ def parse_frontmatter(content: str) -> dict:
         "prompt": "",
         "started_at": "",
         "last_activity": "",
+        "session_id": "",
     }
 
     match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
@@ -322,8 +328,28 @@ def parse_frontmatter(content: str) -> dict:
                 result["started_at"] = value
             elif key == "last_activity":
                 result["last_activity"] = value
+            elif key == "session_id":
+                result["session_id"] = value
 
     return result
+
+
+def is_same_session(state: dict) -> bool:
+    """
+    Check if the PRISM loop belongs to THIS session.
+
+    Prevents cross-session pollution when multiple Claude Code
+    terminals are running in the same working directory.
+    """
+    stored_session = state.get("session_id", "")
+    current_session = get_session_id()
+
+    # If no session_id stored (old format), allow for backwards compatibility
+    # but warn that this is risky
+    if not stored_session:
+        return True
+
+    return stored_session == current_session
 
 
 def is_workflow_stale(state: dict, stale_hours: int = 2) -> bool:
@@ -419,16 +445,42 @@ Command:
     return messages.get(step_id, f"Gate: {step_id}\n\nRun /prism-approve to continue.")
 
 
+def get_context_reminder(phase: str) -> str:
+    """Get context file reminders for each phase."""
+    context_dir = Path(".context")
+    if not context_dir.exists():
+        return ""
+
+    reminders = {
+        "planning": """
+📋 Context: Read .context/core/persona-rules.md for persona guidelines
+📋 Context: Read .context/core/commit-format.md for commit message format""",
+        "red": """
+📋 Context: Read .context/core/persona-rules.md for persona guidelines
+📋 Context: Read .context/safety/file-write-limits.md if writing large test files""",
+        "green": """
+📋 Context: Read .context/core/persona-rules.md for persona guidelines
+📋 Context: Read .context/safety/destructive-ops.md before any file deletions
+📋 Context: Read .context/safety/file-write-limits.md for file write limits""",
+        "review": """
+📋 Context: Read .context/workflows/git-branching.md before committing
+📋 Context: Read .context/workflows/code-review.md for PR review rules""",
+    }
+    return reminders.get(phase, "")
+
+
 def build_agent_instruction(step_id: str, agent: str, action: str, story_file: str, prompt: str = "") -> str:
     """Build instruction for the next agent step."""
 
     review_instruction = "Execute SM agent: *planning-review\nReview previous story dev/QA notes for context before drafting new story."
     if prompt:
         review_instruction += f"\n\nWorkflow Context: {prompt}"
+    review_instruction += get_context_reminder("planning")
 
     draft_instruction = "Execute SM agent: *draft\nDraft the next story from the sharded epic and architecture documents."
     if prompt:
         draft_instruction += f"\n\nWorkflow Context: {prompt}"
+    draft_instruction += get_context_reminder("planning")
 
     instructions = {
         "review_previous_notes": review_instruction,
@@ -445,7 +497,8 @@ Process:
 5. UPDATE story with test file paths and mappings
 
 CRITICAL: Tests must FAIL cleanly (assertion failures, not errors).
-The stop hook will validate RED state before advancing.""",
+The stop hook will validate RED state before advancing.
+{get_context_reminder("red")}""",
         "implement_tasks": f"""Execute DEV agent: *develop-story
 
 TDD GREEN PHASE: Make the failing tests pass.
@@ -459,7 +512,8 @@ Tests exist and are FAILING. Your job:
 4. Refactor while keeping tests green
 
 CRITICAL: The stop hook validates that ALL tests pass.
-Do NOT stop until tests are GREEN.""",
+Do NOT stop until tests are GREEN.
+{get_context_reminder("green")}""",
         "verify_green_state": f"""Execute QA agent: *verify-green-state {story_file}
 
 TDD GREEN STATE VERIFICATION: Confirm implementation is complete.
@@ -471,7 +525,8 @@ Process:
 4. RUN type checks (if applicable)
 5. VERIFY build succeeds
 
-The stop hook validates tests + lint before advancing to completion gate.""",
+The stop hook validates tests + lint before advancing to completion gate.
+{get_context_reminder("review")}""",
     }
 
     return instructions.get(step_id, f"Execute {agent} agent: *{action}")
@@ -538,6 +593,12 @@ def main():
 
     if not state["active"]:
         cleanup()
+        sys.exit(0)
+
+    # Check if this PRISM loop belongs to THIS session
+    # Prevents cross-session pollution when multiple terminals share working directory
+    if not is_same_session(state):
+        # This loop belongs to a different Claude Code session - ignore it
         sys.exit(0)
 
     # Check if workflow is stale (no activity in last 2 hours)

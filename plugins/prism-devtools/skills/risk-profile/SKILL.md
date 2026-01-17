@@ -1,4 +1,4 @@
-﻿---
+---
 name: risk-profile
 version: 1.0.0
 description: Use to assess and document risk factors for stories or features. Creates risk profiles with mitigation strategies.
@@ -7,7 +7,22 @@ description: Use to assess and document risk factors for stories or features. Cr
 
 # risk-profile
 
-Generate a comprehensive risk assessment matrix for a story implementation using probability Ã— impact analysis.
+Generate a comprehensive risk assessment matrix for a story implementation using probability × impact analysis.
+
+## When to Use
+
+- During story planning to identify potential risks
+- When assessing story complexity before estimation
+- When creating mitigation strategies for high-risk features
+- As part of comprehensive story review
+
+## Quick Start
+
+1. Provide story ID and path
+2. Identify risks across categories (TECH, SEC, PERF, DATA, BUS, OPS)
+3. Rate each risk by probability and impact
+4. Generate risk matrix with mitigation strategies
+5. Document testing focus areas based on risk levels
 
 ## Inputs
 

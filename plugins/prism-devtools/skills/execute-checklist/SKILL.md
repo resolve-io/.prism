@@ -1,4 +1,4 @@
-﻿---
+---
 name: execute-checklist
 description: Use to systematically validate documents, stories, or processes against defined checklists. Ensures quality and completeness.
 version: 1.0.0
@@ -6,6 +6,22 @@ version: 1.0.0
 <!-- Powered by PRISMâ„¢ Core -->
 
 # Execute Checklist Task
+
+## When to Use
+
+- Before marking a story as complete (Definition of Done)
+- During sprint planning to validate completeness
+- When validating migration progress (strangler pattern)
+- Before retrospectives to ensure thoroughness
+- When reviewing draft stories for quality
+
+## Quick Start
+
+1. Identify checklist to use (or list available from `checklists/`)
+2. Choose mode: Interactive (step-by-step) or YOLO (all at once)
+3. Gather required documents/artifacts
+4. Process each checklist item
+5. Generate summary report with pass/fail status
 
 ## Purpose
 

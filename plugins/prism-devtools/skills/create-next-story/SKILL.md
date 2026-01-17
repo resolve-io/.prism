@@ -1,4 +1,4 @@
-﻿---
+---
 name: create-next-story
 description: Use to identify and prepare the next logical story based on project progress. Creates comprehensive story files with full technical context.
 version: 1.0.0
@@ -6,6 +6,21 @@ version: 1.0.0
 <!-- Powered by PRISMâ„¢ System -->
 
 # Create Next Story Task
+
+## When to Use
+
+- When ready to start the next development story
+- After completing the current story (status: Done)
+- When preparing stories for sprint planning
+- When creating comprehensive context for Dev agents
+
+## Quick Start
+
+1. Load `core-config.yaml` for project settings
+2. Find highest story file and check completion status
+3. Identify next sequential story/task number
+4. Gather requirements and previous story context
+5. Generate story file with full technical context
 
 ## Purpose
 

@@ -824,9 +824,9 @@ To create YOUR skill from this template:
 
 ## 📚 Related Resources
 
-- [Agent Skills Best Practices](../best-practices.md) - Quick reference
-- [Progressive Disclosure](../topics/progressive-disclosure.md) - Design philosophy
-- [Token Optimization](../README.md#token-optimized-structure) - Token limits explained
+- [Quick Reference](./quick-reference.md) - Best practices at a glance
+- [Progressive Disclosure](./progressive-disclosure.md) - Design philosophy
+- [Philosophy Guide](./philosophy.md) - Token optimization explained
 
 ---
 

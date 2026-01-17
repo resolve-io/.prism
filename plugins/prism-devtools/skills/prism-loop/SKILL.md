@@ -9,6 +9,15 @@ author: PRISM
 
 TDD-driven workflow orchestration using the Ralph Wiggum self-referential loop pattern.
 
+## Quick Start
+
+1. Run `*prism-loop [your context/prompt]`
+2. SM agent reviews previous notes and drafts story
+3. QA agent writes failing tests (TDD RED)
+4. Red gate pauses for `/prism-approve`
+5. DEV agent implements tasks (TDD GREEN)
+6. QA verifies green state, green gate completes
+
 ## When to Use
 
 - User wants to run the PRISM core development cycle

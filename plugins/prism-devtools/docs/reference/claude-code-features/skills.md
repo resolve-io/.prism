@@ -86,7 +86,6 @@ Full context maintained
 | `prism-devtools:dev` | "implement", "write code", "TDD" | `/dev` |
 | `prism-devtools:qa` | "test strategy", "quality review" | `/qa` |
 | `prism-devtools:po` | "requirements", "backlog" | `/po` |
-| `prism-devtools:peer` | "review this code", "mentor" | `/peer` |
 | `prism-devtools:support` | "reproduce issue", "validate bug" | `/support` |
 
 ### Plugin-Specific Skills
@@ -329,7 +328,7 @@ PRISM provides a skill to build skills:
 - Token budget analysis
 - Integration examples
 
-**Learn more:** [Skill Builder](../../skills/skill-builder/SKILL.md)
+**Learn more:** [Skill Builder](../../../skills/skill-builder/SKILL.md)
 
 ---
 
@@ -355,7 +354,6 @@ PRISM provides a skill to build skills:
 - `/sm` (plan) → `/dev` (implement) → `/qa` (validate)
 
 ✅ **Precise control**: No ambiguity needed
-- `/peer` for code review
 - `/support` for issue validation
 
 ✅ **Scripting**: Automation sequences
@@ -428,21 +426,23 @@ whenToUse: |
 - **[Slash Commands](./slash-commands.md)** - Manual alternatives to skills
 - **[Hooks](./hooks.md)** - Enforce skill-specific rules
 - **[Workflows](./workflows.md)** - Multi-skill orchestration
-- **[Skill Builder](../../skills/skill-builder/SKILL.md)** - Tool for creating skills
+- **[Skill Builder](../../../skills/skill-builder/SKILL.md)** - Tool for creating skills
 
 ---
 
 ## Examples in PRISM
 
-**Skill Implementations:**
-- [Dev Skill](../../skills/dev/SKILL.md)
-- [QA Skill](../../skills/qa/SKILL.md)
-- [SM Skill](../../skills/sm/SKILL.md)
-- [Architect Skill](../../skills/architect/SKILL.md)
+> **Note:** Agent personas (`/dev`, `/qa`, `/sm`, `/architect`) are **slash commands**, not skills. See [Slash Commands](./slash-commands.md).
 
-**Skill Builder:**
-- [Skill Builder](../../skills/skill-builder/SKILL.md)
-- [Creation Process](../../skills/skill-builder/reference/skill-creation-process.md)
+**Meta-Skills:**
+- [Skill Builder](../../../skills/skill-builder/SKILL.md) - Create new skills
+- [Hooks Manager](../../../skills/hooks-manager/SKILL.md) - Manage hooks
+- [Agent Builder](../../../skills/agent-builder/SKILL.md) - Create subagents
+
+**Task Skills:**
+- [QA Gate](../../../skills/qa-gate/SKILL.md) - Quality gate creation
+- [Test Design](../../../skills/test-design/SKILL.md) - Test planning
+- [Risk Profile](../../../skills/risk-profile/SKILL.md) - Risk assessment
 
 ---
 

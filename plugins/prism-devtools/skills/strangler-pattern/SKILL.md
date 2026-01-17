@@ -1,4 +1,4 @@
-﻿---
+---
 name: strangler-pattern
 version: 1.0.0
 description: Use when implementing strangler pattern for legacy migrations. Safely migrates controllers with feature flag control.

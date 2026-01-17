@@ -440,7 +440,7 @@ This is an overview. For complete details:
 ## Examples in PRISM
 
 **All 10 Sub-Agents:**
-- [.claude/agents/](../../.claude/agents/) directory
+- [agents/](../../../agents/) directory
 
 **Workflow Integration:**
 - [Core Development Cycle](../workflows/core-development-cycle.md)

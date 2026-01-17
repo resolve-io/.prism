@@ -1,4 +1,4 @@
-﻿---
+---
 name: create-epic
 description: Use when creating new Epic documents. Groups related user stories, includes risk analysis, integration points, and story breakdown with PROBE estimation.
 version: 1.0.0
@@ -6,6 +6,23 @@ version: 1.0.0
 # <!-- Powered by PRISMâ„¢ System -->
 
 # Create Epic Task
+
+## When to Use
+
+- When starting a new major feature or initiative
+- When grouping related user stories into a cohesive unit
+- When breaking down PRD requirements into epics
+- When planning multi-sprint work packages
+- When defining business value delivery milestones
+
+## Quick Start
+
+1. Load core configuration from `core-config.yaml`
+2. Identify epic source (PRD or new requirement)
+3. Gather epic details (title, business value, constraints)
+4. Perform risk analysis and integration mapping
+5. Break down into stories with PROBE estimation
+6. Generate epic document with story breakdown
 
 ## Purpose
 
