@@ -77,7 +77,7 @@ Returns JSON to stdout. See [output format](./reference/output-format.md) for sc
 The link-checker agent can invoke this script to verify its findings:
 
 ```bash
-python validate-refs.py --json-only
+python validate-refs.py
 ```
 
-This provides deterministic validation to complement the agent's AI-based scanning.
+JSON is the default (and only) output format, providing deterministic validation to complement the agent's AI-based scanning.
