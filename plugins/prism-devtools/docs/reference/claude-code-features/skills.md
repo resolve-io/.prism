@@ -108,7 +108,7 @@ Full context maintained
 ---
 name: skill-name
 description: Brief one-liner
-version: 1.7.1
+version: 2.2.0
 ---
 
 # Skill Name - Brief Title
@@ -446,5 +446,5 @@ whenToUse: |
 
 ---
 
-**Last Updated**: 2025-11-10
-**PRISM Version**: 1.7.1
+**Last Updated**: 2026-02-06
+**PRISM Version**: 2.2.0

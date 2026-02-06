@@ -16,6 +16,8 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from prism_loop_context import build_agent_instruction, detect_project_conventions
+
 # State file location
 STATE_FILE = Path(".claude/prism-loop.local.md")
 
@@ -445,93 +447,6 @@ Command:
     return messages.get(step_id, f"Gate: {step_id}\n\nRun /prism-approve to continue.")
 
 
-def get_context_reminder(phase: str) -> str:
-    """Get context file reminders for each phase."""
-    context_dir = Path(".context")
-    if not context_dir.exists():
-        return ""
-
-    reminders = {
-        "planning": """
-📋 Context: Read .context/core/persona-rules.md for persona guidelines
-📋 Context: Read .context/core/commit-format.md for commit message format""",
-        "red": """
-📋 Context: Read .context/core/persona-rules.md for persona guidelines
-📋 Context: Read .context/safety/file-write-limits.md if writing large test files""",
-        "green": """
-📋 Context: Read .context/core/persona-rules.md for persona guidelines
-📋 Context: Read .context/safety/destructive-ops.md before any file deletions
-📋 Context: Read .context/safety/file-write-limits.md for file write limits""",
-        "review": """
-📋 Context: Read .context/workflows/git-branching.md before committing
-📋 Context: Read .context/workflows/code-review.md for PR review rules""",
-    }
-    return reminders.get(phase, "")
-
-
-def build_agent_instruction(step_id: str, agent: str, action: str, story_file: str, prompt: str = "") -> str:
-    """Build instruction for the next agent step."""
-
-    review_instruction = "Execute SM agent: *planning-review\nReview previous story dev/QA notes for context before drafting new story."
-    if prompt:
-        review_instruction += f"\n\nWorkflow Context: {prompt}"
-    review_instruction += get_context_reminder("planning")
-
-    draft_instruction = "Execute SM agent: *draft\nDraft the next story from the sharded epic and architecture documents."
-    if prompt:
-        draft_instruction += f"\n\nWorkflow Context: {prompt}"
-    draft_instruction += get_context_reminder("planning")
-
-    instructions = {
-        "review_previous_notes": review_instruction,
-        "draft_story": draft_instruction,
-        "write_failing_tests": f"""Execute QA agent: *write-failing-tests {story_file}
-
-TDD RED PHASE: Write failing tests BEFORE implementation.
-
-Process:
-1. IDENTIFY existing tests covering affected code areas
-2. EXTEND existing test files if found, CREATE new if not
-3. WRITE failing tests for each acceptance criterion
-4. RUN tests to confirm they FAIL (assertion failures only)
-5. UPDATE story with test file paths and mappings
-
-CRITICAL: Tests must FAIL cleanly (assertion failures, not errors).
-The stop hook will validate RED state before advancing.
-{get_context_reminder("red")}""",
-        "implement_tasks": f"""Execute DEV agent: *develop-story
-
-TDD GREEN PHASE: Make the failing tests pass.
-
-Story file: {story_file}
-
-Tests exist and are FAILING. Your job:
-1. Write MINIMAL code to make each test pass
-2. Run tests after each change
-3. Continue until ALL tests pass
-4. Refactor while keeping tests green
-
-CRITICAL: The stop hook validates that ALL tests pass.
-Do NOT stop until tests are GREEN.
-{get_context_reminder("green")}""",
-        "verify_green_state": f"""Execute QA agent: *verify-green-state {story_file}
-
-TDD GREEN STATE VERIFICATION: Confirm implementation is complete.
-
-Process:
-1. RUN all tests (unit, integration, e2e)
-2. VERIFY all tests PASS
-3. RUN linting checks
-4. RUN type checks (if applicable)
-5. VERIFY build succeeds
-
-The stop hook validates tests + lint before advancing to completion gate.
-{get_context_reminder("review")}""",
-    }
-
-    return instructions.get(step_id, f"Execute {agent} agent: *{action}")
-
-
 def cleanup():
     """Remove state file."""
     if STATE_FILE.exists():
@@ -680,7 +595,8 @@ def main():
     updated_content = update_state_file(content, updates)
     STATE_FILE.write_text(updated_content, encoding='utf-8')
 
-    instruction = build_agent_instruction(next_step_id, next_agent, next_action, state["story_file"], state["prompt"])
+    runner = detect_test_runner()
+    instruction = build_agent_instruction(next_step_id, next_agent, next_action, state["story_file"], state["prompt"], runner)
     print(json.dumps({
         "decision": "block",
         "reason": f"[PRISM - Step {next_index + 1}/{len(WORKFLOW_STEPS)}: {next_step_id}]\n\n{instruction}"

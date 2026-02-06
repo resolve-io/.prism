@@ -38,6 +38,122 @@ devLoadAlwaysFiles:
   - docs/architecture/tech-stack.md
   - docs/architecture/source-tree.md
 devDebugLog: .ai/debug-log.md
+
+# File-First Architecture Settings
+# Direct file access patterns for AI agents - no RAG, no vector databases
+fileFirst:
+  enabled: true
+  # Project-specific file patterns for context loading
+  projectPatterns:
+    dotnet_backend:
+      keyFiles:
+        - "*.csproj"
+        - "Program.cs"
+        - "appsettings.json"
+      architectureDocs:
+        - "docs/architecture/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/Program.cs"
+        - "**/Startup.cs"
+    react_frontend:
+      keyFiles:
+        - "package.json"
+        - "tsconfig.json"
+        - "vite.config.ts"
+      architectureDocs:
+        - "docs/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/src/main.tsx"
+        - "**/src/index.tsx"
+        - "**/src/App.tsx"
+      components:
+        - "**/src/components/**/*"
+        - "**/src/pages/**/*"
+        - "**/src/hooks/**/*"
+        - "**/src/context/**/*"
+        - "**/src/store/**/*"
+      styles:
+        - "**/src/styles/**/*"
+        - "**/tailwind.config.*"
+    nextjs_fullstack:
+      keyFiles:
+        - "package.json"
+        - "next.config.js"
+        - "tsconfig.json"
+      architectureDocs:
+        - "docs/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/app/layout.tsx"
+        - "**/app/page.tsx"
+        - "**/pages/_app.tsx"
+        - "**/pages/index.tsx"
+      components:
+        - "**/components/**/*"
+        - "**/lib/**/*"
+    typescript_backend:
+      keyFiles:
+        - "package.json"
+        - "tsconfig.json"
+      architectureDocs:
+        - "docs/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/src/index.ts"
+        - "**/src/server.ts"
+        - "**/src/app.ts"
+    python_backend:
+      keyFiles:
+        - "requirements.txt"
+        - "pyproject.toml"
+      architectureDocs:
+        - "docs/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/main.py"
+        - "**/app.py"
+    java_backend:
+      keyFiles:
+        - "pom.xml"
+        - "build.gradle"
+      architectureDocs:
+        - "docs/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/*Application.java"
+    go_backend:
+      keyFiles:
+        - "go.mod"
+      architectureDocs:
+        - "docs/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/main.go"
+    rust_backend:
+      keyFiles:
+        - "Cargo.toml"
+      architectureDocs:
+        - "docs/**/*.md"
+        - "README.md"
+      entryPoints:
+        - "**/main.rs"
+        - "**/lib.rs"
+
+  # Context loading order for agents
+  contextLoadingOrder:
+    - config           # core-config.yaml
+    - architecture     # docs/architecture/
+    - story            # current story file
+    - related_code     # files from story File List
+
+  # File-first validation rules
+  validation:
+    requireSourceCitations: true
+    requireFileListInStory: true
+    warnOnAssumedContent: true
+    checkArchitectureReferences: true
 devStoryLocation: docs/stories
 slashPrefix: prism
 jira:

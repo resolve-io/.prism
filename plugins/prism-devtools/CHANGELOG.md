@@ -5,6 +5,229 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-02-06
+
+### Added
+- **Comprehensive Documentation Audit** — Multi-agent audit identified and resolved 75 undocumented features across the plugin
+  - Full feature gap analysis comparing filesystem (v2.1.0) against documented CHANGELOG (v1.7.4)
+  - Stale content audit across 42 markdown files with 247 link validations
+  - Automated link-checker validation confirming zero broken references post-fix
+
+### Changed
+- **CHANGELOG.md** — Backfilled 4 missing version entries (v1.8.0, v1.9.0, v2.0.0, v2.1.0) covering all previously undocumented features
+  - v1.8.0: Strangler pattern, SDLC handoff, estimation skills, requirements tracing
+  - v1.9.0: 8 templates, 9 checklists, 8 hooks
+  - v2.0.0: 11 sub-agents, file-first architecture, PRISM loop introduction
+  - v2.1.0: prism-loop v3.3.0 maturity, Orca integration, Jira v2.2.0
+
+- **docs/index.md** — Updated to reflect actual plugin state
+  - Version header: 1.7.4 → 2.2.0
+  - Skills count: 28 → 38
+  - Sub-agents count: 10 → 11 (added link-checker)
+  - Commands count: 7 → 13 (added file-first, prism-approve, prism-loop, prism-reject, prism-status, cancel-prism)
+  - Templates count: "Multiple" → 16
+  - Added "What's New in v2.1.0" section
+  - Fixed broken archive/README.md link (replaced with consolidation note)
+
+- **Version References** — Updated 14 stale version references across 13 documentation files
+  - All `PRISM Version: 1.7.x` → `PRISM Version: 2.2.0`
+  - All `Last Updated` dates → `2026-02-06`
+  - Files updated: README.md, docs/reference/README.md, 6 Claude Code feature tutorials, 3 sub-agent docs, claude-code-overview guide, slash-commands tutorial
+
+### Fixed
+- **Broken Link** — Removed dead reference to `./archive/README.md` in docs/index.md (directory never existed)
+- **Documentation Coverage** — Increased from ~31% to 100% of features documented in CHANGELOG
+
+### Validated
+- Link-checker agent confirmed 247/247 links valid (100%) across 42 files
+- All version references consistent at 2.2.0
+- All feature counts match actual filesystem inventory
+
+## [2.1.0] - 2026-02-06
+
+### Added
+- **prism-loop v3.3.0 Maturity** — TDD workflow orchestration reaches production stability
+  - Ralph Wiggum self-referential loop pattern fully stabilized
+  - Planning, TDD RED, TDD GREEN, and Review phases with seamless auto-progression
+  - Gate-based approval system across SM, QA, and DEV agents
+  - Passive context plans for maintaining state across long-running loops
+
+- **Orca Integration Suite** — Full local development and API testing for Orca platform
+  - **orca-local-setup v1.0.0** — .NET Aspire local development setup, validation, and troubleshooting
+    - Docker, .NET 9, Aspire Dashboard, Redis, SQL, MariaDB, Keycloak, RabbitMQ support
+  - **orca-api-test v1.0.0** — API health checks, endpoint discovery, Keycloak auth integration
+    - Feature flag CRUD operations with automated PowerShell scripts
+
+- **prism-status Command** — Real-time status reporting for active PRISM loop sessions
+- **cancel-prism Command** — Graceful cancellation of in-progress PRISM loop workflows
+
+### Changed
+- **Jira Skill v2.2.0** — Major version bump from v1.7.4 to v2.2.0
+  - Enhanced integration with PRISM loop workflow phases
+  - Improved issue context enrichment for sub-agent validators
+
+### Enhanced
+- **PRISM Loop Resilience** — Improved error recovery and state persistence
+  - Better handling of agent transitions during gate failures
+  - Passive context plans reduce token overhead in long sessions
+
+---
+
+## [2.0.0] - 2025-12-20
+
+### Added
+- **Sub-Agents System** — 11 specialized validation sub-agents (MAJOR)
+  - **architecture-compliance-checker** — Validates code changes against architecture decisions and constraints
+  - **epic-alignment-checker** — Ensures stories align with parent epic goals and acceptance criteria
+  - **epic-analyzer** — Deep analysis of epic scope, dependencies, and decomposition quality
+  - **file-list-auditor** — Audits file changes for completeness, naming conventions, and structure
+  - **link-checker** — Validates all internal and external links in documentation and code comments
+  - **lint-checker** — Runs and reports lint results across supported languages and frameworks
+  - **qa-gate-manager** — Orchestrates quality gate decisions with evidence-based pass/fail
+  - **requirements-tracer** — Traces requirements through implementation to test coverage
+  - **story-content-validator** — Validates story content quality, completeness, and clarity
+  - **story-structure-validator** — Ensures stories follow required structural format and sections
+  - **test-runner** — Executes test suites and reports results with failure analysis
+
+- **file-first v1.0.0** — Direct file access architecture for codebase analysis
+  - Bypasses RAG for deterministic, complete file reads
+  - Project type detection: dotnet, react, nextjs, python, node, java, go, and more
+  - Intelligent file prioritization based on project structure
+  - Eliminates context loss from embedding-based retrieval
+
+- **PRISM Loop Introduction** — TDD workflow orchestration system (initial release)
+  - **prism-loop.md** command — Launch and manage PRISM TDD loop sessions
+  - **prism-approve.md** command — Approve gate transitions between workflow phases
+  - **prism-reject.md** command — Reject and send work back to previous phase with feedback
+  - Planning, TDD RED, TDD GREEN, Review phase lifecycle
+  - Agent auto-progression through SM, QA, DEV roles
+
+- **file-first.md Command** — Direct codebase analysis without RAG dependency
+
+### Changed
+- **Architecture** — Shift from RAG-dependent to file-first analysis approach
+  - Sub-agents provide modular, composable validation pipeline
+  - Each sub-agent operates independently with focused responsibility
+  - Gate-based quality system replaces monolithic review steps
+
+### Breaking Changes
+- Plugin architecture restructured for sub-agent support
+- Skill loading order updated to accommodate sub-agent dependencies
+- Configuration schema extended with sub-agent and loop settings
+
+---
+
+## [1.9.0] - 2025-12-05
+
+### Added
+- **Templates Expansion** — 8 new workflow templates for consistent output
+  - **dev-task-tmpl.yaml** — Structured developer task definition and tracking
+  - **qa-task-tmpl.yaml** — QA task definition with test scope and coverage targets
+  - **failing-test-tmpl.yaml** — Failing test documentation with reproduction steps and expected behavior
+  - **qa-gate-tmpl.yaml** — Quality gate decision template with evidence sections
+  - **peer-review-report-tmpl.yaml** — Peer review findings, severity ratings, and recommendations
+  - **code-feedback-tmpl.yaml** — Structured code feedback with inline reference support
+  - **architecture-review-tmpl.yaml** — Architecture review with compliance scoring
+  - **sdlc-handoff-tmpl.yaml** — SDLC phase transition handoff package template
+
+- **Checklists Library** — 9 new quality and process checklists
+  - **architect-checklist.md** — Architecture review validation checklist
+  - **change-checklist.md** — Change impact assessment and rollback planning
+  - **code-quality-checklist.md** — Code quality standards verification
+  - **documentation-quality-checklist.md** — Documentation completeness and accuracy checks
+  - **peer-review-checklist.md** — Peer review process and criteria checklist
+  - **po-master-checklist.md** — Product Owner story mastery validation
+  - **story-dod-checklist.md** — Story Definition of Done verification
+  - **story-draft-checklist.md** — Story draft quality and completeness checklist
+  - **strangler-migration-checklist.md** — Strangler pattern migration step-by-step validation
+
+- **Hooks Additions** — 8 new lifecycle and automation hooks
+  - **capture-session-history.py** — Captures session conversation history for audit trails
+  - **consolidate-story-learnings.py** — Aggregates learnings from completed stories into knowledge base
+  - **context-loader.py** — Pre-loads relevant context at session start based on active work
+  - **log-terminal-output.py** — Logs terminal command output for debugging and compliance
+  - **prism_stop_hook.py** — Cleanup and state persistence when PRISM sessions end
+  - **save-large-responses.py** — Persists large Claude responses to prevent context window overflow
+  - Obsidian integration variants for hooks with vault-aware file routing
+
+### Enhanced
+- **Template System** — Unified YAML-based template format across all templates
+  - Consistent frontmatter metadata (version, author, created, tags)
+  - Variable substitution support for dynamic content generation
+  - Template inheritance for shared sections across related templates
+
+- **Checklist Framework** — Standardized markdown checklist format
+  - Severity-tagged items (critical, important, recommended)
+  - Section-based organization with completion tracking
+  - Cross-references to related skills, templates, and documentation
+
+---
+
+## [1.8.0] - 2025-11-28
+
+### Added
+- **strangler-pattern v1.0.0** — Strangler pattern implementation skill
+  - Controller migration strategies with incremental replacement
+  - Feature flag integration for gradual traffic shifting
+  - Rollback procedures for failed migrations
+  - Real C# code patterns for .NET legacy systems
+
+- **strangler-pattern-guide v1.0.0** — Comprehensive reference guide for legacy migrations
+  - Step-by-step migration playbook with decision trees
+  - Real-world C# patterns for controller, service, and data layer migration
+  - Risk assessment framework for migration scope evaluation
+  - Before/after code examples for common migration scenarios
+
+- **strangler-pattern-migration.yaml v1.1.0** — Workflow definition for strangler migrations
+  - Orchestrated migration phases with validation gates
+  - Automated rollback triggers on failure thresholds
+  - Integration with existing PRISM quality gate system
+
+- **sdlc-handoff v1.0.0** — SDLC phase transition management skill
+  - Formal handoff packages between development phases
+  - Task assignment tracking with ownership and deadlines
+  - Escalation rules for blocked or overdue transitions
+  - Integration with SM, Dev, QA, and PO agent workflows
+
+- **probe-estimation v1.0.0** — PROBE sizing method implementation
+  - Historical data-driven size estimation
+  - Story point mapping with confidence intervals
+  - Calibration support for team velocity normalization
+  - Integration with Story Master epic decomposition
+
+- **story-decomposition v1.0.0** — Story breakdown skill
+  - Breaks stories estimated at 3+ days into 1-3 day stories
+  - PROBE validation for each decomposed story
+  - Dependency mapping between child stories
+  - Preserves traceability to parent story and epic
+
+- **trace-requirements v1.0.0** — Requirements traceability skill
+  - Acceptance criteria to test case mapping
+  - Coverage calculation with gap identification
+  - Bidirectional traceability matrix generation
+  - Integration with QA gate validation
+
+- **validate-issue v1.0.0** — Issue validation skill with browser automation
+  - Playwright-based browser automation for visual validation
+  - Screenshot capture as evidence artifacts
+  - Automated reproduction step execution
+  - Evidence packaging for QA gate submissions
+
+- **fetch-jira-issue** — Lightweight Jira fetcher companion skill
+  - Streamlined single-issue fetch for quick context lookups
+  - Companion to full Jira integration skill for simple use cases
+
+### Enhanced
+- **Development Workflow** — Expanded with estimation and decomposition capabilities
+  - Story Master can now invoke PROBE estimation during planning
+  - Automatic decomposition suggestions for oversized stories
+  - Requirements tracing integrated into QA review pipeline
+
+- **Legacy Migration Support** — First-class strangler pattern tooling
+  - Dedicated workflow, skill, guide, and checklist for migrations
+  - Feature flag patterns for safe incremental rollout
+  - Monitoring and rollback integrated into migration lifecycle
+
 ## [1.7.4] - 2025-11-20
 
 ### Added

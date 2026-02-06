@@ -440,6 +440,121 @@ Please verify:
 Proceeding without Jira context.
 ```
 
+## Windows-Specific Errors
+
+### JQL Illegal Escape Sequence: `\!~`
+
+**Symptoms:**
+```
+Error: Invalid JQL query.
+JQL: project = PLAT AND summary \!~ 'Aspire'
+Details: Error in the JQL Query: '\!' is an illegal JQL escape sequence.
+```
+
+**Cause:** The `!` character in bash triggers history expansion. When someone tries to use `!~` (does not contain) in a JQL query, bash may escape it as `\!~`, which Jira rejects.
+
+**Solution:** Use JQL `NOT` keyword instead of `!~`:
+```bash
+# WRONG - bash escaping issues
+python jira_search.py "project = PLAT AND summary !~ 'Aspire'"
+
+# CORRECT - shell-safe alternative
+python jira_search.py "project = PLAT AND NOT summary ~ 'Aspire'"
+```
+
+**JQL Equivalents:**
+| Problematic | Shell-Safe Equivalent |
+|-------------|----------------------|
+| `summary !~ 'text'` | `NOT summary ~ 'text'` |
+| `status !~ 'Done'` | `NOT status ~ 'Done'` |
+| `labels !~ 'blocked'` | `NOT labels ~ 'blocked'` |
+
+### Python SyntaxError with `\!`
+
+**Symptoms:**
+```
+SyntaxError: unexpected character after line continuation character
+File "<string>", line 17
+    if key \!= 'PLAT-3274':
+            ^
+```
+
+**Cause:** Using `\!` instead of `!=` in Python code. The backslash is a line continuation character in Python, and `!` after it is invalid.
+
+**Solution:** Use `!=` for not-equal comparisons:
+```python
+# WRONG
+if key \!= 'PLAT-3274':
+
+# CORRECT
+if key != 'PLAT-3274':
+```
+
+### Encoding Error (cp1252)
+
+**Symptoms:**
+```
+UnicodeDecodeError: 'charmap' codec can't decode byte...
+File "C:\...\encodings\cp1252.py", line 23, in decode
+```
+
+**Cause:** Windows default encoding (cp1252) cannot handle UTF-8 characters in Jira responses.
+
+**Solution:** Set UTF-8 encoding explicitly in Python:
+```python
+import json, sys, io
+sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+data = json.load(sys.stdin)
+```
+
+### FileNotFoundError: `/tmp/`
+
+**Symptoms:**
+```
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/jira_results.json'
+```
+
+**Cause:** Unix-style paths don't exist on Windows.
+
+**Solution:**
+- Avoid temp files when possible - pipe directly to Python
+- If temp files needed, use Windows paths: `$TEMP` or `$LOCALAPPDATA`
+
+### Environment Variables Not Loading
+
+**Symptoms:**
+- `$JIRA_EMAIL` not expanding
+- Empty or missing credentials
+
+**Solution:** Source the .env file before curl:
+```bash
+source "C:/Dev/.prism/plugins/prism-devtools/.env" && \
+curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" ...
+```
+
+### Invalid Request Payload (Search API)
+
+**Symptoms:**
+```json
+{"errorMessages": ["Invalid request payload. Refer to the REST API documentation and try again."]}
+```
+
+**Cause:** Malformed JSON body in POST request.
+
+**Solution:** Ensure valid JSON format:
+```bash
+# CORRECT - single quotes around JSON, double quotes inside
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"jql":"project = PLAT","maxResults":20,"fields":["key","summary"]}'
+
+# WRONG - missing Content-Type header
+curl -X POST -d '{"jql":"..."}'
+
+# WRONG - invalid JSON syntax
+curl -X POST -H "Content-Type: application/json" \
+  -d "{'jql': 'project = PLAT'}"  # Single quotes not valid JSON
+```
+
 ## Configuration Errors
 
 ### Missing Configuration

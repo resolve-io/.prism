@@ -3,7 +3,9 @@
 Setup PRISM Workflow Loop - initializes workflow state to orchestrate agent pool.
 
 Usage:
-    python setup_prism_loop.py [--skip STEP1,STEP2] [--start-at STEP]
+    python setup_prism_loop.py [prompt]
+
+The script operates relative to the current working directory (the project folder).
 """
 
 import os
@@ -12,6 +14,12 @@ import shlex
 import shutil
 from pathlib import Path
 from datetime import datetime
+
+# Add hooks directory to path for shared module import
+PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
+from prism_loop_context import build_agent_instruction
+from prism_stop_hook import detect_test_runner
 
 STATE_DIR = Path(".claude")
 STATE_FILE = STATE_DIR / "prism-loop.local.md"
@@ -213,7 +221,8 @@ def main():
     # Check if loop already active
     if STATE_FILE.exists():
         print("Warning: PRISM workflow loop already active!")
-        print(f"State file: {STATE_FILE}")
+        print(f"State file: {STATE_FILE.absolute()}")
+        print(f"Working directory: {Path.cwd()}")
         print("Run /cancel-prism first to start a new workflow.")
         sys.exit(1)
 
@@ -244,17 +253,18 @@ def main():
     if prompt:
         print(f"Prompt: {prompt}")
         print("")
-    print("Beginning SM agent: *planning-review")
+    print("Beginning Planning Review")
     print("")
-    print(f"---")
+    print("---")
     print("")
-    # Output the instruction for SM - this is what gets fed to the agent
-    print(f"Execute SM agent with action: *planning-review")
-    if prompt:
-        print(f"")
-        print(f"Context: {prompt}")
+    # Output the self-contained instruction for SM
+    runner = detect_test_runner()
+    instruction = build_agent_instruction(
+        "review_previous_notes", "sm", "planning-review",
+        "", prompt, runner
+    )
+    print(instruction)
     print("")
-    print("Context files available at .context/")
     print("The stop hook will auto-progress through agent steps.")
     print("Gates pause for /prism-approve")
 

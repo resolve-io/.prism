@@ -44,6 +44,11 @@ CONTEXT_TRIGGERS = {
         'file': '.context/workflows/code-review.md',
         'name': 'Code Review Persistence',
         'severity': 'INFO'
+    },
+    r'analyze.*codebase|file-first|project.*structure': {
+        'file': '.context/project/architecture.md',
+        'name': 'Project Architecture',
+        'severity': 'INFO'
     }
 }
 

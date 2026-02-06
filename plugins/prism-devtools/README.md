@@ -1,6 +1,6 @@
 # PRISM Development System
 
-**Version 1.7.4** - Jira Integration & Enhanced Workflow Context
+**Version 2.2.0** - Documentation Audit & Completeness Update
 
 A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
@@ -119,11 +119,12 @@ PRISM is a software engineering methodology that combines proven practices into 
 - `/support` - Issue validation and reproduction
 
 ### Workflow Automation
-- **Hooks** - Python-based automation that enforces workflow integrity
-- **Workflows** - Multi-step orchestrated processes (YAML + Mermaid diagrams)
-- **Tasks** - 28 reusable operations (risk assessment, test design, tracing, etc.)
-- **Templates** - Document generation (PRD, stories, architecture, QA gates)
-- **Checklists** - 10 quality gate checklists
+- **[Hooks](hooks/README.md)** - Event-driven enforcement that blocks invalid operations
+- **[Workflows](docs/reference/workflows/README.md)** - Multi-step orchestrated processes with quality gates
+- **[PRISM Loop](skills/prism-loop/SKILL.md)** - Automated TDD workflow with RED/GREEN validation
+- **[Skills](skills/README.md)** - Reusable operations (estimation, test design, risk assessment, tracing)
+- **[Templates](templates/README.md)** - Document generation (PRD, stories, architecture, QA gates)
+- **[Checklists](checklists/README.md)** - Quality gate validation at workflow checkpoints
 
 ### Progressive Disclosure
 All documentation follows token-efficient loading:
@@ -153,19 +154,19 @@ All documentation follows token-efficient loading:
 ## System Components
 
 ### Agents & Commands
-- **Skills** (`/skills/`) - Auto-activating agent personas with progressive disclosure
-- **Commands** (`/commands/`) - 7 slash commands to invoke agents directly
-- **Sub-Agents** (`.claude/agents/`) - 10 validators for automated quality checks
+- **[Skills](skills/README.md)** - Auto-activating agent personas with progressive disclosure
+- **[Commands](commands/README.md)** - Slash commands to invoke agents directly
+- **[Sub-Agents](agents/)** - Isolated validators for automated quality checks
 
 ### Automation & Workflows
-- **Hooks** (`/hooks/`) - Python scripts that enforce workflow integrity
-- **Workflows** (`/workflows/`) - YAML-based multi-step orchestration
-- **Tasks** (`/tasks/`) - 28 reusable operations
+- **[Hooks](hooks/README.md)** - Event-driven scripts that enforce workflow integrity
+- **[Workflows](workflows/)** - YAML-based multi-step orchestration
+- **[PRISM Loop](skills/prism-loop/SKILL.md)** - Automated TDD with validation gates
 
 ### Documentation & Standards
-- **Templates** (`/templates/`) - Document generation patterns
-- **Checklists** (`/checklists/`) - 10 quality validation checklists
-- **Docs** (`/docs/`) - Complete system documentation
+- **[Templates](templates/README.md)** - Document generation patterns
+- **[Checklists](checklists/README.md)** - Quality validation at workflow gates
+- **[Docs](docs/index.md)** - Complete system documentation
 
 ## Configuration
 
@@ -203,17 +204,17 @@ node validate-skill.js ../architect
 
 ```
 .prism/
-├── .claude/agents/      # 10 sub-agents for automated validation
+├── .claude/agents/      # Sub-agents for automated quality validation
 ├── skills/              # Agent personas (architect, dev, qa, sm, po, peer, support)
 ├── commands/            # Slash commands (/architect, /dev, etc.)
-├── hooks/               # Workflow automation (Python)
-├── workflows/           # Multi-step processes (YAML + Mermaid)
-├── tasks/               # 28 reusable operations
-├── templates/           # Document generation
-├── checklists/          # 10 quality checklists
+├── hooks/               # Event-driven workflow enforcement (Python)
+├── workflows/           # Multi-step orchestrated processes (YAML + Mermaid)
+├── tasks/               # Reusable operations (estimation, tracing, risk assessment)
+├── templates/           # Document generation (PRD, stories, architecture)
+├── checklists/          # Quality gate validation at workflow checkpoints
 ├── docs/                # Complete documentation
 │   └── index.md         # Documentation hub
-├── utils/               # Jira integration, etc.
+├── utils/               # Jira integration, helpers
 └── core-config.yaml     # Project configuration
 ```
 
@@ -242,6 +243,7 @@ PRISM follows secure development practices:
 - **[Sub-Agent User Guide](docs/reference/sub-agents/user-guide.md)** - Automated validation
 - **[Sub-Agent Quick Reference](docs/reference/sub-agents/quick-reference.md)** - Cheat sheet
 - **[Claude Code Integration](docs/reference/guides/claude-code-overview.md)** - Architecture guide
+- **[TDD Workflow Loop](skills/prism-loop/SKILL.md)** - Automated RED/GREEN development cycle
 
 ### Building Skills
 - **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills

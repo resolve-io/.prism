@@ -91,14 +91,44 @@ WebFetch:
 
 ### 2. Search Issues (JQL)
 
-**Endpoint:**
+**Endpoint (as of 2024):**
 ```
-GET /rest/api/3/search?jql={query}
+POST /rest/api/3/search/jql  (with JSON body)
 ```
 
-**URL Example:**
+**Note:** The old `/rest/api/3/search` endpoint has been deprecated. Use `/rest/api/3/search/jql` instead.
+
+**POST Request Format:**
+```bash
+curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  "https://resolvesys.atlassian.net/rest/api/3/search/jql" \
+  -d '{
+    "jql": "project = PLAT AND type = Story",
+    "maxResults": 50,
+    "fields": ["key", "summary", "status", "issuetype", "assignee"]
+  }'
 ```
-https://resolvesys.atlassian.net/rest/api/3/search?jql=project=PLAT+AND+type=Epic
+
+**CRITICAL: POST body must be valid JSON:**
+```json
+{
+  "jql": "project = PLAT AND type = Epic",
+  "maxResults": 50,
+  "startAt": 0,
+  "fields": ["key", "summary", "status", "issuetype", "assignee", "parent"]
+}
+```
+
+**Common "Invalid request payload" causes:**
+- Missing `Content-Type: application/json` header
+- Invalid JSON (trailing commas, unquoted strings)
+- Using GET parameters in POST body
+
+**GET URL Example (simple queries only):**
+```
+https://resolvesys.atlassian.net/rest/api/3/search?jql=project=PLAT&maxResults=20
 ```
 
 **Common JQL Queries:**
@@ -128,6 +158,17 @@ project = PLAT AND assignee = currentUser()
 project = PLAT AND updated >= -7d
 ```
 
+**Search by text in summary/description:**
+```jql
+project = PLAT AND (summary ~ ".NET" OR description ~ "migration")
+```
+
+**Exclude results (use NOT, not !~):**
+```jql
+project = PLAT AND summary ~ "upgrade" AND NOT summary ~ "Aspire"
+```
+**Note:** Always use `NOT field ~ 'text'` instead of `field !~ 'text'` to avoid shell escaping issues with the `!` character.
+
 **Response Structure:**
 ```json
 {
@@ -143,20 +184,19 @@ project = PLAT AND updated >= -7d
 }
 ```
 
-**Usage with WebFetch:**
+**Recommended: Use Python script instead of curl:**
+```bash
+python "C:/Dev/.prism/plugins/prism-devtools/skills/jira/scripts/jira_search.py" "parent = PLAT-789" --max 50
 ```
-WebFetch:
-  url: https://resolvesys.atlassian.net/rest/api/3/search?jql=parent=PLAT-789
-  prompt: |
-    List all issues returned from this search.
-    For each issue, extract:
-    - Issue Key
-    - Type
-    - Summary
-    - Status
-    - Assignee
 
-    Format as a numbered list.
+**Alternative: curl (Windows-compatible):**
+```bash
+source "C:/Dev/.prism/plugins/prism-devtools/.env" && \
+curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  "https://resolvesys.atlassian.net/rest/api/3/search/jql" \
+  -d '{"jql":"parent = PLAT-789","maxResults":50,"fields":["key","summary","status","issuetype"]}'
 ```
 
 ### 3. Get Epic Issues

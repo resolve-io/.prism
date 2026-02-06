@@ -21,6 +21,10 @@ docs/reference/workflows/
     ├── core-development-cycle.yaml     # Executable workflow definition
     ├── strangler-pattern-migration.yaml # Brownfield migration workflow
     └── [other-workflows].yaml          # Additional workflows
+
+skills/
+└── prism-loop/
+    └── SKILL.md                        # Automated TDD workflow with validation gates
 ```
 
 ## Workflow Components
@@ -287,6 +291,51 @@ workflow:
         Loads skills/qa/reference/review-methodology.md
         Validates test coverage and quality
 ```
+
+### Pattern 4: Automated TDD Loop (prism-loop)
+
+Automated workflow with validation gates.
+
+```yaml
+workflow:
+  sequence:
+    - step: review_previous_notes
+      agent: sm
+      action: planning-review
+
+    - step: draft_story
+      agent: sm
+      action: draft
+      validation: story_complete  # Validates ACs exist
+
+    - step: write_failing_tests
+      agent: qa
+      action: write-failing-tests
+      validation: red_with_trace  # Tests fail + trace audit
+
+    - step: red_gate
+      type: gate  # Manual approval
+
+    - step: implement_tasks
+      agent: dev
+      action: develop-story
+      validation: green  # Tests must pass
+
+    - step: verify_green_state
+      agent: qa
+      validation: green_full  # Tests + lint
+
+    - step: green_gate
+      type: gate  # Manual approval
+```
+
+**Commands:**
+- `/prism-loop [context]` - Start automated TDD workflow
+- `/prism-approve` - Approve gate and advance
+- `/prism-reject` - Reject at red_gate, loop back
+- `/prism-status` - Check workflow position
+
+Full Documentation: [prism-loop SKILL.md](../../../skills/prism-loop/SKILL.md)
 
 ## Workflow vs Skills vs Commands
 

@@ -222,5 +222,5 @@ See: [Extending the System](./implementation/extending.md)
 
 ---
 
-**Last Updated**: 2025-11-10
-**PRISM Version**: 1.7.1
+**Last Updated**: 2026-02-06
+**PRISM Version**: 2.2.0

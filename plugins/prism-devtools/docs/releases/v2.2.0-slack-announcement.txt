@@ -1,0 +1,52 @@
+🔄 *PRISM v2.2.0 Released!* 🔄
+
+Your entire dev cycle now runs with one command and two approvals.
+
+---
+
+*🚀 NEW: The PRISM Loop*
+Start a full TDD development cycle:
+
+```/prism-loop implement login feature```
+
+That's it. Here's what happens automatically:
+
+```SM plans → QA writes failing tests → ⏸ YOU approve → DEV implements → QA verifies → ⏸ YOU approve → Done```
+
+You only interact at the gates:
+• `/prism-approve` — approve and advance
+• `/prism-reject` — reject, loop back to planning
+• `/prism-status` — check where you are
+• `/cancel-prism` — stop everything
+
+Tests are *enforced*. QA's tests must actually fail. DEV's code must make them pass. No skipping, no "trust me it works."
+
+---
+
+*📋 NEW: Full Documentation Audit*
+We ran a multi-agent audit and found 69% of features were undocumented. Fixed:
+
+• Backfilled 4 missing CHANGELOG versions (v1.8.0 → v2.1.0)
+• Corrected feature counts — skills 28→38, agents 10→11, commands 7→13
+• Updated stale version refs across 13 docs
+• 247 links validated, 0 broken
+
+---
+
+*🚀 Quick Start*
+
+New to PRISM Loop:
+1. Open Claude Code in your project
+2. Run `/prism-loop [describe what you want to build]`
+3. Approve at gates when prompted
+
+Existing users:
+→ Update: `cd .prism && git pull origin main`
+
+---
+
+*📝 Full details:* CHANGELOG.md
+
+Questions? Drop them in #prism-feedback or #prism-support
+
+*PRISM™ - Refracting complexity into clarity* ✨

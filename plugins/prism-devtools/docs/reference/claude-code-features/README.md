@@ -80,5 +80,5 @@ Tasks → Reusable operations
 
 ---
 
-**Last Updated**: 2025-11-17
-**PRISM Version**: 1.7.2
+**Last Updated**: 2026-02-06
+**PRISM Version**: 2.2.0

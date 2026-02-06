@@ -9,6 +9,12 @@ import re
 import sys
 from pathlib import Path
 
+# Add hooks directory to path for shared module import
+PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
+from prism_loop_context import build_agent_instruction, parse_state as _parse_state
+from prism_stop_hook import detect_test_runner
+
 STATE_FILE = Path(".claude/prism-loop.local.md")
 
 WORKFLOW_STEPS = [
@@ -24,43 +30,8 @@ WORKFLOW_STEPS = [
 
 
 def parse_state() -> dict:
-    """Parse state file."""
-    result = {
-        "active": False,
-        "current_step": "",
-        "current_step_index": 0,
-        "story_file": "",
-        "paused_for_manual": False,
-        "prompt": "",
-    }
-
-    if not STATE_FILE.exists():
-        return result
-
-    content = STATE_FILE.read_text(encoding='utf-8')
-
-    for key in ["active", "paused_for_manual"]:
-        match = re.search(rf"^{key}:\s*(\S+)", content, re.MULTILINE)
-        if match:
-            result[key] = match.group(1).lower() == "true"
-
-    match = re.search(r"^current_step_index:\s*(\d+)", content, re.MULTILINE)
-    if match:
-        result["current_step_index"] = int(match.group(1))
-
-    match = re.search(r'^current_step:\s*["\']?([^"\'\n]*)["\']?', content, re.MULTILINE)
-    if match:
-        result["current_step"] = match.group(1).strip()
-
-    match = re.search(r'^story_file:\s*["\']?([^"\'\n]*)["\']?', content, re.MULTILINE)
-    if match:
-        result["story_file"] = match.group(1).strip()
-
-    match = re.search(r'^prompt:\s*["\']?([^"\'\n]*)["\']?', content, re.MULTILINE)
-    if match:
-        result["prompt"] = match.group(1).strip()
-
-    return result
+    """Parse state file using shared implementation."""
+    return _parse_state(STATE_FILE)
 
 
 def update_state(current_step: str, current_index: int):
@@ -95,64 +66,6 @@ def cleanup():
     """Remove state file."""
     if STATE_FILE.exists():
         STATE_FILE.unlink()
-
-
-def build_agent_instruction(step_id: str, agent: str, action: str, story_file: str, prompt: str = "") -> str:
-    """Build instruction for the next agent step."""
-
-    review_instruction = "Execute SM agent: *planning-review\nReview previous story dev/QA notes for context before drafting new story."
-    if prompt:
-        review_instruction += f"\n\nWorkflow Context: {prompt}"
-
-    draft_instruction = "Execute SM agent: *draft\nDraft the next story from the sharded epic and architecture documents."
-    if prompt:
-        draft_instruction += f"\n\nWorkflow Context: {prompt}"
-
-    instructions = {
-        "review_previous_notes": review_instruction,
-        "draft_story": draft_instruction,
-        "write_failing_tests": f"""Execute QA agent: *write-failing-tests {story_file}
-
-TDD RED PHASE: Write failing tests BEFORE implementation.
-
-Process:
-1. IDENTIFY existing tests covering affected code areas
-2. EXTEND existing test files if found, CREATE new if not
-3. WRITE failing tests for each acceptance criterion
-4. RUN tests to confirm they FAIL (assertion failures only)
-5. UPDATE story with test file paths and mappings
-
-CRITICAL: Tests must FAIL cleanly (assertion failures, not errors).
-The stop hook will validate RED state before advancing.""",
-        "implement_tasks": f"""Execute DEV agent: *develop-story
-
-TDD GREEN PHASE: Make the failing tests pass.
-
-Story file: {story_file}
-
-Tests exist and are FAILING. Your job:
-1. Write MINIMAL code to make each test pass
-2. Run tests after each change
-3. Continue until ALL tests pass
-4. Refactor while keeping tests green
-
-CRITICAL: The stop hook validates that ALL tests pass.
-Do NOT stop until tests are GREEN.""",
-        "verify_green_state": f"""Execute QA agent: *verify-green-state {story_file}
-
-TDD GREEN STATE VERIFICATION: Confirm implementation is complete.
-
-Process:
-1. RUN all tests (unit, integration, e2e)
-2. VERIFY all tests PASS
-3. RUN linting checks
-4. RUN type checks (if applicable)
-5. VERIFY build succeeds
-
-The stop hook validates tests + lint before advancing to completion gate.""",
-    }
-
-    return instructions.get(step_id, f"Execute {agent} agent: *{action}")
 
 
 def main():
@@ -208,12 +121,14 @@ def main():
     print("")
 
     # Output the instruction for the next agent step
+    runner = detect_test_runner()
     instruction = build_agent_instruction(
         next_step_id,
         next_agent,
         next_action,
         state["story_file"],
-        state["prompt"]
+        state["prompt"],
+        runner
     )
     print(instruction)
 

@@ -2,7 +2,7 @@
 
 **P**redictability · **R**esiliency · **I**ntentionality · **S**ustainability · **M**aintainability
 
-`Version 1.7.4` | `Last Updated: 2025-11-20`
+`Version 2.2.0` | `Last Updated: 2026-02-06`
 
 ---
 
@@ -28,6 +28,7 @@
 |-----------------|-------------|
 | **🚀 New to PRISM?** | [Installation](../README.md#quick-start) · [First Steps](../README.md#2-first-steps) |
 | **🔄 Main Workflow** | [Core Development Cycle](./reference/workflows/core-development-cycle.md) (SM → Dev → QA → Peer) |
+| **🤖 Automated TDD** | [PRISM Loop](../skills/prism-loop/SKILL.md) (Planning → RED → GREEN with validation gates) |
 | **👥 By Role** | [Developers](#for-developers) · [Story Masters](#for-story-masters) · [QA Engineers](#for-qa-engineers) |
 | **⚙️ By Feature** | [Sub-Agents](#sub-agent-validation-system) · [Workflows](#workflows) · [Skills](#skills) · [Hooks](#hooks) |
 
@@ -150,7 +151,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 ### 🤖 Sub-Agent Validation System
 
-**10 specialized validators** running at quality checkpoints—isolated execution prevents context pollution during implementation.
+**11 specialized validators** running at quality checkpoints—isolated execution prevents context pollution during implementation.
 
 > [!NOTE]
 > **Why sub-agents?** Traditional "check the story" in main context loads entire story into memory, reducing tokens available for implementation. Sub-agents validate in isolation, then report back concisely.
@@ -165,6 +166,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 | `file-list-auditor` | Git changes match story | Development complete |
 | `test-runner` | Test execution, coverage | Development complete |
 | `lint-checker` | Code standards | Development complete |
+| `link-checker` | Documentation link validity | Documentation updates |
 | `requirements-tracer` | PRD → Code coverage | QA review |
 | `qa-gate-manager` | Quality gate YAML | QA decision |
 
@@ -196,6 +198,11 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 📖 **Key Workflow:** [Core Development Cycle](./reference/workflows/core-development-cycle.md)
 📂 **All Workflows:** [Workflows Directory](./reference/workflows/README.md)
+
+> [!TIP]
+> **Automated TDD:** Use `/prism-loop` for automated RED/GREEN workflow with validation gates.
+> Auto-progresses through Planning, TDD RED, and TDD GREEN phases with stop hooks to validate test state.
+> See [PRISM Loop](../skills/prism-loop/SKILL.md)
 
 ---
 
@@ -241,10 +248,11 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 ### ⌨️ Commands (Slash Commands)
 
-**7 role-based entry points** for manual workflow control:
+**13 slash commands** for manual workflow control:
 
 ```
 /architect  /sm  /dev  /qa  /po  /peer  /support
+/file-first  /prism-approve  /prism-loop  /prism-reject  /prism-status  /cancel-prism
 ```
 
 **Each command:**
@@ -262,8 +270,8 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| **🧩 Skills** | 28+ | [probe-estimation](../skills/probe-estimation/SKILL.md), [test-design](../skills/test-design/SKILL.md), [risk-profile](../skills/risk-profile/SKILL.md), [+more](../skills/skill-builder/SKILL.md) |
-| **📄 Templates** | Multiple | PRD, Architecture, Stories, QA Gates ([Templates](../templates/README.md)) |
+| **🧩 Skills** | 38 | [probe-estimation](../skills/probe-estimation/SKILL.md), [test-design](../skills/test-design/SKILL.md), [risk-profile](../skills/risk-profile/SKILL.md), [+more](../skills/skill-builder/SKILL.md) |
+| **📄 Templates** | 16 | PRD, Architecture, Stories, QA Gates ([Templates](../templates/README.md)) |
 | **✅ Checklists** | 10 | [story-draft](../checklists/story-draft-checklist.md), [code-quality](../checklists/code-quality-checklist.md), [+8 more](../checklists/README.md) |
 
 ---
@@ -318,6 +326,7 @@ Smart Connections integration for efficient, non-duplicative documentation:
 | Learning Goal | Resources |
 |---------------|-----------|
 | **📖 Understanding PRISM** | [Methodology](../PRISM-METHODOLOGY.md) · [Core Workflow](./reference/workflows/core-development-cycle.md) |
+| **📁 File-First approach** | [File-First Principle](./reference/file-first.md) · [Philosophy](../skills/file-first/reference/philosophy.md) |
 | **🤖 Understanding sub-agents** | [Overview](./reference/sub-agents/README.md) · [User Guide](./reference/sub-agents/user-guide.md) |
 | **🛠️ Building skills** | [Skill Builder](../skills/skill-builder/SKILL.md) · [Creation Process](../skills/skill-builder/reference/skill-creation-process.md) |
 | **🪝 Creating hooks** | [Hooks System](../hooks/README.md) · [Hooks Manager](../skills/hooks-manager/SKILL.md) |
@@ -348,6 +357,9 @@ Complete technical reference with progressive disclosure:
 ### 📘 Guides
 - [Claude Code Overview](./reference/guides/claude-code-overview.md) - Architecture integration
 
+### 📁 Core Principles
+- [File-First Codebase Understanding](./reference/file-first.md) - Use Glob/Grep/Read for precise retrieval instead of semantic search
+
 ### 📝 Best Practices
 - [Documentation](./reference/best-practices/documentation.md) - Standards
 - [Smart Connections](./reference/best-practices/smart-connections.md) - Setup
@@ -369,15 +381,27 @@ Complete technical reference with progressive disclosure:
 ## 📊 System Status
 
 > [!NOTE]
-> **Current Version:** `1.7.4`
+> **Current Version:** `2.2.0`
+
+### What's New in v2.2.0
+
+- **Documentation Audit & Completeness** - Multi-agent audit resolved 75 undocumented features, backfilled 4 CHANGELOG versions (v1.8.0–v2.1.0), updated all version references, fixed broken links, corrected feature counts across 15 files
+- **100% Documentation Coverage** - All 38 skills, 11 agents, 16 templates, 10 checklists, 13 commands now documented in CHANGELOG
+
+### Highlights from v2.1.0
+
+- **prism-loop TDD orchestration** - Automated RED/GREEN workflow with validation gates and phase auto-progression
+- **Sub-agents validation system** - 11 specialized agents including `link-checker`
+- **File-first architecture** - Glob/Grep/Read-based codebase understanding as a core principle
+- **Orca integration skills** - New skills for orchestrating Orca-based workflows
 
 ### ✅ Production Ready
 
 | Component | Status |
 |-----------|--------|
 | Core Development Workflow (SM → Dev → QA → Peer) | ✅ Ready |
-| 10 Sub-Agent Validators (isolated quality checks) | ✅ Ready |
-| 7 Role-Based Commands (manual control) | ✅ Ready |
+| 11 Sub-Agent Validators (isolated quality checks) | ✅ Ready |
+| 13 Slash Commands (manual control) | ✅ Ready |
 | 6 Core Skills (auto-activation) | ✅ Ready |
 | 4 Workflow Hooks (enforcement) | ✅ Ready |
 | Progressive Disclosure (token efficiency) | ✅ Ready |
@@ -397,7 +421,7 @@ Complete technical reference with progressive disclosure:
 
 ## 📦 Archive
 
-Historical implementation: [Archive README](./archive/README.md)
+> Archive content has been consolidated into the main documentation. Historical implementation details are now covered in the relevant reference sections above.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: prism-loop
 description: Start PRISM TDD workflow loop using Ralph Wiggum pattern. Auto-progresses through Planning, TDD RED (failing tests), TDD GREEN (implementation), and Review phases. Use when user wants to run the core development cycle.
-version: 3.3.0
+version: 3.4.0
 author: PRISM
 ---
 
@@ -33,15 +33,15 @@ TDD-driven workflow orchestration using the Ralph Wiggum self-referential loop p
 
 ## Workflow Steps (7 steps)
 
-| # | Phase | Step | Agent | Type |
-|---|-------|------|-------|------|
-| 1 | Planning | review_previous_notes | SM | agent |
-| 2 | Planning | draft_story | SM | agent |
-| 3 | TDD RED | write_failing_tests | QA | agent |
-| 4 | TDD RED | red_gate | - | **gate** |
-| 5 | TDD GREEN | implement_tasks | DEV | agent |
-| 6 | TDD GREEN | verify_green_state | QA | agent |
-| 7 | TDD GREEN | green_gate | - | **gate** |
+| # | Phase | Step | Agent | Type | Validation |
+|---|-------|------|-------|------|------------|
+| 1 | Planning | review_previous_notes | SM | agent | - |
+| 2 | Planning | draft_story | SM | agent | story_complete |
+| 3 | TDD RED | write_failing_tests | QA | agent | red_with_trace |
+| 4 | TDD RED | red_gate | - | **gate** | trace_matrix |
+| 5 | TDD GREEN | implement_tasks | DEV | agent | - |
+| 6 | TDD GREEN | verify_green_state | QA | agent | green |
+| 7 | TDD GREEN | green_gate | - | **gate** | - |
 
 ## Commands
 
@@ -101,15 +101,59 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/cancel_prism_loop.py"
 
 Removes state file and stops the loop.
 
+## Requirements Traceability
+
+The workflow enforces a traceability chain to prevent silent requirement drops:
+
+```
+User Request → Requirements → Acceptance Criteria → Tests
+              (REQ-1, REQ-2)   (AC-1 → REQ-1)      (test_ac1 → AC-1)
+```
+
+### Capture and Validation Points
+
+| Step | Validation | What's Checked |
+|------|------------|----------------|
+| review_previous_notes | - | Captures requirements in "## Original Requirements" section |
+| draft_story | story_complete | Every REQ has at least one AC |
+| write_failing_tests | red_with_trace | Tests fail + every AC has a test |
+| red_gate | trace_matrix | Human verifies REQ → AC → Test chain |
+
+### Test Mapping Conventions
+
+For the trace audit to find test coverage:
+
+| Method | Example |
+|--------|---------|
+| Test name | `test_ac1_user_login()` |
+| Comment | `# AC-1: Validates login` |
+| Docstring | `"""Tests AC-1 login flow"""` |
+
+If an AC has no mapped test, the workflow blocks with "SILENT DROP DETECTED".
+
+### Trace Matrix at Red Gate
+
+The red_gate displays a trace matrix for human verification:
+
+```
+## Trace Matrix
+| REQ | AC | Test | Status |
+|-----|-----|------|--------|
+| REQ-1 | AC-1 | test_ac1_login | COVERED |
+| REQ-2 | AC-2 | test_ac2_logout | COVERED |
+```
+
+This ensures no requirement silently disappears during implementation.
+
 ## TDD Validation
 
 The stop hook validates before advancing:
 
-- **write_failing_tests** → Tests must FAIL (assertion errors, not syntax errors)
+- **write_failing_tests** → Tests must FAIL (assertion errors, not syntax errors) + trace audit passes
 - **implement_tasks** → All tests must PASS
 - **verify_green_state** → Tests + lint must pass
 
-Claude cannot "think" it's done - the hook runs tests to verify.
+Claude cannot "think" it's done - the hook runs tests to verify. The trace audit ensures every acceptance criterion has test coverage before proceeding to implementation.
 
 ## State File
 
@@ -169,5 +213,5 @@ This skill activates when you mention:
 
 ---
 
-**Version**: 3.3.0
-**Last Updated**: 2025-01-09
+**Version**: 3.4.0
+**Last Updated**: 2025-02-06

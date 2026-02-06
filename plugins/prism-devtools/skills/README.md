@@ -77,6 +77,12 @@ Auto-activating agent capabilities for PRISM workflows.
 | [sdlc-handoff](./sdlc-handoff/SKILL.md) | SDLC handoff |
 | [investigate-root-cause](./investigate-root-cause/SKILL.md) | Root cause analysis |
 
+## Context Loading
+
+| Skill | Purpose |
+|-------|---------|
+| [file-first](./file-first/SKILL.md) | Analyze codebase, detect project type, suggest key files |
+
 ## Shared Resources
 
 | Resource | Purpose |
