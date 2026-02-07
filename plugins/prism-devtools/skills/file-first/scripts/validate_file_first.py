@@ -11,10 +11,16 @@ Usage:
 
 import argparse
 import json
+import io
 import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+# Fix Windows console encoding for Unicode support
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 
 class FileFirstValidator:

@@ -5,6 +5,24 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-02-07
+
+### Fixed
+- **PRISM Loop Session Isolation** — Fixed cross-session pollution when running multiple Claude Code terminals
+  - Stop hook now uses `session_id` from Claude Code's official hook JSON input instead of unreliable `CLAUDE_CODE_SSE_PORT` environment variable
+  - Removed backwards-compatibility fallback that allowed "unknown" sessions to match each other
+  - Setup script now receives `${CLAUDE_SESSION_ID}` from skill invocation for reliable session tracking
+  - Prevents PRISM workflow from one terminal hijacking unrelated sessions in another terminal
+
+- **Windows Unicode Encoding** — Fixed `UnicodeEncodeError` on Windows when printing checkmarks and other Unicode characters
+  - Added UTF-8 encoding wrapper to 4 Python scripts that use Unicode output
+  - Affected scripts: `prism_stop_hook.py`, `setup_prism_loop.py`, `prism_approve.py`, `validate_file_first.py`
+  - Uses `io.TextIOWrapper` with `errors='replace'` for graceful fallback on incompatible terminals
+
+### Changed
+- **prism-loop SKILL.md** — Updated command to pass `--session-id "${CLAUDE_SESSION_ID}"` to setup script
+- **setup_prism_loop.py** — Now accepts `--session-id` argument for reliable session identification
+
 ## [2.2.0] - 2026-02-06
 
 ### Added

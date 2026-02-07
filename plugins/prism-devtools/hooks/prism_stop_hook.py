@@ -11,10 +11,16 @@ State file: .claude/prism-loop.local.md
 import json
 import subprocess
 import sys
+import io
 import re
 import os
 from pathlib import Path
 from datetime import datetime, timedelta
+
+# Fix Windows console encoding for Unicode support
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 from prism_loop_context import build_agent_instruction, detect_project_conventions
 
@@ -279,9 +285,15 @@ Story file: {state.get('story_file', 'unknown')}"""
     return {"valid": True, "message": "Unknown validation type", "continue_instruction": None}
 
 
-def get_session_id() -> str:
-    """Get unique session identifier from Claude Code SSE port."""
-    return os.environ.get("CLAUDE_CODE_SSE_PORT", "unknown")
+def get_session_id_from_input(input_data: dict) -> str:
+    """
+    Get session_id from Claude Code's hook JSON input.
+
+    According to official Claude Code docs, all hook events receive
+    'session_id' in the JSON input via stdin. This is more reliable
+    than environment variables.
+    """
+    return input_data.get("session_id", "")
 
 
 def parse_frontmatter(content: str) -> dict:
@@ -336,22 +348,28 @@ def parse_frontmatter(content: str) -> dict:
     return result
 
 
-def is_same_session(state: dict) -> bool:
+def is_same_session(state: dict, current_session_id: str) -> bool:
     """
     Check if the PRISM loop belongs to THIS session.
 
     Prevents cross-session pollution when multiple Claude Code
     terminals are running in the same working directory.
+
+    Args:
+        state: Parsed state from the PRISM loop state file
+        current_session_id: Session ID from Claude Code's hook JSON input
+
+    Returns:
+        True if sessions match, False otherwise
     """
     stored_session = state.get("session_id", "")
-    current_session = get_session_id()
 
-    # If no session_id stored (old format), allow for backwards compatibility
-    # but warn that this is risky
-    if not stored_session:
-        return True
+    # Require BOTH sessions to have valid IDs
+    # This prevents "unknown" == "unknown" false matches
+    if not stored_session or not current_session_id:
+        return False
 
-    return stored_session == current_session
+    return stored_session == current_session_id
 
 
 def is_workflow_stale(state: dict, stale_hours: int = 2) -> bool:
@@ -496,6 +514,9 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
+    # Get session_id from Claude Code's hook JSON input (official API)
+    current_session_id = get_session_id_from_input(input_data)
+
     if not STATE_FILE.exists():
         sys.exit(0)
 
@@ -512,7 +533,7 @@ def main():
 
     # Check if this PRISM loop belongs to THIS session
     # Prevents cross-session pollution when multiple terminals share working directory
-    if not is_same_session(state):
+    if not is_same_session(state, current_session_id):
         # This loop belongs to a different Claude Code session - ignore it
         sys.exit(0)
 

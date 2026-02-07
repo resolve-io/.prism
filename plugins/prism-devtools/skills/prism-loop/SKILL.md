@@ -1,7 +1,7 @@
 ---
 name: prism-loop
 description: Start PRISM TDD workflow loop using Ralph Wiggum pattern. Auto-progresses through Planning, TDD RED (failing tests), TDD GREEN (implementation), and Review phases. Use when user wants to run the core development cycle.
-version: 3.4.0
+version: 3.5.0
 author: PRISM
 ---
 
@@ -50,7 +50,7 @@ TDD-driven workflow orchestration using the Ralph Wiggum self-referential loop p
 Start the PRISM workflow loop.
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" "$ARGUMENTS"
+python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" --session-id "${CLAUDE_SESSION_ID}" "$ARGUMENTS"
 ```
 
 The prompt provides context to the SM agent for planning.

@@ -3,17 +3,23 @@
 Setup PRISM Workflow Loop - initializes workflow state to orchestrate agent pool.
 
 Usage:
-    python setup_prism_loop.py [prompt]
+    python setup_prism_loop.py --session-id <session_id> [prompt]
 
 The script operates relative to the current working directory (the project folder).
 """
 
 import os
 import sys
+import io
 import shlex
 import shutil
 from pathlib import Path
 from datetime import datetime
+
+# Fix Windows console encoding for Unicode support
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Add hooks directory to path for shared module import
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
@@ -43,15 +49,31 @@ WORKFLOW_STEPS = [
 
 
 def parse_arguments(args: list[str]) -> dict:
-    """Parse command line arguments. First non-flag argument is the prompt."""
+    """Parse command line arguments.
+
+    Accepts:
+        --session-id <id>  Session ID from Claude Code (required for session isolation)
+        [remaining args]   The prompt/context for the workflow
+    """
     result = {
         "prompt": "",
         "start_index": 0,  # Always start at step 0
+        "session_id": "",
     }
 
-    # Join all args as the prompt
-    if args:
-        result["prompt"] = " ".join(args).strip()
+    remaining_args = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--session-id" and i + 1 < len(args):
+            result["session_id"] = args[i + 1]
+            i += 2
+        else:
+            remaining_args.append(args[i])
+            i += 1
+
+    # Join remaining args as the prompt
+    if remaining_args:
+        result["prompt"] = " ".join(remaining_args).strip()
 
     return result
 
@@ -132,9 +154,19 @@ def initialize_context_system() -> bool:
         return False
 
 
-def get_session_id() -> str:
-    """Get unique session identifier from Claude Code SSE port."""
-    return os.environ.get("CLAUDE_CODE_SSE_PORT", "unknown")
+def get_session_id(config: dict) -> str:
+    """
+    Get unique session identifier.
+
+    Prefers session_id from config (passed via --session-id from skill),
+    which comes from Claude Code's ${CLAUDE_SESSION_ID} substitution.
+    """
+    # Prefer session_id passed from skill (most reliable)
+    if config.get("session_id"):
+        return config["session_id"]
+
+    # Fallback to environment variable (less reliable)
+    return os.environ.get("CLAUDE_SESSION_ID", "")
 
 
 def create_state_file(config: dict):
@@ -142,7 +174,7 @@ def create_state_file(config: dict):
     STATE_DIR.mkdir(exist_ok=True)
 
     timestamp = datetime.now().isoformat()
-    session_id = get_session_id()
+    session_id = get_session_id(config)
 
     content = f"""---
 active: true

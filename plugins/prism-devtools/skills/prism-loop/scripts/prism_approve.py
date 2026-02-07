@@ -7,7 +7,13 @@ Outputs the instruction for the next agent step so workflow continues.
 
 import re
 import sys
+import io
 from pathlib import Path
+
+# Fix Windows console encoding for Unicode support
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Add hooks directory to path for shared module import
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
