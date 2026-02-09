@@ -25,11 +25,6 @@
             "type": "command",
             "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/prism_stop_hook.py",
             "description": "PRISM workflow loop - orchestrate agents through core development cycle"
-          },
-          {
-            "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/capture-session-history.py",
-            "description": "Save key decisions and actions for context recovery after compaction"
           }
         ]
       }

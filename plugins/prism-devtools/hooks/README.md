@@ -22,7 +22,6 @@ These hooks ensure:
 | `validate-required-sections.py` | PostToolUse | Verify all required PRISM sections | ✅ Yes (critical errors) |
 | `save-large-responses.py` | PostToolUse | Save large MCP responses (>50 lines) to files | ❌ No |
 | `log-terminal-output.py` | PostToolUse | Log test/build output for grep searching | ❌ No |
-| `capture-session-history.py` | Stop | Save key decisions for context recovery | ❌ No |
 | `prism_stop_hook.py` | Stop | PRISM workflow loop orchestration | ✅ Yes (workflow) |
 
 ### Configuration
@@ -210,20 +209,6 @@ These hooks implement Cursor-style dynamic context discovery:
 - Searchable with grep: `grep "ERROR" .context/terminal/*.log`
 - No need to re-run tests to see previous output
 - Auto-cleanup keeps last 30 files
-
-### Session History Capture
-
-`capture-session-history.py` - Saves workflow state to `.context/history/`
-
-**Tracked**:
-- PRISM workflow state (current step, story file)
-- Recent git changes
-- Workflow log events
-
-**Benefits**:
-- Recovery after context compaction
-- Session continuity across restarts
-- Auto-cleanup keeps last 20 files
 
 ---
 

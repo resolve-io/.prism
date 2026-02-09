@@ -29,10 +29,8 @@ PRISM implements advanced context management techniques based on Cursor's dynami
 │   └── code-review.md
 ├── tool-responses/         # Auto-saved large MCP responses (NEW)
 │   └── 20260116-143022-mcp-read-page.md
-├── terminal/               # Auto-saved test/build outputs (NEW)
-│   └── 20260116-143045-npm-test.log
-└── history/                # Session decision history (NEW)
-    └── 20260116-session-12345.md
+└── terminal/               # Auto-saved test/build outputs (NEW)
+    └── 20260116-143045-npm-test.log
 ```
 
 ---
@@ -57,24 +55,7 @@ RESPONSE_DIR = '.context/tool-responses'
 - Contains: Timestamp, tool name, full response
 - Auto-cleanup: Keeps last 50 files
 
-### 2. Session History Capture
-
-**Hook**: `capture-session-history.py`
-**Trigger**: Stop event (end of each turn)
-
-Captures key decisions and workflow state for recovery after context compaction.
-
-**Tracked Information**:
-- PRISM workflow state (current step, story file)
-- Recent git changes
-- Workflow log events
-
-**Output Files**:
-- Location: `.context/history/`
-- Format: `YYYYMMDD-session-[SSE_PORT].md`
-- Auto-cleanup: Keeps last 20 files
-
-### 3. Terminal Output Logging
+### 2. Terminal Output Logging
 
 **Hook**: `log-terminal-output.py`
 **Trigger**: PostToolUse on Bash (tests, builds, linting)
@@ -158,14 +139,6 @@ When debugging a test failure:
 Let me check the last test run output:
 
 📋 Searching .context/terminal/ for recent pytest logs
-```
-
-When recovering after compaction:
-
-```markdown
-Let me check the session history for what we decided:
-
-📋 Reading .context/history/20260116-session-12345.md
 ```
 
 ---
