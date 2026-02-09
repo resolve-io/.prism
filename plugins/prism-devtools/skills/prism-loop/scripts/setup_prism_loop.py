@@ -8,7 +8,6 @@ Usage:
 The script operates relative to the current working directory (the project folder).
 """
 
-import os
 import sys
 import io
 import shlex
@@ -158,15 +157,10 @@ def get_session_id(config: dict) -> str:
     """
     Get unique session identifier.
 
-    Prefers session_id from config (passed via --session-id from skill),
-    which comes from Claude Code's ${CLAUDE_SESSION_ID} substitution.
+    Returns session_id from config (passed via --session-id from skill),
+    which comes from Claude Code's ${CLAUDE_SESSION_ID} template substitution.
     """
-    # Prefer session_id passed from skill (most reliable)
-    if config.get("session_id"):
-        return config["session_id"]
-
-    # Fallback to environment variable (less reliable)
-    return os.environ.get("CLAUDE_SESSION_ID", "")
+    return config.get("session_id", "")
 
 
 def create_state_file(config: dict):
