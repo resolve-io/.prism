@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.2.2] - 2026-02-09
 
 ### Fixed
+- **prism-loop command** — Added missing `--session-id "${CLAUDE_SESSION_ID}"` flag to `commands/prism-loop.md` (the command file that actually executes). SKILL.md had the fix from v2.2.1 but the command file did not, causing session isolation to not work.
 - **setup_prism_loop.py** — Removed dead `os.environ.get("CLAUDE_SESSION_ID")` fallback that could never work since `${CLAUDE_SESSION_ID}` is a Claude Code template variable, not an environment variable
 - Cleaned up unused `import os` from setup script
 
