@@ -2,7 +2,7 @@
 
 **P**redictability · **R**esiliency · **I**ntentionality · **S**ustainability · **M**aintainability
 
-`Version 2.2.0` | `Last Updated: 2026-02-06`
+`Version 2.3.0` | `Last Updated: 2026-02-12`
 
 ---
 
@@ -227,6 +227,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 - `prism-devtools:support` - Issue validation
 
 🛠️ **Build Your Own:** [Skill Builder](../skills/skill-builder/SKILL.md) · [Creation Process](../skills/skill-builder/reference/skill-creation-process.md)
+🏗️ **Project Skills:** [BYOS](../skills/byos/SKILL.md) — Create team skills shared via git with automatic PRISM agent assignment
 
 ---
 
@@ -270,7 +271,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| **🧩 Skills** | 38 | [probe-estimation](../skills/probe-estimation/SKILL.md), [test-design](../skills/test-design/SKILL.md), [risk-profile](../skills/risk-profile/SKILL.md), [+more](../skills/skill-builder/SKILL.md) |
+| **🧩 Skills** | 39 | [probe-estimation](../skills/probe-estimation/SKILL.md), [test-design](../skills/test-design/SKILL.md), [risk-profile](../skills/risk-profile/SKILL.md), [byos](../skills/byos/SKILL.md), [+more](../skills/skill-builder/SKILL.md) |
 | **📄 Templates** | 16 | PRD, Architecture, Stories, QA Gates ([Templates](../templates/README.md)) |
 | **✅ Checklists** | 10 | [story-draft](../checklists/story-draft-checklist.md), [code-quality](../checklists/code-quality-checklist.md), [+8 more](../checklists/README.md) |
 
@@ -381,14 +382,13 @@ Complete technical reference with progressive disclosure:
 ## 📊 System Status
 
 > [!NOTE]
-> **Current Version:** `2.2.0`
+> **Current Version:** `2.3.0`
 
-### What's New in v2.2.0
+### What's New in v2.3.0
 
-- **Documentation Audit & Completeness** - Multi-agent audit resolved 75 undocumented features, backfilled 4 CHANGELOG versions (v1.8.0–v2.1.0), updated all version references, fixed broken links, corrected feature counts across 15 files
-- **100% Documentation Coverage** - All 38 skills, 11 agents, 16 templates, 10 checklists, 13 commands now documented in CHANGELOG
+- **Bring Your Own Skill (BYOS)** — Teams can now create project-level skills shared via git with automatic PRISM agent assignment. `/byos scaffold`, `/byos validate`, `/byos list` commands. Leverages existing `discover_prism_skills()` infrastructure — no sync needed.
 
-### Highlights from v2.1.0
+### Highlights from v2.2.x
 
 - **prism-loop TDD orchestration** - Automated RED/GREEN workflow with validation gates and phase auto-progression
 - **Sub-agents validation system** - 11 specialized agents including `link-checker`

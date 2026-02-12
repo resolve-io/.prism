@@ -13,10 +13,11 @@ TDD-driven workflow orchestration using the Ralph Wiggum self-referential loop p
 
 1. Run `*prism-loop [your context/prompt]`
 2. SM agent reviews previous notes and drafts story
-3. QA agent writes failing tests (TDD RED)
-4. Red gate pauses for `/prism-approve`
-5. DEV agent implements tasks (TDD GREEN)
-6. QA verifies green state, green gate completes
+3. SM agent verifies plan coverage against requirements
+4. QA agent writes failing tests with traceability headers (TDD RED)
+5. Red gate pauses for `/prism-approve`
+6. DEV agent implements tasks (TDD GREEN)
+7. QA verifies green state, green gate completes
 
 ## When to Use
 
@@ -31,17 +32,18 @@ TDD-driven workflow orchestration using the Ralph Wiggum self-referential loop p
 3. **Gate steps** pause for `/prism-approve` (or `/prism-reject` at red_gate)
 4. **Validation** runs tests to verify TDD state (RED = fail, GREEN = pass)
 
-## Workflow Steps (7 steps)
+## Workflow Steps (8 steps)
 
 | # | Phase | Step | Agent | Type | Validation |
 |---|-------|------|-------|------|------------|
 | 1 | Planning | review_previous_notes | SM | agent | - |
 | 2 | Planning | draft_story | SM | agent | story_complete |
-| 3 | TDD RED | write_failing_tests | QA | agent | red_with_trace |
-| 4 | TDD RED | red_gate | - | **gate** | trace_matrix |
-| 5 | TDD GREEN | implement_tasks | DEV | agent | - |
-| 6 | TDD GREEN | verify_green_state | QA | agent | green |
-| 7 | TDD GREEN | green_gate | - | **gate** | - |
+| 3 | Planning | verify_plan | SM | agent | plan_coverage |
+| 4 | TDD RED | write_failing_tests | QA | agent | red_with_trace |
+| 5 | TDD RED | red_gate | - | **gate** | - |
+| 6 | TDD GREEN | implement_tasks | DEV | agent | green |
+| 7 | TDD GREEN | verify_green_state | QA | agent | green_full |
+| 8 | TDD GREEN | green_gate | - | **gate** | - |
 
 ## Commands
 
@@ -89,7 +91,7 @@ Check current workflow state.
 python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_status.py"
 ```
 
-Shows progress through all 7 steps.
+Shows progress through all 8 steps.
 
 ### *cancel-prism
 
@@ -115,9 +117,10 @@ User Request → Requirements → Acceptance Criteria → Tests
 | Step | Validation | What's Checked |
 |------|------------|----------------|
 | review_previous_notes | - | Captures requirements in "## Original Requirements" section |
-| draft_story | story_complete | Every REQ has at least one AC |
-| write_failing_tests | red_with_trace | Tests fail + every AC has a test |
-| red_gate | trace_matrix | Human verifies REQ → AC → Test chain |
+| draft_story | story_complete | Story file exists with ## Acceptance Criteria and AC items |
+| verify_plan | plan_coverage | ## Plan Coverage section has zero MISSING requirements |
+| write_failing_tests | red_with_trace | Tests fail with assertions + every AC has a mapped test |
+| red_gate | - | Human reviews and approves RED state |
 
 ### Test Mapping Conventions
 
@@ -149,7 +152,9 @@ This ensures no requirement silently disappears during implementation.
 
 The stop hook validates before advancing:
 
-- **write_failing_tests** → Tests must FAIL (assertion errors, not syntax errors) + trace audit passes
+- **draft_story** → Story file must exist with ## Acceptance Criteria containing AC items
+- **verify_plan** → ## Plan Coverage section must exist with zero MISSING requirements
+- **write_failing_tests** → Tests must FAIL (assertion errors, not syntax errors) + every AC must have a mapped test (blocks with "SILENT DROP DETECTED" otherwise)
 - **implement_tasks** → All tests must PASS
 - **verify_green_state** → Tests + lint must pass
 
@@ -161,7 +166,7 @@ Located at `.claude/prism-loop.local.md`
 
 Tracks:
 - `current_step`: Active step
-- `current_step_index`: Position (0-6)
+- `current_step_index`: Position (0-7)
 - `story_file`: Path to story file (set after draft_story)
 - `paused_for_manual`: True at gates
 
@@ -213,5 +218,5 @@ This skill activates when you mention:
 
 ---
 
-**Version**: 3.4.0
-**Last Updated**: 2025-02-06
+**Version**: 3.5.0
+**Last Updated**: 2026-02-11

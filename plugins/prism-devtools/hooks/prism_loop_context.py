@@ -56,7 +56,16 @@ INLINE_RULES = {
 }
 
 # --- Compressed Workflow Index ---
-WORKFLOW_INDEX = "Workflow: Planning(SM) -> RED(QA:tests fail) -> RED_GATE -> GREEN(DEV:tests pass) -> VERIFY(QA) -> GREEN_GATE"
+WORKFLOW_INDEX = "Workflow: Planning(SM) -> VerifyPlan(SM) -> RED(QA:tests fail) -> RED_GATE -> GREEN(DEV:tests pass) -> VERIFY(QA) -> GREEN_GATE"
+
+STEP_PHASE_MAP = {
+    "review_previous_notes": ("sm", "planning"),
+    "draft_story":           ("sm", "planning"),
+    "verify_plan":           ("sm", "planning"),
+    "write_failing_tests":   ("qa", "red"),
+    "implement_tasks":       ("dev", "green"),
+    "verify_green_state":    ("qa", "review"),
+}
 
 
 def detect_project_conventions(runner: dict) -> str:
@@ -138,6 +147,97 @@ def detect_project_conventions(runner: dict) -> str:
     return "\n".join(parts) if parts else "No test runner detected"
 
 
+def _parse_skill_frontmatter(content: str) -> dict | None:
+    """
+    Parse PRISM skill metadata from SKILL.md frontmatter.
+
+    Returns dict with name, description, agent, phase, priority
+    or None if no valid prism: block found.
+    """
+    # Extract YAML frontmatter block
+    fm_match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+    if not fm_match:
+        return None
+
+    fm_text = fm_match.group(1)
+
+    # Early bail-out: must contain prism: block
+    if "prism:" not in fm_text:
+        return None
+
+    # Extract top-level name and description
+    name_match = re.search(r"^name:\s*(.+)$", fm_text, re.MULTILINE)
+    desc_match = re.search(r"^description:\s*(.+)$", fm_text, re.MULTILINE)
+
+    # Extract prism: nested values (indented under prism:)
+    agent_match = re.search(r"^\s+agent:\s*(.+)$", fm_text, re.MULTILINE)
+    phase_match = re.search(r"^\s+phase:\s*(.+)$", fm_text, re.MULTILINE)
+    priority_match = re.search(r"^\s+priority:\s*(\d+)", fm_text, re.MULTILINE)
+
+    if not (name_match and agent_match and phase_match):
+        return None
+
+    agent = agent_match.group(1).strip()
+    phase = phase_match.group(1).strip()
+
+    valid_agents = ("sm", "dev", "qa", "architect")
+    valid_phases = ("planning", "red", "green", "review")
+
+    if agent not in valid_agents or phase not in valid_phases:
+        return None
+
+    return {
+        "name": name_match.group(1).strip(),
+        "description": desc_match.group(1).strip() if desc_match else "",
+        "agent": agent,
+        "phase": phase,
+        "priority": int(priority_match.group(1)) if priority_match else 99,
+    }
+
+
+def discover_prism_skills(agent: str, phase: str) -> list:
+    """
+    Discover local skills that declare prism: metadata matching agent and phase.
+
+    Scans project-local (.claude/skills/*/SKILL.md) and user-global
+    (~/.claude/skills/*/SKILL.md) directories. Returns sorted list by priority.
+    """
+    results = []
+    scan_dirs = [
+        Path.cwd() / ".claude" / "skills",
+        Path.home() / ".claude" / "skills",
+    ]
+
+    for skills_dir in scan_dirs:
+        try:
+            if not skills_dir.is_dir():
+                continue
+            for skill_file in skills_dir.glob("*/SKILL.md"):
+                try:
+                    content = skill_file.read_text(encoding="utf-8")
+                    meta = _parse_skill_frontmatter(content)
+                    if meta and meta["agent"] == agent and meta["phase"] == phase:
+                        results.append(meta)
+                except (IOError, OSError):
+                    continue
+        except (IOError, OSError):
+            continue
+
+    results.sort(key=lambda s: s["priority"])
+    return results
+
+
+def _format_discovered_skills(skills: list) -> str:
+    """Format discovered skills for injection into agent instructions."""
+    if not skills:
+        return ""
+    lines = ["Discovered PRISM skills for this step (invoke if relevant):"]
+    for s in skills:
+        desc = f" - {s['description']}" if s["description"] else ""
+        lines.append(f"  - /{s['name']}{desc}")
+    return "\n".join(lines)
+
+
 def parse_state(state_file: Path) -> dict:
     """
     Parse PRISM loop state file frontmatter.
@@ -204,6 +304,9 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
 
     conventions = detect_project_conventions(runner)
     test_cmd = runner.get("command", "")
+    phase_info = STEP_PHASE_MAP.get(step_id)
+    discovered_skills = discover_prism_skills(*phase_info) if phase_info else []
+    skill_text = _format_discovered_skills(discovered_skills)
 
     # --- review_previous_notes ---
     if step_id == "review_previous_notes":
@@ -234,6 +337,8 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
             "",
             "Note: The /sm *planning-review skill is available for complex planning orchestration but is not required.",
         ])
+        if skill_text:
+            parts.append(skill_text)
         return "\n".join(parts)
 
     # --- draft_story ---
@@ -266,6 +371,49 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
             "",
             "Note: The /sm *draft skill is available for complex story drafting but is not required.",
         ])
+        if skill_text:
+            parts.append(skill_text)
+        return "\n".join(parts)
+
+    # --- verify_plan ---
+    if step_id == "verify_plan":
+        parts = [
+            "PLAN VERIFICATION: Check Story Coverage Against Requirements",
+            "",
+            ROLE_CARDS["sm"],
+            "",
+        ]
+        if story_file:
+            parts.append(f"Story: {story_file}")
+        if conventions:
+            parts.append(conventions)
+        parts.extend([
+            "",
+            "Steps:",
+            "1. Read the original prompt/requirements from workflow context below",
+            "2. Read the story file just drafted",
+            "3. Extract every distinct requirement from the prompt",
+            "4. For each requirement, find the AC(s) that cover it",
+            "5. Write a ## Plan Coverage section in the story with:",
+            "   | # | Requirement | AC(s) | Status |",
+            "   Each must be COVERED, PARTIAL, or MISSING",
+            "6. If any are MISSING: add new ACs and tasks to cover them",
+            "7. If any are PARTIAL: expand existing ACs to fully cover",
+            "8. Final coverage must have zero MISSING items",
+        ])
+        if prompt:
+            parts.extend(["", f"Original Requirements: {prompt}"])
+        parts.extend([
+            "",
+            INLINE_RULES["planning"],
+            "",
+            RETRIEVAL_INSTRUCTION,
+            "",
+            "CRITICAL: The stop hook validates that the Plan Coverage section exists",
+            "and contains zero MISSING items. Do NOT stop until all requirements are COVERED.",
+        ])
+        if skill_text:
+            parts.append(skill_text)
         return "\n".join(parts)
 
     # --- write_failing_tests ---
@@ -283,14 +431,43 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
         parts.extend([
             "",
             "Trace Convention (REQUIRED - workflow blocks without this):",
-            "  Map each test to its AC. If any AC lacks a mapped test, workflow blocks.",
+            "  Map each test to its AC. If any AC lacks a mapped test, workflow blocks",
+            "  with 'SILENT DROP DETECTED'.",
+            "",
+            "Test Documentation (REQUIRED):",
+            "  Each test MUST include a traceability header as the FIRST thing in the test:",
+            "",
+            "  For Python:",
+            '    def test_ac1_user_can_login(self):',
+            '        """',
+            '        AC-1: User can login with valid credentials',
+            '        Requirement: Authentication flow validates credentials against store',
+            '        Expected: Returns auth token and redirects to dashboard',
+            '        """',
+            "",
+            "  For JavaScript/TypeScript:",
+            "    // AC-1: User can login with valid credentials",
+            "    // Requirement: Authentication flow validates credentials against store",
+            "    // Expected: Returns auth token and redirects to dashboard",
+            "    test('AC-1: user can login with valid credentials', () => {",
+            "",
+            "  For C#:",
+            "    /// <summary>",
+            "    /// AC-1: User can login with valid credentials",
+            "    /// Requirement: Authentication flow validates credentials against store",
+            "    /// Expected: Returns auth token and redirects to dashboard",
+            "    /// </summary>",
+            "    [Fact]",
+            "    public async Task AC1_UserCanLogin_ReturnsToken()",
+            "",
+            "  This makes tests self-documenting artifacts that carry their own traceability.",
             "",
             "Steps:",
             "1. Read story file - extract all acceptance criteria",
             "2. Glob for existing test files: *.test.*, *.spec.*, *_test.*, test_*.*",
             "3. Read existing tests to understand patterns",
             "4. Extend existing files if found, create new if needed",
-            "5. Write one failing test per AC with clear assertion",
+            "5. Write one failing test per AC with traceability header and clear assertion",
         ])
         if test_cmd:
             parts.append(f"6. Run: {test_cmd} - verify FAIL with assertion errors (not syntax/import)")
@@ -308,6 +485,8 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
             "",
             "Note: The /qa *write-failing-tests skill is available for complex test orchestration but is not required.",
         ])
+        if skill_text:
+            parts.append(skill_text)
         return "\n".join(parts)
 
     # --- implement_tasks ---
@@ -346,6 +525,8 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
             "",
             "Note: The /dev *develop-story skill is available for complex implementation but is not required.",
         ])
+        if skill_text:
+            parts.append(skill_text)
         return "\n".join(parts)
 
     # --- verify_green_state ---
@@ -383,6 +564,8 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
             "",
             "Note: The /qa *verify-green-state skill is available for complex verification but is not required.",
         ])
+        if skill_text:
+            parts.append(skill_text)
         return "\n".join(parts)
 
     # --- Fallback for unknown steps ---

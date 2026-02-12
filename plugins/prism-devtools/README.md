@@ -1,6 +1,6 @@
 # PRISM Development System
 
-**Version 2.2.0** - Documentation Audit & Completeness Update
+**Version 2.3.0** - Bring Your Own Skill (BYOS)
 
 A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
@@ -102,10 +102,11 @@ PRISM is a software engineering methodology that combines proven practices into 
 ## Key Features
 
 ### Automated Quality Validation
-**10 specialized sub-agents** validate your work at critical checkpoints:
+**11 specialized sub-agents** validate your work at critical checkpoints:
 - 5 for Story Masters (structure, content, alignment, compliance, decomposition)
 - 3 for Developers (file tracking, test running, linting)
 - 2 for QA (requirements tracing, quality gates)
+- 1 for Documentation (link validation)
 
 **Impact:** ~1.3 hours saved per story, 100% compliance, <5% rework rate
 
@@ -134,20 +135,17 @@ All documentation follows token-efficient loading:
 
 ## What's New
 
-### Version 1.7.4
-🎫 **Jira Integration Skill** - Read-only Jira integration with automatic issue detection and context enrichment
-🔄 **Enhanced PRISM Skills** - All 7 agent personas now integrate seamlessly with Jira for richer context
-🔒 **Security-First Configuration** - Environment variable-based credential management with comprehensive guides
-📖 **Progressive Disclosure Documentation** - Complete Jira integration guide with API reference and examples
+### Version 2.3.0
+🏗️ **Bring Your Own Skill (BYOS)** - Create project-level skills shared via git with automatic PRISM agent assignment. `/byos scaffold`, `/byos validate`, `/byos list` commands. Leverages existing `discover_prism_skills()` infrastructure.
 
 ### Recent Updates
-- **1.7.2**: Feature comparison table, workflow diagrams, official documentation links
-- **1.7.1**: Documentation clarity, system architecture layers, test artifact labeling
-- **1.7.0**: Smart Connections Integration, Documentation Optimization, Architecture System
-- **1.6.0**: Documentation validation system and PRISM methodology checklist
-- **1.5.0**: Obsidian-based context memory with Smart Connections
-- **1.4.0**: Hooks Manager skill with security documentation
-- **1.3.0**: Complete token documentation and parameter consistency
+- **2.2.2**: Fixed prism-loop command session isolation, removed dead env var fallback
+- **2.2.1**: PRISM Loop session isolation fix, Windows Unicode encoding fix
+- **2.2.0**: Documentation audit & completeness - backfilled 4 CHANGELOG versions, 247 links validated
+- **2.1.0**: prism-loop TDD orchestration, Orca integration suite, Jira v2.2.0
+- **2.0.0**: 11 sub-agents, file-first architecture, PRISM loop introduction
+- **1.9.0**: 8 templates, 9 checklists, 8 hooks
+- **1.8.0**: Strangler pattern, SDLC handoff, PROBE estimation, story decomposition
 
 📋 **[Complete Changelog](CHANGELOG.md)**
 
@@ -246,7 +244,8 @@ PRISM follows secure development practices:
 - **[TDD Workflow Loop](skills/prism-loop/SKILL.md)** - Automated RED/GREEN development cycle
 
 ### Building Skills
-- **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills
+- **[BYOS](skills/byos/SKILL.md)** - Create project-level skills shared via git with PRISM agent assignment
+- **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills with progressive disclosure
 - **[Progressive Disclosure](skills/skill-builder/reference/progressive-disclosure.md)** - Token optimization pattern
 
 ## Support

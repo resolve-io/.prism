@@ -18,19 +18,22 @@ graph TD
     B --> C["2. SM: Draft Story"]
     C --> D{"story_complete?"}
     D -->|No| C
-    D -->|Yes| E["3. QA: Write Failing Tests"]
+    D -->|Yes| VP["3. SM: Verify Plan"]
+    VP --> VPC{"plan_coverage?"}
+    VPC -->|MISSING items| VP
+    VPC -->|All COVERED| E["4. QA: Write Failing Tests"]
     E --> F{"red_with_trace?"}
     F -->|Tests pass| E
     F -->|AC uncovered| E
-    F -->|Valid RED| G["4. RED GATE ⏸"]
+    F -->|Valid RED| G["5. RED GATE ⏸"]
     G -->|"/prism-reject"| B
-    G -->|"/prism-approve"| H["5. DEV: Implement"]
+    G -->|"/prism-approve"| H["6. DEV: Implement"]
     H --> I{"green?"}
     I -->|Tests fail| H
-    I -->|Tests pass| J["6. QA: Verify Green"]
+    I -->|Tests pass| J["7. QA: Verify Green"]
     J --> K{"green_full?"}
     K -->|Lint fails| J
-    K -->|All pass| L["7. GREEN GATE ⏸"]
+    K -->|All pass| L["8. GREEN GATE ⏸"]
     L -->|"/prism-approve"| M["✓ DONE"]
 
     style G fill:#ffeb3b
@@ -45,16 +48,20 @@ graph TD
 The workflow enforces end-to-end traceability:
 
 ```
-User Request → [Step 1] → Requirements → [Step 2] → Acceptance Criteria → [Step 3] → Tests
-                          REQ-1, REQ-2              AC-1 → REQ-1            test_ac1 → AC-1
+User Request → [Step 1] → Requirements → [Step 2] → Acceptance Criteria
+                          REQ-1, REQ-2              AC-1 → REQ-1
+
+[Step 3] → Plan Coverage (all REQs mapped) → [Step 4] → Tests
+           REQ → AC verified                            test_ac1 → AC-1
 ```
 
 ### Validation Chain
 
 | Exit Point | Validation | Blocks If |
 |------------|------------|-----------|
-| Step 2 | `story_complete` | Any REQ lacks an AC |
-| Step 3 | `red_with_trace` | Tests pass (should fail) OR any AC lacks a test |
+| Step 2 | `story_complete` | Story file missing or no ACs found |
+| Step 3 | `plan_coverage` | Any requirement is MISSING from Plan Coverage |
+| Step 4 | `red_with_trace` | Tests pass (should fail) OR any AC lacks a test |
 
 ### Silent Drop Prevention
 
@@ -85,7 +92,7 @@ Write tests for ALL uncovered ACs before proceeding.
 
 ## Gate Decisions
 
-### At RED Gate (Step 4)
+### At RED Gate (Step 5)
 
 **Approve if:**
 - All ACs have test coverage (trace audit passed)
@@ -97,7 +104,7 @@ Write tests for ALL uncovered ACs before proceeding.
 - Requirements need clarification
 - Loops back to step 1 (planning)
 
-### At GREEN Gate (Step 7)
+### At GREEN Gate (Step 8)
 
 **Approve if:**
 - All tests pass

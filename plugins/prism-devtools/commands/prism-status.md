@@ -14,4 +14,4 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_status.py"
 
 ## Output
 
-Shows current step, progress through all 7 steps, and story file path.
+Shows current step, progress through all 8 steps, and story file path.

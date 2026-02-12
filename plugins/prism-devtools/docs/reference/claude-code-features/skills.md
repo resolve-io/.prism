@@ -426,6 +426,7 @@ whenToUse: |
 - **[Slash Commands](./slash-commands.md)** - Manual alternatives to skills
 - **[Hooks](./hooks.md)** - Enforce skill-specific rules
 - **[Workflows](./workflows.md)** - Multi-skill orchestration
+- **[BYOS](../../../skills/byos/SKILL.md)** - Create project-level skills with agent assignment
 - **[Skill Builder](../../../skills/skill-builder/SKILL.md)** - Tool for creating skills
 
 ---
@@ -435,7 +436,8 @@ whenToUse: |
 > **Note:** Agent personas (`/dev`, `/qa`, `/sm`, `/architect`) are **slash commands**, not skills. See [Slash Commands](./slash-commands.md).
 
 **Meta-Skills:**
-- [Skill Builder](../../../skills/skill-builder/SKILL.md) - Create new skills
+- [BYOS](../../../skills/byos/SKILL.md) - Create project-level skills with PRISM agent assignment
+- [Skill Builder](../../../skills/skill-builder/SKILL.md) - Create new skills with progressive disclosure
 - [Hooks Manager](../../../skills/hooks-manager/SKILL.md) - Manage hooks
 - [Agent Builder](../../../skills/agent-builder/SKILL.md) - Create subagents
 
@@ -446,5 +448,5 @@ whenToUse: |
 
 ---
 
-**Last Updated**: 2026-02-06
-**PRISM Version**: 2.2.0
+**Last Updated**: 2026-02-12
+**PRISM Version**: 2.3.0

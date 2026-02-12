@@ -5,13 +5,13 @@
     "name": "Resolve Systems",
     "email": "jesse@resolve.io"
   },
-  "version": "2.2.2",
+  "version": "2.3.0",
   "plugins": [
     {
       "name": "prism-devtools",
       "description": "Comprehensive development toolkit for building Claude Code plugins and skills with progressive disclosure patterns, validation tools, PRISM methodology agents (SM, Dev, QA, PO, Architect), TDD workflow orchestration, and Obsidian-powered long-term memory with Smart Connections semantic search",
       "source": "./plugins/prism-devtools",
-      "version": "2.2.2",
+      "version": "2.3.0",
       "author": {
         "name": "Resolve Systems"
       },

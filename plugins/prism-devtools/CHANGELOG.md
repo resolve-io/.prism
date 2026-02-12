@@ -5,6 +5,19 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-02-12
+
+### Added
+- **Bring Your Own Skill (BYOS) v1.0.0** — Create and manage project-level skills shared via git with automatic PRISM agent assignment
+  - **`/byos scaffold <name>`** — Scaffolds `.claude/skills/{name}/` with pre-filled SKILL.md, reference/ directory, and optional `prism:` agent metadata
+  - **`/byos validate [name]`** — Validates skill structure, YAML frontmatter, `prism:` metadata (agent/phase/priority), stray .md files, and token budget
+  - **`/byos list`** — Lists all project-level skills with their PRISM agent/phase assignments
+  - **Scaffold script** (`scaffold_skill.py`) — Validates kebab-case names, enforces agent+phase pairing, prevents overwriting existing skills
+  - **Validate script** (`validate_skill.py`) — Checks required fields, validates agent/phase values against `sm|dev|qa|architect` and `planning|red|green|review`, warns on TODO placeholders and oversized bodies
+  - **Reference documentation** — Getting started guide, copy-paste skill template with all fields, and 3 real-world examples (team code standards/dev, test patterns/qa, architecture guard/architect)
+  - Leverages existing `discover_prism_skills()` infrastructure in `prism_loop_context.py` — no sync mechanism needed
+  - Project skills at `.claude/skills/` are natively discovered by Claude Code and auto-injected into PRISM agents via `prism:` frontmatter metadata
+
 ## [2.2.2] - 2026-02-09
 
 ### Fixed
