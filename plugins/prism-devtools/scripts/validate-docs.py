@@ -51,6 +51,7 @@ class Category(Enum):
     STRUCTURE = "structure"
     METADATA = "metadata"
     CLAUDE_CODE_FEATURES = "claude_code_features"
+    TERMINOLOGY = "terminology"
 
 
 # Directories excluded from validation
@@ -1289,6 +1290,172 @@ class SkillBuilderPatternValidator:
         return resolved
 
 
+class TerminologyConsistencyValidator:
+    """
+    Validates consistent use of Claude Code terminology (skill vs agent vs task)
+
+    PRISM Principle: Predictability - Consistent terminology prevents Claude from
+    misinterpreting instructions (e.g., using Task tool when a /skill was intended).
+
+    Rules:
+    - TC001: Skill referred to as "task"
+    - TC002: Skill referred to as "agent"
+    - TC003: Agent referred to as "skill"
+    - TC004: Skill or agent referred to as "command"
+    - TC005: Conflating declaration (e.g., "TASKS ARE SKILLS")
+    - TC006: Implicit task alias in routing context
+    """
+
+    EXCLUDED_PATHS = {'docs/validation/', 'agents/terminology-checker.md'}
+    CODE_EXAMPLE_LANGS = {'python', 'typescript', 'javascript', 'js', 'ts',
+                          'csharp', 'cs', 'bash', 'sh', 'powershell', 'json',
+                          'go', 'rust', 'java', 'sql', 'html', 'css'}
+
+    def __init__(self, files: Dict[str, FileNode], root_path: Path):
+        self.files = files
+        self.root_path = root_path
+        self.issues: List[ValidationIssue] = []
+        self.registry: Dict[str, str] = {}
+
+    def validate(self) -> List[ValidationIssue]:
+        """Run terminology consistency validation"""
+        self._build_registry()
+
+        if not self.registry:
+            return self.issues
+
+        for rel_path, file_node in self.files.items():
+            if file_node.file_type != 'markdown':
+                continue
+            if any(rel_path.startswith(excl) for excl in self.EXCLUDED_PATHS):
+                continue
+            self._scan_file(file_node)
+
+        return self.issues
+
+    def _build_registry(self):
+        """Build ground-truth registry of skills and agents from filesystem"""
+        skills_dir = self.root_path / 'skills'
+        if skills_dir.exists():
+            for skill_dir in skills_dir.iterdir():
+                if not skill_dir.is_dir() or skill_dir.name.startswith('.'):
+                    continue
+                skill_md = skill_dir / 'SKILL.md'
+                if skill_md.exists():
+                    name = self._extract_frontmatter_name(skill_md) or skill_dir.name
+                    self.registry[name] = 'skill'
+
+        agents_dir = self.root_path / 'agents'
+        if agents_dir.exists():
+            for agent_file in agents_dir.glob('*.md'):
+                name = self._extract_frontmatter_name(agent_file) or agent_file.stem
+                self.registry[name] = 'agent'
+
+    @staticmethod
+    def _extract_frontmatter_name(file_path: Path) -> Optional[str]:
+        """Extract the name: field from YAML frontmatter"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except Exception:
+            return None
+
+        if not lines or not lines[0].strip().startswith('---'):
+            return None
+
+        for line in lines[1:]:
+            if line.strip() == '---':
+                break
+            match = re.match(r'^name:\s*(.+)$', line.strip())
+            if match:
+                return match.group(1).strip().strip('"').strip("'")
+
+        return None
+
+    def _scan_file(self, file_node: FileNode):
+        """Scan file for terminology misclassifications in instruction blocks"""
+        in_code_block = False
+        code_block_lang = None
+
+        for line_num, line in enumerate(file_node.content_lines, start=1):
+            stripped = line.strip()
+
+            if stripped.startswith('```') or stripped.startswith('~~~'):
+                if not in_code_block:
+                    in_code_block = True
+                    lang_match = re.match(r'^[`~]{3,}\s*(\w+)?', stripped)
+                    code_block_lang = lang_match.group(1).lower() if lang_match and lang_match.group(1) else None
+                else:
+                    in_code_block = False
+                    code_block_lang = None
+                continue
+
+            if in_code_block and code_block_lang in self.CODE_EXAMPLE_LANGS:
+                continue
+
+            line_clean = re.sub(r'`[^`]+`', '', line)
+
+            if re.search(r'TASKS?\s+(?:ARE|=)\s+SKILLS?', line_clean, re.IGNORECASE):
+                self.issues.append(ValidationIssue(
+                    file=file_node.relative_path,
+                    line=line_num,
+                    category=Category.TERMINOLOGY,
+                    severity=Severity.WARNING,
+                    rule_id="TC005",
+                    message=f"Conflating declaration found: '{stripped}'",
+                    fix_guidance="Remove or rewrite. Skills (/slash-commands) are distinct from Task tool (delegation)."
+                ))
+
+            self._check_name_misclassifications(file_node, line_num, line_clean)
+
+    def _check_name_misclassifications(self, file_node: FileNode, line_num: int, line_clean: str):
+        """Check for specific name misclassifications"""
+        for name, actual_type in self.registry.items():
+            name_pattern = r'[-\s]'.join(re.escape(part) for part in name.split('-'))
+
+            wrong_type = None
+            rule_id = None
+            severity = Severity.WARNING
+
+            if actual_type == 'skill':
+                if re.search(rf'(?:execute|run|launch|use|invoke)\s+(?:the\s+)?{name_pattern}\s+task', line_clean, re.IGNORECASE):
+                    wrong_type = 'task'
+                    rule_id = 'TC001'
+                elif re.search(rf'(?:execute|run|launch|use|invoke)\s+(?:the\s+)?{name_pattern}\s+agent', line_clean, re.IGNORECASE):
+                    wrong_type = 'agent'
+                    rule_id = 'TC002'
+                elif re.search(rf'(?:→|->|=>|:\s)\s*{name_pattern}\s+task', line_clean, re.IGNORECASE):
+                    wrong_type = 'task'
+                    rule_id = 'TC006'
+                    severity = Severity.INFO
+            elif actual_type == 'agent':
+                if re.search(rf'(?:execute|run|launch|use|invoke)\s+(?:the\s+)?{name_pattern}\s+skill', line_clean, re.IGNORECASE):
+                    wrong_type = 'skill'
+                    rule_id = 'TC003'
+
+            if wrong_type:
+                self.issues.append(ValidationIssue(
+                    file=file_node.relative_path,
+                    line=line_num,
+                    category=Category.TERMINOLOGY,
+                    severity=severity,
+                    rule_id=rule_id,
+                    message=f"{actual_type.capitalize()} '{name}' referred to as '{wrong_type}'",
+                    fix_guidance=f"Replace with '/{name}' or '{name} {actual_type}'"
+                ))
+
+            if re.search(rf'(?:execute|run|launch|use|invoke)\s+(?:the\s+)?{name_pattern}\s+command', line_clean, re.IGNORECASE):
+                self.issues.append(ValidationIssue(
+                    file=file_node.relative_path,
+                    line=line_num,
+                    category=Category.TERMINOLOGY,
+                    severity=Severity.INFO,
+                    rule_id='TC004',
+                    message=f"{actual_type.capitalize()} '{name}' referred to as 'command'",
+                    fix_guidance=f"Replace with '{actual_type}'"
+                ))
+
+
 def generate_markdown_report(report: ValidationReport, output_path: Path):
     """Generate detailed markdown validation report"""
     with open(output_path, 'w', encoding='utf-8') as f:
@@ -1409,6 +1576,17 @@ def main():
     skillbuilder_issues = skillbuilder_validator.validate()
     all_issues.extend(skillbuilder_issues)
     print(f"OK: Found {len(skillbuilder_issues)} skill-builder pattern issues")
+    print()
+
+    # Phase 6: Validate terminology consistency
+    print("Phase 6: Validating terminology consistency...")
+    terminology_validator = TerminologyConsistencyValidator(files, args.root)
+    terminology_issues = terminology_validator.validate()
+    all_issues.extend(terminology_issues)
+    registry = terminology_validator.registry
+    print(f"  Registry: {sum(1 for v in registry.values() if v == 'skill')} skills, "
+          f"{sum(1 for v in registry.values() if v == 'agent')} agents")
+    print(f"OK: Found {len(terminology_issues)} terminology issues")
     print()
 
     # Generate report
