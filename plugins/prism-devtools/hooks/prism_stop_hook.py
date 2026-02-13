@@ -33,8 +33,9 @@ STATE_FILE = Path(".claude/prism-loop.local.md")
 WORKFLOW_STEPS = [
     # (step_id, agent, action, step_type, loop_back_to, validation)
     ("review_previous_notes", "sm", "planning-review", "agent", None, None),
-    ("draft_story", "sm", "draft", "agent", None, None),
-    ("write_failing_tests", "qa", "write-failing-tests", "agent", None, "red"),
+    ("draft_story", "sm", "draft", "agent", None, "story_complete"),
+    ("verify_plan", "sm", "verify-plan", "agent", None, "plan_coverage"),
+    ("write_failing_tests", "qa", "write-failing-tests", "agent", None, "red_with_trace"),
     ("red_gate", None, None, "gate", 0, None),
     ("implement_tasks", "dev", "develop-story", "agent", None, "green"),
     ("verify_green_state", "qa", "verify-green-state", "agent", None, "green_full"),
@@ -138,7 +139,128 @@ def validate_step(step_id: str, validation_type: str, state: dict) -> dict:
 
     runner = detect_test_runner()
 
-    if validation_type == "red":
+    if validation_type == "story_complete":
+        # Verify story file exists and has acceptance criteria
+        story_file = state.get("story_file", "")
+        if not story_file:
+            story_file = detect_story_file()
+        if not story_file or not Path(story_file).exists():
+            return {
+                "valid": False,
+                "message": "Story file not found.",
+                "continue_instruction": f"""STORY VALIDATION FAILED: No story file detected.
+
+The draft_story step must produce a story file in docs/stories/.
+Ensure the story file is saved before completing this step.
+
+Workflow Context: {state.get('prompt', '')}"""
+            }
+        try:
+            story_content = Path(story_file).read_text(encoding='utf-8')
+        except IOError:
+            return {
+                "valid": False,
+                "message": f"Cannot read story file: {story_file}",
+                "continue_instruction": "Ensure the story file is readable."
+            }
+        if "## Acceptance Criteria" not in story_content and "## acceptance criteria" not in story_content.lower():
+            return {
+                "valid": False,
+                "message": "Story file missing '## Acceptance Criteria' section.",
+                "continue_instruction": f"""STORY VALIDATION FAILED: Missing Acceptance Criteria
+
+Story file: {story_file}
+
+The story must contain a '## Acceptance Criteria' section with
+at least one AC in Given/When/Then format.
+
+Add the section and re-save the story file."""
+            }
+        ac_pattern = re.compile(r'AC-\d+|(?:^|\n)\s*\d+\.\s', re.MULTILINE)
+        if not ac_pattern.search(story_content):
+            return {
+                "valid": False,
+                "message": "No acceptance criteria items found (expected AC-1, AC-2, etc.).",
+                "continue_instruction": f"""STORY VALIDATION FAILED: No AC items
+
+Story file: {story_file}
+
+The '## Acceptance Criteria' section exists but contains no
+numbered items (AC-1, AC-2, etc.). Add at least one AC."""
+            }
+        return {"valid": True, "message": "Story complete: file exists with acceptance criteria", "continue_instruction": None}
+
+    elif validation_type == "plan_coverage":
+        # Verify plan coverage section exists with no MISSING items
+        story_file = state.get("story_file", "")
+        if not story_file:
+            story_file = detect_story_file()
+        if not story_file or not Path(story_file).exists():
+            return {
+                "valid": False,
+                "message": "Story file not found for plan coverage check.",
+                "continue_instruction": "Ensure the story file exists before verifying plan coverage."
+            }
+        try:
+            story_content = Path(story_file).read_text(encoding='utf-8')
+        except IOError:
+            return {
+                "valid": False,
+                "message": f"Cannot read story file: {story_file}",
+                "continue_instruction": "Ensure the story file is readable."
+            }
+        if "## Plan Coverage" not in story_content:
+            return {
+                "valid": False,
+                "message": "Story file missing '## Plan Coverage' section.",
+                "continue_instruction": f"""PLAN COVERAGE VALIDATION FAILED
+
+Story file: {story_file}
+
+The verify_plan step must add a '## Plan Coverage' section to the story
+that maps each original requirement to its covering AC(s).
+
+Format:
+## Plan Coverage
+| # | Requirement | AC(s) | Status |
+|---|-------------|-------|--------|
+| 1 | User can login | AC-1 | COVERED |
+
+All items must be COVERED. Any MISSING items must be addressed
+by adding new ACs and tasks."""
+            }
+        if "MISSING" in story_content.split("## Plan Coverage")[1].split("##")[0]:
+            return {
+                "valid": False,
+                "message": "Plan coverage has MISSING requirements.",
+                "continue_instruction": f"""PLAN COVERAGE VALIDATION FAILED: Requirements not covered
+
+Story file: {story_file}
+
+The Plan Coverage section contains MISSING items.
+Each requirement from the original prompt must map to at least one AC.
+
+ACTION REQUIRED:
+1. Read the Plan Coverage section
+2. For each MISSING item, add new ACs and tasks
+3. Update the coverage table to COVERED
+4. No MISSING items are allowed"""
+            }
+        coverage_section = story_content.split("## Plan Coverage")[1].split("##")[0]
+        if "COVERED" not in coverage_section and "PARTIAL" not in coverage_section:
+            return {
+                "valid": False,
+                "message": "Plan Coverage section has no coverage entries.",
+                "continue_instruction": f"""PLAN COVERAGE VALIDATION FAILED: Empty coverage table
+
+Story file: {story_file}
+
+The Plan Coverage section exists but contains no entries.
+Map each requirement to its covering AC(s) with COVERED status."""
+            }
+        return {"valid": True, "message": "Plan coverage validated: all requirements covered", "continue_instruction": None}
+
+    elif validation_type == "red" or validation_type == "red_with_trace":
         # RED phase: tests must EXIST and FAIL
         test_result = run_tests(runner)
 
@@ -201,7 +323,64 @@ Fix the errors, then verify tests fail on assertions.
 Story file: {state.get('story_file', 'unknown')}"""
             }
 
-        # Tests fail with assertions - RED phase complete!
+        # Tests fail with assertions - basic RED check passed
+        # For red_with_trace, also verify AC-to-test traceability
+        if validation_type == "red_with_trace":
+            story_file = state.get("story_file", "")
+            if story_file and Path(story_file).exists():
+                try:
+                    story_content = Path(story_file).read_text(encoding='utf-8')
+                    ac_ids = re.findall(r'AC-(\d+)', story_content)
+                    ac_ids = sorted(set(ac_ids), key=int)
+
+                    if ac_ids:
+                        # Find test files
+                        cwd = Path.cwd()
+                        test_globs = ["**/*.test.*", "**/*.spec.*", "**/*_test.*", "**/test_*.*", "**/*Tests.cs"]
+                        test_files_content = ""
+                        for tg in test_globs:
+                            for tf in cwd.glob(tg):
+                                try:
+                                    test_files_content += tf.read_text(encoding='utf-8', errors='replace')
+                                except (IOError, OSError):
+                                    pass
+
+                        missing_acs = []
+                        for ac_id in ac_ids:
+                            ac_ref = f"AC-{ac_id}"
+                            ac_ref_lower = f"ac{ac_id}"
+                            ac_ref_underscore = f"ac_{ac_id}"
+                            if (ac_ref not in test_files_content
+                                    and ac_ref_lower not in test_files_content.lower()
+                                    and ac_ref_underscore not in test_files_content.lower()):
+                                missing_acs.append(ac_ref)
+
+                        if missing_acs:
+                            missing_list = ", ".join(missing_acs)
+                            return {
+                                "valid": False,
+                                "message": f"SILENT DROP DETECTED: {missing_list} has no test",
+                                "continue_instruction": f"""TRACE VALIDATION FAILED: Silent requirement drop detected
+
+Story file: {story_file}
+
+The following acceptance criteria have NO mapped test:
+{chr(10).join(f'  - {ac}: No test references this AC' for ac in missing_acs)}
+
+Every AC MUST have at least one test that references it via:
+  - Test name: test_ac1_description()
+  - Comment: # AC-1: description
+  - Docstring: \"\"\"AC-1: description\"\"\"
+
+ACTION REQUIRED:
+1. Write tests for each missing AC listed above
+2. Include AC reference in test name, comment, or docstring
+3. Ensure tests FAIL with assertion errors
+4. Run tests to confirm RED state"""
+                            }
+                except (IOError, OSError):
+                    pass  # If we can't read story, skip trace check
+
         return {"valid": True, "message": "RED phase validated: Tests fail with assertions", "continue_instruction": None}
 
     elif validation_type == "green":

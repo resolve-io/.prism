@@ -37,6 +37,7 @@ WORKFLOW_STEPS = [
     # PLANNING PHASE
     "review_previous_notes",  # agent
     "draft_story",            # agent
+    "verify_plan",            # agent: verify story covers all requirements
     # TDD RED PHASE
     "write_failing_tests",    # agent
     "red_gate",               # gate: approve → GREEN, reject → step 0
@@ -222,11 +223,12 @@ This file tracks workflow state. The Stop hook reads this to determine the next 
 ### TDD Flow
 
 1. **Planning**: SM reviews context and drafts story
-2. **RED Phase**: QA identifies/extends/creates failing tests
-3. **RED Gate**: Review tests → /prism-approve or /prism-reject
-4. **GREEN Phase**: DEV implements minimal code to pass tests
-5. **Review**: QA verifies tests + lint
-6. **GREEN Gate**: Final approval → /prism-approve to complete
+2. **Verify Plan**: SM checks story covers all requirements
+3. **RED Phase**: QA writes failing tests with traceability headers
+4. **RED Gate**: Review tests → /prism-approve or /prism-reject
+5. **GREEN Phase**: DEV implements minimal code to pass tests
+6. **Review**: QA verifies tests + lint
+7. **GREEN Gate**: Final approval → /prism-approve to complete
 """
 
     STATE_FILE.write_text(content, encoding='utf-8')

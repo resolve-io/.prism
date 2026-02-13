@@ -19,22 +19,25 @@ Run the setup script to initialize workflow state:
 python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" --session-id "${CLAUDE_SESSION_ID}" "$ARGUMENTS"
 ```
 
-## Workflow Steps (7 steps)
+## Workflow Steps (8 steps)
 
-| # | Phase | Step | Agent | Type |
-|---|-------|------|-------|------|
-| 1 | Planning | review_previous_notes | SM | agent |
-| 2 | Planning | draft_story | SM | agent |
-| 3 | TDD RED | write_failing_tests | QA | agent |
-| 4 | TDD RED | red_gate | - | gate |
-| 5 | TDD GREEN | implement_tasks | DEV | agent |
-| 6 | TDD GREEN | verify_green_state | QA | agent |
-| 7 | TDD GREEN | green_gate | - | gate |
+| # | Phase | Step | Agent | Type | Validation |
+|---|-------|------|-------|------|------------|
+| 1 | Planning | review_previous_notes | SM | agent | - |
+| 2 | Planning | draft_story | SM | agent | story_complete |
+| 3 | Planning | verify_plan | SM | agent | plan_coverage |
+| 4 | TDD RED | write_failing_tests | QA | agent | red_with_trace |
+| 5 | TDD RED | red_gate | - | gate | - |
+| 6 | TDD GREEN | implement_tasks | DEV | agent | green |
+| 7 | TDD GREEN | verify_green_state | QA | agent | green_full |
+| 8 | TDD GREEN | green_gate | - | gate | - |
 
 ## Test Validation
 
 The stop hook validates before advancing:
-- **write_failing_tests** → Tests must FAIL (assertion errors)
+- **draft_story** → Story file must exist with Acceptance Criteria
+- **verify_plan** → Plan Coverage section must have zero MISSING requirements
+- **write_failing_tests** → Tests must FAIL (assertion errors) + every AC must have a mapped test
 - **implement_tasks** → All tests must PASS
 - **verify_green_state** → Tests + lint must pass
 

@@ -21,13 +21,13 @@ Claude Code features build on each other in layers:
 
 ```
 ┌─────────────────────────────────────┐
-│  Skills (Auto-activate)             │  ← PRISM: 8 agent personas
+│  Skills (Auto-activate)             │  ← PRISM: 39 skills (8 agents + meta + tasks)
 ├─────────────────────────────────────┤
 │  Plugins (Bundle & Share)           │  ← PRISM: Distributed package
 ├─────────────────────────────────────┤
 │  Hooks (Event-driven)               │  ← PRISM: 6 workflow hooks
 ├─────────────────────────────────────┤
-│  Subagents (Specialized)            │  ← PRISM: 10 validators
+│  Subagents (Specialized)            │  ← PRISM: 11 validators
 ├─────────────────────────────────────┤
 │  Slash Commands (Manual)            │  ← PRISM: 7 agent commands
 ├─────────────────────────────────────┤
@@ -80,7 +80,7 @@ Claude Code features build on each other in layers:
 
 **What they are:** Pre-configured AI personalities with isolated context windows. Each has specific expertise and tool access.
 
-**How PRISM uses it:** 10 validation subagents that run at quality gates:
+**How PRISM uses it:** 11 validation subagents that run at quality gates:
 
 ### Story Master (SM) Validators
 
@@ -146,7 +146,7 @@ Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 
 **What they are:** Folders with `SKILL.md` descriptors that activate **automatically** when their description matches task context.
 
-**How PRISM uses it:** 30+ task-specific skills that extend persona capabilities.
+**How PRISM uses it:** 39 task-specific skills that extend persona capabilities, including the BYOS skill for creating project-level skills with PRISM agent assignment.
 
 > **Note:** Agent personas (`/architect`, `/dev`, `/qa`, `/sm`, `/po`, `/support`) are **slash commands**, not skills. See [Section 2: Slash Commands](#2-slash-commands) for persona details.
 
@@ -155,6 +155,7 @@ Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 | Skill | Purpose | Location |
 |-------|---------|----------|
 | `skill-builder` | Create optimized skills using progressive disclosure | [`skills/skill-builder/SKILL.md`](../../../skills/skill-builder/SKILL.md) |
+| `byos` | Create project-level skills with PRISM agent assignment | [`skills/byos/SKILL.md`](../../../skills/byos/SKILL.md) |
 | `hooks-manager` | Manage hook configurations, test patterns | [`skills/hooks-manager/SKILL.md`](../../../skills/hooks-manager/SKILL.md) |
 | `agent-builder` | Create custom subagent definitions | [`skills/agent-builder/SKILL.md`](../../../skills/agent-builder/SKILL.md) |
 
@@ -182,7 +183,7 @@ Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 │   └── plugin.json              # Plugin metadata
 ├── .claude/
 │   ├── settings.json            # Hook configurations
-│   └── agents/                  # 10 subagent validators
+│   └── agents/                  # 11 subagent validators
 ├── commands/                    # 7 slash commands
 ├── skills/                      # 11 skills (8 agents + 3 meta)
 ├── hooks/                       # 6 active hooks
@@ -287,5 +288,5 @@ PRISM demonstrates progressive disclosure at multiple levels:
 
 ---
 
-**Last Updated:** 2026-02-06
-**PRISM Version:** 2.2.0
+**Last Updated:** 2026-02-12
+**PRISM Version:** 2.3.0

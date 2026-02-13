@@ -26,8 +26,9 @@ STATE_FILE = Path(".claude/prism-loop.local.md")
 WORKFLOW_STEPS = [
     # (step_id, agent, action, step_type, loop_back_to, validation)
     ("review_previous_notes", "sm", "planning-review", "agent", None, None),
-    ("draft_story", "sm", "draft", "agent", None, None),
-    ("write_failing_tests", "qa", "write-failing-tests", "agent", None, "red"),
+    ("draft_story", "sm", "draft", "agent", None, "story_complete"),
+    ("verify_plan", "sm", "verify-plan", "agent", None, "plan_coverage"),
+    ("write_failing_tests", "qa", "write-failing-tests", "agent", None, "red_with_trace"),
     ("red_gate", None, None, "gate", 0, None),
     ("implement_tasks", "dev", "develop-story", "agent", None, "green"),
     ("verify_green_state", "qa", "verify-green-state", "agent", None, "green_full"),

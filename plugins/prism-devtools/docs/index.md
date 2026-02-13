@@ -2,7 +2,7 @@
 
 **P**redictability · **R**esiliency · **I**ntentionality · **S**ustainability · **M**aintainability
 
-`Version 2.2.0` | `Last Updated: 2026-02-06`
+`Version 2.3.1` | `Last Updated: 2026-02-13`
 
 ---
 
@@ -26,10 +26,10 @@
 
 | Navigation Path | Quick Links |
 |-----------------|-------------|
-| **🚀 New to PRISM?** | [Installation](../README.md#quick-start) · [First Steps](../README.md#2-first-steps) |
-| **🔄 Main Workflow** | [Core Development Cycle](./reference/workflows/core-development-cycle.md) (SM → Dev → QA → Peer) |
-| **🤖 Automated TDD** | [PRISM Loop](../skills/prism-loop/SKILL.md) (Planning → RED → GREEN with validation gates) |
-| **👥 By Role** | [Developers](#for-developers) · [Story Masters](#for-story-masters) · [QA Engineers](#for-qa-engineers) |
+| **🔄 Tier 1: /prism-loop** | [PRISM Loop](../skills/prism-loop/SKILL.md) — Give it a PRD, auto-drives SM → QA → DEV |
+| **🤖 Tier 2: Agent Commands** | [/dev](../commands/dev.md) · [/qa](../commands/qa.md) · [/sm](../commands/sm.md) · [/architect](../commands/architect.md) |
+| **🎯 Tier 3: Skills** | [probe-estimation](../skills/probe-estimation/SKILL.md) · [test-design](../skills/test-design/SKILL.md) · [byos](../skills/byos/SKILL.md) · [execute-checklist](../skills/execute-checklist/SKILL.md) |
+| **🚀 New to PRISM?** | [Installation](../README.md#installation) · [How to Use](#how-to-use-prism) |
 | **⚙️ By Feature** | [Sub-Agents](#sub-agent-validation-system) · [Workflows](#workflows) · [Skills](#skills) · [Hooks](#hooks) |
 
 ---
@@ -75,75 +75,58 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 ---
 
-## 👥 Getting Started by Role
+## 🚀 How to Use PRISM
 
-### 💻 For Developers
+PRISM has three tiers of usage. Start with the loop, drop to an agent when you need focused expertise, invoke a skill directly for one-off operations.
 
-> **Goal:** Implement features with automated quality checks and TDD workflow
+### Tier 1: `/prism-loop` — Automated Team
 
-**🎯 Entry Point:** [Core Development Workflow](./reference/workflows/core-development-cycle.md#brownfield-workflow-patterns)
+> **The primary entry point for feature work.** Give it a PRD or requirements and the loop drives SM → QA → DEV automatically through Planning → RED (failing tests) → GREEN (implementation) → verification with quality gates.
 
-**⌨️ Commands:**
 ```bash
-/dev story-001    # Activate developer role
+/prism-loop implement user authentication based on PRD-auth.md
 ```
 
-**🛠️ Key Tools:**
-- **Sub-agents:** `file-list-auditor`, `test-runner`, `lint-checker`
-- **Workflows:** [Core Development Cycle](./reference/workflows/core-development-cycle.md)
-- **Checklists:** [Code Quality](../checklists/code-quality-checklist.md)
-
-📖 **Learn More:** [Dev Command](../commands/dev.md)
+📖 **Learn More:** [PRISM Loop](../skills/prism-loop/SKILL.md) · [Core Development Cycle](./reference/workflows/core-development-cycle.md)
 
 ---
 
-### 📝 For Story Masters
+### Tier 2: Agent Commands — Focused Problem-Solving
 
-> **Goal:** Plan and size stories with PSP/PROBE estimation
+> **Activate a specific agent when you have a targeted problem.** These are for when you need one agent's expertise, not the full cycle.
 
-**🎯 Entry Point:** [Planning Phase](./reference/workflows/core-development-cycle.md#1-story-approval-after-planning)
-
-**⌨️ Commands:**
 ```bash
-/sm    # Activate story master role
+/dev story-001    # Implement against an existing story
+/qa story-001     # Validate quality for a specific story
+/sm               # Plan and size stories manually
+/architect        # Design systems and make tech decisions
 ```
 
-**🛠️ Key Tools:**
-- **Sub-agents:** `story-structure-validator`, `story-content-validator`, `epic-alignment-checker`, `architecture-compliance-checker`, `epic-analyzer`
-- **Skills:** [PROBE Estimation](../skills/probe-estimation/SKILL.md)
-- **Checklists:** [Story Draft](../checklists/story-draft-checklist.md)
-
-📖 **Learn More:** [SM Command](../commands/sm.md)
+| Agent | Command | Key Tools |
+|-------|---------|-----------|
+| **Developer** | [`/dev`](../commands/dev.md) | `file-list-auditor`, `test-runner`, `lint-checker` |
+| **QA Engineer** | [`/qa`](../commands/qa.md) | `requirements-tracer`, `qa-gate-manager`, [Test Design](../skills/test-design/SKILL.md) |
+| **Story Master** | [`/sm`](../commands/sm.md) | `story-structure-validator`, `epic-analyzer`, [PROBE](../skills/probe-estimation/SKILL.md) |
+| **Architect** | [`/architect`](../commands/architect.md) | System design, tech decisions |
+| **Product Owner** | [`/po`](../commands/po.md) | Requirements, backlog management |
+| **Support** | [`/support`](../commands/support.md) | Issue validation with Playwright |
 
 ---
 
-### ✅ For QA Engineers
+### Tier 3: Skills — Individual Operations
 
-> **Goal:** Design test strategy and validate quality gates
+> **Invoke any skill directly for a specific task.** Skills are building blocks that agents use, but you can invoke them directly too.
 
-**🎯 Entry Point:** [QA Review Phase](./reference/workflows/core-development-cycle.md#3-qa-review-optional-but-recommended)
-
-**⌨️ Commands:**
 ```bash
-/qa story-001    # Activate QA role
+/probe-estimation            # Size a story with PROBE method
+/test-design                 # Design test strategy
+/byos scaffold my-skill      # Create a team skill
+/execute-checklist story-dod  # Run a quality checklist
 ```
 
-**🛠️ Key Tools:**
-- **Sub-agents:** `requirements-tracer`, `qa-gate-manager`
-- **Skills:** [Test Design](../skills/test-design/SKILL.md), [Risk Profile](../skills/risk-profile/SKILL.md)
-- **Templates:** [QA Gate YAML](../templates/qa-gate-tmpl.yaml)
+**Or let skills auto-activate** — say "design the architecture" and the Architect skill activates, say "implement the story" and Dev activates.
 
-📖 **Learn More:** [QA Command](../commands/qa.md) · [QA Reference](./reference/qa/README.md)
-
----
-
-### 🔧 Other Roles
-
-| Role | Command | Purpose |
-|------|---------|---------|
-| **🏛️ Architect** | [`/architect`](../commands/architect.md) | System design and tech decisions |
-| **📋 Product Owner** | [`/po`](../commands/po.md) | Requirements and backlog management |
-| **🆘 Support Engineer** | [`/support`](../commands/support.md) | Issue validation with Playwright |
+📖 **All Skills:** [Skills Directory](../skills/README.md) · [Build Your Own](../skills/byos/SKILL.md)
 
 ---
 
@@ -227,6 +210,7 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 - `prism-devtools:support` - Issue validation
 
 🛠️ **Build Your Own:** [Skill Builder](../skills/skill-builder/SKILL.md) · [Creation Process](../skills/skill-builder/reference/skill-creation-process.md)
+🏗️ **Project Skills:** [BYOS](../skills/byos/SKILL.md) — Create team skills shared via git with automatic PRISM agent assignment
 
 ---
 
@@ -270,9 +254,9 @@ PRISM uses Claude Code's feature stack in a **layered architecture**. Each featu
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| **🧩 Skills** | 38 | [probe-estimation](../skills/probe-estimation/SKILL.md), [test-design](../skills/test-design/SKILL.md), [risk-profile](../skills/risk-profile/SKILL.md), [+more](../skills/skill-builder/SKILL.md) |
+| **🧩 Skills** | 39 | [probe-estimation](../skills/probe-estimation/SKILL.md), [test-design](../skills/test-design/SKILL.md), [risk-profile](../skills/risk-profile/SKILL.md), [byos](../skills/byos/SKILL.md), [+more](../skills/skill-builder/SKILL.md) |
 | **📄 Templates** | 16 | PRD, Architecture, Stories, QA Gates ([Templates](../templates/README.md)) |
-| **✅ Checklists** | 10 | [story-draft](../checklists/story-draft-checklist.md), [code-quality](../checklists/code-quality-checklist.md), [+8 more](../checklists/README.md) |
+| **✅ Checklists** | 10 | [story-draft](../skills/execute-checklist/checklists/story-draft-checklist.md), [code-quality](../skills/execute-checklist/checklists/code-quality-checklist.md), [+8 more](../skills/execute-checklist/SKILL.md) |
 
 ---
 
@@ -314,10 +298,10 @@ Smart Connections integration for efficient, non-duplicative documentation:
 | Task | Resources |
 |------|-----------|
 | **🚀 Starting a project** | [Core Workflow](./reference/workflows/core-development-cycle.md) · [`/architect`](../commands/architect.md) |
-| **📝 Planning a feature** | [`/sm`](../commands/sm.md) · [Story Checklist](../checklists/story-draft-checklist.md) |
-| **💻 Implementing code** | [`/dev`](../commands/dev.md) · [Code Quality](../checklists/code-quality-checklist.md) |
+| **📝 Planning a feature** | [`/sm`](../commands/sm.md) · [Story Checklist](../skills/execute-checklist/checklists/story-draft-checklist.md) |
+| **💻 Implementing code** | [`/dev`](../commands/dev.md) · [Code Quality](../skills/execute-checklist/checklists/code-quality-checklist.md) |
 | **✅ Testing & QA** | [`/qa`](../commands/qa.md) · [QA Reference](./reference/qa/README.md) · [Quality Gates](./reference/qa/concepts/quality-gates.md) |
-| **👁️ Code review** | [Peer Review Checklist](../checklists/peer-review-checklist.md) |
+| **👁️ Code review** | [Peer Review Checklist](../skills/execute-checklist/checklists/peer-review-checklist.md) |
 
 ---
 
@@ -381,14 +365,20 @@ Complete technical reference with progressive disclosure:
 ## 📊 System Status
 
 > [!NOTE]
-> **Current Version:** `2.2.0`
+> **Current Version:** `2.3.1`
 
-### What's New in v2.2.0
+### What's New in v2.3.1
 
-- **Documentation Audit & Completeness** - Multi-agent audit resolved 75 undocumented features, backfilled 4 CHANGELOG versions (v1.8.0–v2.1.0), updated all version references, fixed broken links, corrected feature counts across 15 files
-- **100% Documentation Coverage** - All 38 skills, 11 agents, 16 templates, 10 checklists, 13 commands now documented in CHANGELOG
+- **BYOS simplified** — Skills no longer need a `phase:` field. Declare `agent` only; the system resolves which steps to inject into.
+- **Loop steps externalized** — Step instructions moved to `hooks/core-steps/*.md` for easier editing.
+- **Files reorganized** — Checklists, QA artifacts, and validation stories moved into their owning skill directories.
+- **Docs restructured** — README and index now lead with the 3-tier usage hierarchy (loop → agent → skill).
 
-### Highlights from v2.1.0
+### Highlights from v2.3.0
+
+- **Bring Your Own Skill (BYOS)** — Teams can now create project-level skills shared via git with automatic PRISM agent assignment. `/byos scaffold`, `/byos validate`, `/byos list` commands. Leverages existing `discover_prism_skills()` infrastructure — no sync needed.
+
+### Highlights from v2.2.x
 
 - **prism-loop TDD orchestration** - Automated RED/GREEN workflow with validation gates and phase auto-progression
 - **Sub-agents validation system** - 11 specialized agents including `link-checker`

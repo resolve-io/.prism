@@ -21,6 +21,7 @@ STATE_FILE = Path(".claude/prism-loop.local.md")
 WORKFLOW_STEPS = [
     ("review_previous_notes", "sm", "planning-review", None),
     ("draft_story", "sm", "draft", None),
+    ("verify_plan", "sm", "verify-plan", None),
     ("write_failing_tests", "qa", "write-failing-tests", None),
     ("red_gate", None, None, 0),  # Reject loops back to step 0
     ("implement_tasks", "dev", "develop-story", None),

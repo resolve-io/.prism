@@ -267,7 +267,7 @@ PRISM QA tracks key quality indicators:
 - [qa-gate-tmpl.yaml](../../../templates/qa-gate-tmpl.yaml) - Gate file template
 
 ### Examples
-- [story-001-post-implementation-gate.yaml](../../../artifacts/qa/gates/story-001-post-implementation-gate.yaml) - Real gate example
+- [story-001-post-implementation-gate.yaml](../../../skills/qa-gate/artifacts/story-001-post-implementation-gate.yaml) - Real gate example
 
 ---
 
@@ -277,7 +277,7 @@ PRISM QA tracks key quality indicators:
 
 1. **Understand Quality Gates** → [concepts/quality-gates.md](./concepts/quality-gates.md)
 2. **Learn How Gates Are Created** → [concepts/gate-creation-process.md](./concepts/gate-creation-process.md)
-3. **Practice with an Example** → [Example Gate](../../../artifacts/qa/gates/story-001-post-implementation-gate.yaml)
+3. **Practice with an Example** → [Example Gate](../../../skills/qa-gate/artifacts/story-001-post-implementation-gate.yaml)
 4. **Explore Workflows** → [guides/workflows.md](./guides/workflows.md)
 
 ### Ready to Review?

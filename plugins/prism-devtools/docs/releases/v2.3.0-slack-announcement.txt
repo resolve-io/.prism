@@ -1,0 +1,70 @@
+🏗️ *PRISM v2.3.0 Released!* 🏗️
+
+Teams can now create their own Claude Code skills — right inside the project repo — that are automatically loaded by Claude Code and auto-assigned to the right PRISM agent.
+
+---
+
+*🚀 NEW: Bring Your Own Skill (BYOS)*
+
+These are *native Claude Code project-level skills*. They live in your project's `.claude/skills/` folder — the same path Claude Code already uses for skill discovery. No plugin changes, no registration.
+
+```/byos scaffold team-code-standards --agent dev --phase green```
+
+That creates `.claude/skills/team-code-standards/SKILL.md` directly in your project. Claude Code picks it up automatically in every session.
+
+*Two layers of discovery:*
+1. *Claude Code native* — Any skill in `.claude/skills/` is available as a slash command (`/team-code-standards`) for any team member who pulls the repo
+2. *PRISM agent injection* — Skills with `prism:` metadata are auto-injected into the right agent during `/prism-loop` (e.g., Dev agent gets your coding standards skill during the GREEN phase)
+
+*How it works:*
+• Skills scaffold into your project's `.claude/skills/` — the native Claude Code skill path
+• Claude Code discovers them automatically at session start — works like any built-in skill
+• PRISM reads `prism:` frontmatter metadata to route skills to the right agent at the right phase
+• Commit to git, teammates pull, everyone gets the skill — zero configuration
+
+*Commands:*
+• `/byos scaffold <name> --agent dev --phase green` — create a new project skill
+• `/byos validate [name]` — check structure, metadata, and token budget
+• `/byos list` — see all project skills with their agent/phase assignments
+
+---
+
+*💡 Example Use Cases*
+
+| Skill | Agent | Phase | Purpose |
+|-------|-------|-------|---------|
+| `team-code-standards` | dev | green | Enforce coding patterns during implementation |
+| `team-test-patterns` | qa | red | Enforce test conventions during test creation |
+| `team-arch-guard` | architect | planning | Validate stories against architecture decisions |
+
+Each of these becomes a real Claude Code skill — invocable with `/team-code-standards`, auto-discovered by Claude, and injected into the right PRISM agent during the right workflow phase.
+
+---
+
+*🚀 Quick Start*
+
+1. Run `/byos scaffold my-skill --agent dev --phase green`
+2. Edit the generated SKILL.md with your team's instructions
+3. `git add .claude/skills/my-skill/ && git commit && git push`
+4. Teammates pull → Claude Code sees the skill → PRISM injects it into the Dev agent during GREEN
+
+*Where it lives:*
+```
+your-project/
+└── .claude/
+    └── skills/
+        └── my-skill/
+            ├── SKILL.md        ← Claude Code loads this natively
+            └── reference/
+                └── details.md
+```
+
+---
+
+*📝 Full details:* <https://github.com/resolve-io/.prism/blob/main/plugins/prism-devtools/CHANGELOG.md|CHANGELOG.md>
+
+Update: `cd .prism && git pull origin main`
+
+Questions? Drop them in #prism-feedback or #prism-support
+
+*PRISM™ - Refracting complexity into clarity* ✨

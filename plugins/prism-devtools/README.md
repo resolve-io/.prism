@@ -1,74 +1,48 @@
 # PRISM Development System
 
-**Version 2.2.0** - Documentation Audit & Completeness Update
+**Version 2.3.1** - BYOS Simplification + File Reorganization
 
 A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
-## Quick Start
+## How to Use PRISM
 
-### 1. Installation
+PRISM has three tiers of usage. Start with the loop, drop to an agent when you need focused expertise, invoke a skill directly for one-off operations.
 
-**Via Marketplace (Recommended):**
-```bash
-# Add the PRISM marketplace
-/plugin marketplace add resolve-io/.prism
+### Tier 1: `/prism-loop` — Automated Team
 
-# Install the plugin
-/plugin install prism-devtools
-```
-
-**Local Development (Team Members):**
-```bash
-# 1. Clone the repo
-git clone https://github.com/resolve-io/.prism.git
-cd .prism
-
-# 2. Add as local marketplace (must use ./ prefix - absolute paths don't work)
-/plugin marketplace add .
-
-# 3. Install the plugin
-/plugin install prism-devtools@prism
-```
-
-**Switching between local and GitHub:**
-```bash
-/plugin marketplace remove prism
-/plugin marketplace add .                   # Local
-/plugin marketplace add resolve-io/.prism  # GitHub
-```
-
-**After making local changes:**
-```bash
-/plugin uninstall prism-devtools
-/plugin install prism-devtools@prism
-```
-
-### 2. First Steps
-
-**Choose your workflow entry point:**
+Give it a PRD or requirements and the loop drives SM → QA → DEV automatically through Planning → RED (failing tests) → GREEN (implementation) → verification with quality gates. **This is the primary entry point for feature work.**
 
 ```bash
-# Planning a feature
-/sm                      # Story Master - plan and size stories
-
-# Implementing code
-/dev story-001           # Developer - implement with quality gates
-
-# Quality review
-/qa story-001            # QA - validate quality and test coverage
-
-# System design
-/architect               # Architect - design systems and patterns
+/prism-loop implement user authentication based on PRD-auth.md
 ```
 
-**Or let skills auto-activate:**
-- Say "design the architecture" → Architect skill activates
-- Say "implement the story" → Dev skill activates
-- Say "validate the quality" → QA skill activates
+### Tier 2: Agent Commands — Focused Problem-Solving
 
-### 3. Learn More
+Activate a specific agent when you have a targeted problem, not the full cycle:
 
-📚 **[Complete Documentation](docs/index.md)** - Everything about PRISM, organized by role and task
+```bash
+/dev story-001    # Implement against an existing story
+/qa story-001     # Validate quality for a specific story
+/sm               # Plan and size stories manually
+/architect        # Design systems and make tech decisions
+```
+
+### Tier 3: Skills — Individual Operations
+
+Invoke any skill directly for a specific task. Skills are building blocks that agents use, but you can call them directly too:
+
+```bash
+/probe-estimation            # Size a story with PROBE method
+/test-design                 # Design test strategy
+/byos scaffold my-skill      # Create a team skill
+/execute-checklist story-dod  # Run a quality checklist
+```
+
+**Or let skills auto-activate** — say "design the architecture" and the Architect skill activates, say "implement the story" and Dev activates.
+
+### Learn More
+
+📚 **[Complete Documentation](docs/index.md)** - Everything about PRISM, organized by usage tier and feature
 
 **Popular Guides:**
 - [Core Development Workflow](docs/reference/workflows/core-development-cycle.md) - The main PRISM process
@@ -102,10 +76,11 @@ PRISM is a software engineering methodology that combines proven practices into 
 ## Key Features
 
 ### Automated Quality Validation
-**10 specialized sub-agents** validate your work at critical checkpoints:
+**11 specialized sub-agents** validate your work at critical checkpoints:
 - 5 for Story Masters (structure, content, alignment, compliance, decomposition)
 - 3 for Developers (file tracking, test running, linting)
 - 2 for QA (requirements tracing, quality gates)
+- 1 for Documentation (link validation)
 
 **Impact:** ~1.3 hours saved per story, 100% compliance, <5% rework rate
 
@@ -124,7 +99,7 @@ PRISM is a software engineering methodology that combines proven practices into 
 - **[PRISM Loop](skills/prism-loop/SKILL.md)** - Automated TDD workflow with RED/GREEN validation
 - **[Skills](skills/README.md)** - Reusable operations (estimation, test design, risk assessment, tracing)
 - **[Templates](templates/README.md)** - Document generation (PRD, stories, architecture, QA gates)
-- **[Checklists](checklists/README.md)** - Quality gate validation at workflow checkpoints
+- **[Checklists](skills/execute-checklist/SKILL.md)** - Quality gate validation at workflow checkpoints
 
 ### Progressive Disclosure
 All documentation follows token-efficient loading:
@@ -134,20 +109,18 @@ All documentation follows token-efficient loading:
 
 ## What's New
 
-### Version 1.7.4
-🎫 **Jira Integration Skill** - Read-only Jira integration with automatic issue detection and context enrichment
-🔄 **Enhanced PRISM Skills** - All 7 agent personas now integrate seamlessly with Jira for richer context
-🔒 **Security-First Configuration** - Environment variable-based credential management with comprehensive guides
-📖 **Progressive Disclosure Documentation** - Complete Jira integration guide with API reference and examples
+### Version 2.3.1
+BYOS skills no longer need `phase:` — declare `agent` only. Loop step instructions externalized to `hooks/core-steps/*.md`. Checklists and artifacts moved into their owning skill directories. Docs restructured around 3-tier usage hierarchy.
 
 ### Recent Updates
-- **1.7.2**: Feature comparison table, workflow diagrams, official documentation links
-- **1.7.1**: Documentation clarity, system architecture layers, test artifact labeling
-- **1.7.0**: Smart Connections Integration, Documentation Optimization, Architecture System
-- **1.6.0**: Documentation validation system and PRISM methodology checklist
-- **1.5.0**: Obsidian-based context memory with Smart Connections
-- **1.4.0**: Hooks Manager skill with security documentation
-- **1.3.0**: Complete token documentation and parameter consistency
+- **2.3.0**: Bring Your Own Skill (BYOS) — project-level skills shared via git with PRISM agent assignment
+- **2.2.2**: Fixed prism-loop command session isolation, removed dead env var fallback
+- **2.2.1**: PRISM Loop session isolation fix, Windows Unicode encoding fix
+- **2.2.0**: Documentation audit & completeness - backfilled 4 CHANGELOG versions, 247 links validated
+- **2.1.0**: prism-loop TDD orchestration, Orca integration suite, Jira v2.2.0
+- **2.0.0**: 11 sub-agents, file-first architecture, PRISM loop introduction
+- **1.9.0**: 8 templates, 9 checklists, 8 hooks
+- **1.8.0**: Strangler pattern, SDLC handoff, PROBE estimation, story decomposition
 
 📋 **[Complete Changelog](CHANGELOG.md)**
 
@@ -165,7 +138,7 @@ All documentation follows token-efficient loading:
 
 ### Documentation & Standards
 - **[Templates](templates/README.md)** - Document generation patterns
-- **[Checklists](checklists/README.md)** - Quality validation at workflow gates
+- **[Checklists](skills/execute-checklist/SKILL.md)** - Quality validation at workflow gates
 - **[Docs](docs/index.md)** - Complete system documentation
 
 ## Configuration
@@ -211,7 +184,6 @@ node validate-skill.js ../architect
 ├── workflows/           # Multi-step orchestrated processes (YAML + Mermaid)
 ├── tasks/               # Reusable operations (estimation, tracing, risk assessment)
 ├── templates/           # Document generation (PRD, stories, architecture)
-├── checklists/          # Quality gate validation at workflow checkpoints
 ├── docs/                # Complete documentation
 │   └── index.md         # Documentation hub
 ├── utils/               # Jira integration, helpers
@@ -235,7 +207,7 @@ PRISM follows secure development practices:
 
 ### Getting Started
 - **[Complete Documentation](docs/index.md)** - Main documentation hub
-- **[Quick Start by Role](docs/index.md#getting-started-by-role)** - Jump to your role
+- **[How to Use PRISM](docs/index.md#how-to-use-prism)** - 3-tier usage hierarchy
 - **[Core Development Workflow](docs/reference/workflows/core-development-cycle.md)** - The PRISM process
 
 ### Key Guides
@@ -246,7 +218,8 @@ PRISM follows secure development practices:
 - **[TDD Workflow Loop](skills/prism-loop/SKILL.md)** - Automated RED/GREEN development cycle
 
 ### Building Skills
-- **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills
+- **[BYOS](skills/byos/SKILL.md)** - Create project-level skills shared via git with PRISM agent assignment
+- **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills with progressive disclosure
 - **[Progressive Disclosure](skills/skill-builder/reference/progressive-disclosure.md)** - Token optimization pattern
 
 ## Support
@@ -255,6 +228,43 @@ PRISM follows secure development practices:
 - **Skill Issues**: See [Sub-Agent Quick Reference](docs/reference/sub-agents/quick-reference.md#common-issues-quick-fixes)
 - **Workflow Issues**: Read [Workflow README](docs/reference/workflows/README.md#troubleshooting)
 - **Hook Issues**: Check [Hooks README](hooks/README.md#troubleshooting)
+
+## Installation
+
+**Via Marketplace (Recommended):**
+```bash
+# Add the PRISM marketplace
+/plugin marketplace add resolve-io/.prism
+
+# Install the plugin
+/plugin install prism-devtools
+```
+
+**Local Development (Team Members):**
+```bash
+# 1. Clone the repo
+git clone https://github.com/resolve-io/.prism.git
+cd .prism
+
+# 2. Add as local marketplace (must use ./ prefix - absolute paths don't work)
+/plugin marketplace add .
+
+# 3. Install the plugin
+/plugin install prism-devtools@prism
+```
+
+**Switching between local and GitHub:**
+```bash
+/plugin marketplace remove prism
+/plugin marketplace add .                   # Local
+/plugin marketplace add resolve-io/.prism  # GitHub
+```
+
+**After making local changes:**
+```bash
+/plugin uninstall prism-devtools
+/plugin install prism-devtools@prism
+```
 
 ---
 

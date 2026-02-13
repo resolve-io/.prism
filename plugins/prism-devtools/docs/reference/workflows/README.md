@@ -306,12 +306,17 @@ workflow:
     - step: draft_story
       agent: sm
       action: draft
-      validation: story_complete  # Validates ACs exist
+      validation: story_complete  # Story file exists with ACs
+
+    - step: verify_plan
+      agent: sm
+      action: verify-plan
+      validation: plan_coverage  # All requirements mapped to ACs
 
     - step: write_failing_tests
       agent: qa
       action: write-failing-tests
-      validation: red_with_trace  # Tests fail + trace audit
+      validation: red_with_trace  # Tests fail + every AC has a test
 
     - step: red_gate
       type: gate  # Manual approval

@@ -14,6 +14,7 @@ WORKFLOW_STEPS = [
     # PLANNING PHASE
     ("review_previous_notes", "SM", "agent"),
     ("draft_story", "SM", "agent"),
+    ("verify_plan", "SM", "agent"),
     # TDD RED PHASE
     ("write_failing_tests", "QA", "agent"),
     ("red_gate", "-", "gate"),

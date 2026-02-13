@@ -135,7 +135,7 @@ ALWAYS cite source documents: `[Source: architecture/{filename}.md#{section}]`
 - Verify all source references are included for technical details
 - Ensure tasks align with both story requirements and architecture constraints
 - Update status to "Draft" and save the story file
-- Execute `execute-checklist` task with `../checklists/story-draft-checklist`
+- Execute `execute-checklist` task with `../execute-checklist/checklists/story-draft-checklist`
 - Provide summary to user including:
   - Story created: `{devStoryLocation}/{storyNum}.{storyNum}.story.md`
   - Status: Draft
