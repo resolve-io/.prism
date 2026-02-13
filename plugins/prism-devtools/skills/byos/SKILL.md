@@ -1,6 +1,6 @@
 ---
 name: byos
-description: Create and manage project-level skills shared via git with automatic PRISM agent assignment. Use when teams need project-specific skills that are auto-discovered by Claude Code and injected into the right PRISM agent (Dev, QA, SM, Architect) at the right phase.
+description: Create and manage project-level skills shared via git with automatic PRISM agent assignment. Use when teams need project-specific skills that are auto-discovered by Claude Code and injected into the right PRISM agent (Dev, QA, SM, Architect).
 version: 1.0.0
 ---
 
@@ -9,7 +9,7 @@ version: 1.0.0
 ## When to Use
 
 - Creating a new team/project skill that will be shared via git
-- Assigning a project skill to a specific PRISM agent and phase
+- Assigning a project skill to a specific PRISM agent
 - Scaffolding a new skill with the correct directory structure
 - Validating existing project skills for correctness
 
@@ -29,19 +29,18 @@ name: my-team-skill
 description: What this skill does
 prism:
   agent: dev          # sm | dev | qa | architect
-  phase: green        # planning | red | green | review
   priority: 10        # lower = higher priority (default: 99)
 ---
 ```
 
-At runtime, `discover_prism_skills(agent, phase)` scans `.claude/skills/*/SKILL.md`, matches the `prism:` metadata, and injects matching skills into the agent's step instructions. No configuration needed beyond the frontmatter.
+The system resolves which workflow phase(s) each agent operates in — skill authors only need to specify the agent. At runtime, `discover_prism_skills(agent)` scans `.claude/skills/*/SKILL.md`, matches the agent, and injects matching skills into the agent's step instructions in priority order.
 
 ## Quick Start
 
 ### Scaffold a new skill
 
 ```
-/byos scaffold my-skill --agent dev --phase green
+/byos scaffold my-skill --agent dev
 ```
 
 Creates `.claude/skills/my-skill/` with a pre-filled SKILL.md and `/reference/` directory.
@@ -60,7 +59,7 @@ Checks structure, frontmatter, `prism:` metadata, and token budget.
 /byos list
 ```
 
-Shows all project-level skills with their agent/phase assignments.
+Shows all project-level skills with their agent assignments.
 
 ## Reference Documentation
 
@@ -73,7 +72,6 @@ Shows all project-level skills with their agent/phase assignments.
 - **Follow the 3-level pattern**: metadata (~100 tokens), body (<2k tokens), reference files (unlimited)
 - **All reference `.md` files MUST go in `/reference/`** - never in the skill root
 - **Valid agents**: `sm`, `dev`, `qa`, `architect`
-- **Valid phases**: `planning`, `red`, `green`, `review`
 - **Skill names must be kebab-case** (lowercase, hyphens only)
 - **One SKILL.md per skill** - the only `.md` file allowed in the skill root
 - For deep-dive skill authoring guidance (progressive disclosure, token optimization), use `/skill-builder`

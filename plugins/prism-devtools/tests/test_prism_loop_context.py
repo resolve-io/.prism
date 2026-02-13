@@ -23,6 +23,7 @@ from prism_loop_context import (
     RETRIEVAL_INSTRUCTION,
     INLINE_RULES,
     WORKFLOW_INDEX,
+    STEP_PHASE_MAP,
     build_agent_instruction,
     detect_project_conventions,
     parse_state,
@@ -294,12 +295,23 @@ name: my-discovery-skill
 description: Scan codebase for all affected files before story creation
 prism:
   agent: sm
-  phase: planning
   priority: 1
 ---
 
 # My Discovery Skill
 Instructions for the skill...
+"""
+
+VALID_SKILL_MD_LEGACY_PHASE = """---
+name: legacy-skill
+description: Old-style skill with phase field
+prism:
+  agent: sm
+  phase: planning
+  priority: 5
+---
+
+# Legacy Skill
 """
 
 SKILL_MD_NO_PRISM = """---
@@ -316,7 +328,6 @@ name: bad-agent-skill
 description: Has an invalid agent value
 prism:
   agent: wizard
-  phase: planning
   priority: 5
 ---
 """
@@ -324,20 +335,30 @@ prism:
 SKILL_MD_MISSING_FIELDS = """---
 description: Missing name and agent
 prism:
-  phase: planning
+  priority: 10
 ---
 """
 
 
 def test_parse_skill_frontmatter_with_prism_metadata():
-    """Valid prism: block parses correctly."""
+    """Valid prism: block parses correctly (agent-only, no phase)."""
     result = _parse_skill_frontmatter(VALID_SKILL_MD)
     assert result is not None
     assert result["name"] == "my-discovery-skill"
     assert result["description"] == "Scan codebase for all affected files before story creation"
     assert result["agent"] == "sm"
-    assert result["phase"] == "planning"
+    assert "phase" not in result
     assert result["priority"] == 1
+
+
+def test_parse_skill_frontmatter_legacy_phase_ignored():
+    """Legacy phase: field is silently ignored, skill still parses."""
+    result = _parse_skill_frontmatter(VALID_SKILL_MD_LEGACY_PHASE)
+    assert result is not None
+    assert result["name"] == "legacy-skill"
+    assert result["agent"] == "sm"
+    assert "phase" not in result
+    assert result["priority"] == 5
 
 
 def test_parse_skill_frontmatter_without_prism_metadata():
@@ -353,7 +374,7 @@ def test_parse_skill_frontmatter_invalid_agent():
 
 
 def test_parse_skill_frontmatter_missing_required_fields():
-    """Returns None when name/agent/phase missing."""
+    """Returns None when name and agent are missing."""
     result = _parse_skill_frontmatter(SKILL_MD_MISSING_FIELDS)
     assert result is None
 
@@ -368,28 +389,51 @@ def _create_skill(skills_dir, name, content):
 def test_discover_prism_skills_empty_when_no_dir(tmp_path, monkeypatch):
     """Returns [] when .claude/skills doesn't exist."""
     monkeypatch.chdir(tmp_path)
-    result = discover_prism_skills("sm", "planning")
+    result = discover_prism_skills("sm")
     assert result == []
 
 
 def test_discover_prism_skills_finds_matching(tmp_path, monkeypatch):
-    """Finds skills matching agent+phase."""
+    """Finds skills matching agent."""
     monkeypatch.chdir(tmp_path)
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
-    result = discover_prism_skills("sm", "planning")
+    result = discover_prism_skills("sm")
     assert len(result) == 1
     assert result[0]["name"] == "my-discovery-skill"
 
 
 def test_discover_prism_skills_ignores_non_matching(tmp_path, monkeypatch):
-    """Ignores wrong agent/phase."""
+    """Ignores wrong agent."""
     monkeypatch.chdir(tmp_path)
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
-    # VALID_SKILL_MD targets agent=sm, phase=planning — ask for dev/green
-    result = discover_prism_skills("dev", "green")
+    # VALID_SKILL_MD targets agent=sm — ask for dev
+    result = discover_prism_skills("dev")
     assert result == []
+
+
+def test_discover_prism_skills_qa_matches_for_both_phases(tmp_path, monkeypatch):
+    """QA skills appear whether called from red or review phase."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    qa_skill = """---
+name: qa-patterns
+description: QA test patterns
+prism:
+  agent: qa
+  priority: 10
+---
+"""
+    _create_skill(skills_dir, "qa-patterns", qa_skill)
+    # QA skill appears regardless of phase argument (red or review)
+    result_red = discover_prism_skills("qa", "red")
+    result_review = discover_prism_skills("qa", "review")
+    result_no_phase = discover_prism_skills("qa")
+    assert len(result_red) == 1
+    assert len(result_review) == 1
+    assert len(result_no_phase) == 1
+    assert result_red[0]["name"] == "qa-patterns"
 
 
 def test_discover_prism_skills_sorts_by_priority(tmp_path, monkeypatch):
@@ -402,7 +446,6 @@ name: first-skill
 description: Runs first
 prism:
   agent: sm
-  phase: planning
   priority: 1
 ---
 """
@@ -411,7 +454,6 @@ name: second-skill
 description: Runs second
 prism:
   agent: sm
-  phase: planning
   priority: 10
 ---
 """
@@ -420,14 +462,13 @@ name: third-skill
 description: Default priority
 prism:
   agent: sm
-  phase: planning
 ---
 """
     _create_skill(skills_dir, "z-low", low_priority)
     _create_skill(skills_dir, "a-high", high_priority)
     _create_skill(skills_dir, "m-default", default_priority)
 
-    result = discover_prism_skills("sm", "planning")
+    result = discover_prism_skills("sm")
     assert len(result) == 3
     assert result[0]["name"] == "first-skill"
     assert result[0]["priority"] == 1
@@ -447,3 +488,13 @@ def test_instructions_unchanged_without_discovered_skills():
         assert "Discovered PRISM skills" not in instruction, (
             f"Unexpected discovery text in {step_id} with no local skills"
         )
+
+
+# --- Core step files ---
+
+def test_core_step_files_exist():
+    """Every step in STEP_PHASE_MAP must have a corresponding .md file."""
+    core_steps_dir = HOOKS_DIR / "core-steps"
+    for step_id in STEP_PHASE_MAP:
+        step_file = core_steps_dir / f"{step_id}.md"
+        assert step_file.exists(), f"Missing core step file: {step_file}"

@@ -23,7 +23,7 @@ Claude Code discovers these automatically. No registration needed.
 The fastest way is to use the scaffold command:
 
 ```
-/byos scaffold my-team-skill --agent dev --phase green
+/byos scaffold my-team-skill --agent dev
 ```
 
 This creates the directory structure with a pre-filled SKILL.md.
@@ -49,13 +49,21 @@ If this skill should be auto-injected during the PRISM workflow, add `prism:` me
 name: my-team-skill
 description: Brief description for Claude's skill list
 prism:
-  agent: dev          # Which agent receives this skill
-  phase: green        # During which phase
+  agent: dev          # Which agent receives this skill (sm | dev | qa | architect)
   priority: 10        # Lower = higher priority (default: 99)
 ---
 ```
 
-The PRISM loop's `discover_prism_skills()` function scans project skills at runtime and injects matching ones into the agent's instructions.
+The system resolves which phase(s) each agent operates in automatically:
+
+| Agent | Injected during |
+|-------|----------------|
+| `sm` | Planning steps |
+| `dev` | Implementation (green) |
+| `qa` | Test writing (red) + verification (review) |
+| `architect` | Planning steps |
+
+The PRISM loop's `discover_prism_skills()` function scans project skills at runtime and injects matching ones into the agent's instructions in priority order.
 
 ## Step 4: Test Your Skill
 

@@ -29,12 +29,10 @@ Systematically validate documents, stories, or processes against defined checkli
 
 ## Available Checklists
 
-Check ../checklists/ folder for:
+Check ./checklists/ folder for:
 - story-dod-checklist.md - Story definition of done
-- story-draft-checklist.md - Story draft validation  
-- sprint-planning-checklist.md - Sprint planning completeness
+- story-draft-checklist.md - Story draft validation
 - retrospective-checklist.md - Retrospective effectiveness
-- strangler-migration-checklist.md - Legacy migration validation
 
 ## Instructions
 
@@ -44,7 +42,7 @@ Check ../checklists/ folder for:
 - If user provides checklist name, fuzzy match it
 - If multiple matches, ask for clarification
 - If none specified, list available options
-- Load checklist from ../checklists/
+- Load checklist from ./checklists/
 
 **Choose Processing Mode:**
 - **Interactive**: Section by section with discussion

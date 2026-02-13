@@ -2,7 +2,7 @@
 
 Three real-world examples showing project skills with PRISM agent assignment.
 
-## 1. Team Code Standards (Dev Agent, Green Phase)
+## 1. Team Code Standards (Dev Agent)
 
 A skill that enforces project-specific coding patterns during implementation.
 
@@ -15,7 +15,6 @@ description: Enforce team coding standards and patterns during implementation. C
 version: 1.0.0
 prism:
   agent: dev
-  phase: green
   priority: 10
 ---
 
@@ -51,11 +50,11 @@ prism:
 - Do NOT create utility classes - use extension methods or domain services
 ```
 
-**Why it works**: The Dev agent sees this during `green` phase (implementation), ensuring code follows team patterns as it's written.
+**Why it works**: The Dev agent sees this during implementation (green phase), ensuring code follows team patterns as it's written.
 
-## 2. Team Test Patterns (QA Agent, Red Phase)
+## 2. Team Test Patterns (QA Agent)
 
-A skill that enforces project-specific test conventions during test creation.
+A skill that enforces project-specific test conventions during test creation and verification.
 
 **`.claude/skills/team-test-patterns/SKILL.md`**:
 
@@ -66,7 +65,6 @@ description: Enforce team test conventions when writing tests. Covers test namin
 version: 1.0.0
 prism:
   agent: qa
-  phase: red
   priority: 10
 ---
 
@@ -119,9 +117,9 @@ public void CreateUser_WithValidEmail_ReturnsSuccess()
 - ALWAYS use factories for test data - no inline object creation
 ```
 
-**Why it works**: The QA agent sees this during `red` phase (writing failing tests), ensuring tests follow team conventions from the start.
+**Why it works**: The QA agent sees this during both test writing (red) and verification (review), ensuring tests follow team conventions throughout.
 
-## 3. Team Architecture Guard (Architect Agent, Planning Phase)
+## 3. Team Architecture Guard (Architect Agent)
 
 A skill that ensures architecture decisions are followed during story planning.
 
@@ -134,7 +132,6 @@ description: Validate stories against architecture decisions and boundaries duri
 version: 1.0.0
 prism:
   agent: architect
-  phase: planning
   priority: 5
 ---
 
@@ -174,4 +171,4 @@ Before approving a story plan:
 - REQUIRE ADR reference for any new architectural pattern
 ```
 
-**Why it works**: The Architect agent sees this during `planning` phase, catching boundary violations before any code is written.
+**Why it works**: The Architect agent sees this during planning, catching boundary violations before any code is written.

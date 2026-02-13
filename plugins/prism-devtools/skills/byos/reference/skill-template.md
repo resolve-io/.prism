@@ -11,7 +11,6 @@ description: {Brief description - this appears in Claude's skill list. Be specif
 version: 1.0.0
 prism:
   agent: dev          # sm | dev | qa | architect
-  phase: green        # planning | red | green | review
   priority: 99        # lower = higher priority
 ---
 
@@ -50,8 +49,9 @@ prism:
 | Field | Description | Values |
 |-------|-------------|--------|
 | `prism.agent` | Which PRISM agent receives this skill | `sm`, `dev`, `qa`, `architect` |
-| `prism.phase` | During which workflow phase | `planning`, `red`, `green`, `review` |
 | `prism.priority` | Ordering when multiple skills match | Integer, lower = higher priority (default: 99) |
+
+The system resolves phase automatically from the agent — no `phase` field needed.
 
 ### Optional Claude Code Fields
 

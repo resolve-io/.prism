@@ -5,15 +5,28 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-02-13
+
+### Changed
+- **BYOS skill matching** — `phase:` frontmatter field no longer required; skills are matched by `agent` only. Existing skills with `phase:` still work (silently ignored).
+- **Loop step content externalized** — Step instructions moved from inline Python strings to `hooks/core-steps/*.md` files, making loop behavior easier to read and edit without touching Python.
+- **File reorganization** — Checklists moved into `skills/execute-checklist/checklists/`, QA gate artifacts into `skills/qa-gate/artifacts/`, validation stories into `skills/shared/reference/`. Old `checklists/` and `artifacts/` top-level directories removed.
+- **Documentation restructured** — README.md and docs/index.md now lead with 3-tier usage hierarchy (loop → agent → skill) instead of role-based organization. Installation moved to bottom of README.
+
+### Fixed
+- **13 broken documentation links** — Updated references across 5 files pointing to old `checklists/` and `artifacts/qa/gates/` paths after file reorganization
+- **2 ghost checklist entries** — Removed `sprint-planning-checklist.md` (never existed) and `strangler-migration-checklist.md` (deleted) from execute-checklist skill
+
 ## [2.3.0] - 2026-02-12
 
 ### Added
 - **Bring Your Own Skill (BYOS) v1.0.0** — Create and manage project-level skills shared via git with automatic PRISM agent assignment
   - **`/byos scaffold <name>`** — Scaffolds `.claude/skills/{name}/` with pre-filled SKILL.md, reference/ directory, and optional `prism:` agent metadata
-  - **`/byos validate [name]`** — Validates skill structure, YAML frontmatter, `prism:` metadata (agent/phase/priority), stray .md files, and token budget
-  - **`/byos list`** — Lists all project-level skills with their PRISM agent/phase assignments
-  - **Scaffold script** (`scaffold_skill.py`) — Validates kebab-case names, enforces agent+phase pairing, prevents overwriting existing skills
-  - **Validate script** (`validate_skill.py`) — Checks required fields, validates agent/phase values against `sm|dev|qa|architect` and `planning|red|green|review`, warns on TODO placeholders and oversized bodies
+  - **`/byos validate [name]`** — Validates skill structure, YAML frontmatter, `prism:` metadata (agent/priority), stray .md files, and token budget
+  - **`/byos list`** — Lists all project-level skills with their PRISM agent assignments
+  - **Scaffold script** (`scaffold_skill.py`) — Validates kebab-case names, prevents overwriting existing skills
+  - **Validate script** (`validate_skill.py`) — Checks required fields, validates agent against `sm|dev|qa|architect`, warns on deprecated `phase:` field, TODO placeholders, and oversized bodies
+  - **Agent-only assignment** — Skills declare `prism.agent` only; the system resolves phase(s) from the workflow step map. QA skills auto-inject into both red and review phases.
   - **Reference documentation** — Getting started guide, copy-paste skill template with all fields, and 3 real-world examples (team code standards/dev, test patterns/qa, architecture guard/architect)
   - Leverages existing `discover_prism_skills()` infrastructure in `prism_loop_context.py` — no sync mechanism needed
   - Project skills at `.claude/skills/` are natively discovered by Claude Code and auto-injected into PRISM agents via `prism:` frontmatter metadata

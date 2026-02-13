@@ -6,7 +6,7 @@ Creates the directory structure and a pre-filled SKILL.md with optional
 PRISM agent assignment metadata.
 
 Usage:
-    python scaffold_skill.py <name> [--agent dev] [--phase green] [--priority 99]
+    python scaffold_skill.py <name> [--agent dev] [--priority 99]
 """
 
 import argparse
@@ -25,7 +25,6 @@ if sys.stdout.encoding != "utf-8":
     )
 
 VALID_AGENTS = ("sm", "dev", "qa", "architect")
-VALID_PHASES = ("planning", "red", "green", "review")
 KEBAB_CASE_RE = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 SKILLS_DIR = Path.cwd() / ".claude" / "skills"
@@ -44,7 +43,7 @@ def validate_name(name: str) -> str | None:
     return None
 
 
-def build_skill_md(name: str, agent: str | None, phase: str | None, priority: int) -> str:
+def build_skill_md(name: str, agent: str | None, priority: int) -> str:
     """Build the SKILL.md content from template."""
     # Build frontmatter
     fm_lines = [
@@ -54,10 +53,9 @@ def build_skill_md(name: str, agent: str | None, phase: str | None, priority: in
         "version: 1.0.0",
     ]
 
-    if agent and phase:
+    if agent:
         fm_lines.append("prism:")
         fm_lines.append(f"  agent: {agent}")
-        fm_lines.append(f"  phase: {phase}")
         fm_lines.append(f"  priority: {priority}")
 
     fm_lines.append("---")
@@ -108,12 +106,6 @@ def main():
         help="PRISM agent to assign this skill to (sm, dev, qa, architect)",
     )
     parser.add_argument(
-        "--phase",
-        choices=VALID_PHASES,
-        default=None,
-        help="PRISM phase for this skill (planning, red, green, review)",
-    )
-    parser.add_argument(
         "--priority",
         type=int,
         default=99,
@@ -126,14 +118,6 @@ def main():
     error = validate_name(args.name)
     if error:
         print(f"Error: {error}", file=sys.stderr)
-        sys.exit(1)
-
-    # Validate agent/phase pairing
-    if (args.agent and not args.phase) or (args.phase and not args.agent):
-        print(
-            "Error: --agent and --phase must be specified together.",
-            file=sys.stderr,
-        )
         sys.exit(1)
 
     # Check if skill already exists
@@ -151,7 +135,7 @@ def main():
     ref_dir.mkdir(exist_ok=True)
 
     # Write SKILL.md
-    skill_md = build_skill_md(args.name, args.agent, args.phase, args.priority)
+    skill_md = build_skill_md(args.name, args.agent, args.priority)
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text(skill_md, encoding="utf-8")
 
@@ -167,8 +151,8 @@ def main():
     print(f"  {ref_file.relative_to(Path.cwd())}")
     print()
 
-    if args.agent and args.phase:
-        print(f"PRISM assignment: {args.agent} agent during {args.phase} phase (priority {args.priority})")
+    if args.agent:
+        print(f"PRISM assignment: {args.agent} agent (priority {args.priority})")
     else:
         print("No PRISM agent assignment. Add prism: metadata to SKILL.md to assign to an agent.")
 

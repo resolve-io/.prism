@@ -28,7 +28,6 @@ if sys.stdout.encoding != "utf-8":
     )
 
 VALID_AGENTS = ("sm", "dev", "qa", "architect")
-VALID_PHASES = ("planning", "red", "green", "review")
 KEBAB_CASE_RE = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 # Rough token estimate: ~4 chars per token for English text
 CHARS_PER_TOKEN = 4
@@ -148,12 +147,8 @@ class SkillValidator:
         if not agent_match:
             self._add("error", "prism: block present but missing 'agent' field.", "Add 'agent: dev' under prism:.")
             return
-        if not phase_match:
-            self._add("error", "prism: block present but missing 'phase' field.", "Add 'phase: green' under prism:.")
-            return
 
         agent = agent_match.group(1).strip()
-        phase = phase_match.group(1).strip()
 
         if agent not in VALID_AGENTS:
             self._add(
@@ -162,11 +157,11 @@ class SkillValidator:
                 f"Valid agents: {', '.join(VALID_AGENTS)}",
             )
 
-        if phase not in VALID_PHASES:
+        if phase_match:
             self._add(
-                "error",
-                f"Invalid phase '{phase}'.",
-                f"Valid phases: {', '.join(VALID_PHASES)}",
+                "warning",
+                "The 'phase' field is deprecated and ignored.",
+                "Remove 'phase:' from prism: block — the system resolves phase from agent.",
             )
 
         if priority_match:
