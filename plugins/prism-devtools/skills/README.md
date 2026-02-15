@@ -55,8 +55,6 @@ Auto-activating agent capabilities for PRISM workflows.
 |-------|---------|
 | [jira](./jira/SKILL.md) | Jira integration |
 | [fetch-jira-issue](./fetch-jira-issue/SKILL.md) | Fetch Jira issues |
-| [orca-local-setup](./orca-local-setup/SKILL.md) | Orca local setup |
-| [orca-api-test](./orca-api-test/SKILL.md) | Orca API testing |
 
 ## Tooling
 
