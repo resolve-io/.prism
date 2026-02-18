@@ -1,0 +1,15 @@
+#!/bin/bash
+# Pre-commit hook entry point for .prism repo
+# Delegates to the prism-devtools plugin's pre-commit script.
+#
+# Called by the global dispatcher at ~/.git-hooks/pre-commit
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PLUGIN_HOOK="$REPO_ROOT/plugins/prism-devtools/scripts/pre-commit"
+
+if [ -f "$PLUGIN_HOOK" ]; then
+    exec bash "$PLUGIN_HOOK"
+else
+    echo "Warning: Plugin pre-commit hook not found at $PLUGIN_HOOK"
+    exit 0
+fi

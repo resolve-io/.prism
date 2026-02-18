@@ -1,0 +1,63 @@
+#!/bin/bash
+# Pre-commit hook for .prism repo
+# Runs full documentation validation + portability check on prism-devtools plugin.
+# Invoked by the global dispatcher at ~/.git-hooks/pre-commit
+# which delegates to scripts/pre-commit in whatever repo you're committing to.
+#
+# Phases:
+#   1. Full documentation validation (validate-docs.py) - links, terminology, structure
+#   2. Portability check (check-portability.py) - PC001-PC005
+#
+# Exit codes:
+#   0 - All checks passed
+#   1 - One or more checks failed (commit blocked)
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PLUGIN_DIR="$REPO_ROOT/plugins/prism-devtools"
+FAILED=0
+
+# Phase 1: Full documentation validation (links, terminology, structure)
+# IMPORTANT: validate-docs.py must be run with --root . from inside the plugin
+# directory. Running with an absolute/relative --root from elsewhere causes a
+# path resolution bug that produces ~234 false positive cross-reference errors.
+echo "=== Phase 1: Documentation validation ==="
+DOCS_OUTPUT=$(cd "$PLUGIN_DIR" && python scripts/validate-docs.py --root . --output /dev/null 2>&1)
+DOCS_EXIT=$?
+if [ $DOCS_EXIT -eq 1 ]; then
+    echo "$DOCS_OUTPUT"
+    echo ""
+    echo "BLOCKED: Documentation validation found critical issues."
+    echo ""
+    FAILED=1
+elif [ $DOCS_EXIT -eq 2 ]; then
+    echo "WARNING: Documentation validation script error (non-blocking)."
+    echo ""
+fi
+
+# Phase 2: Portability check (PC001-PC005)
+echo "=== Phase 2: Portability check ==="
+PORTABILITY_OUTPUT=$(python "$PLUGIN_DIR/scripts/check-portability.py" --root "$PLUGIN_DIR" 2>&1)
+PORT_EXIT=$?
+if [ $PORT_EXIT -eq 1 ]; then
+    echo "$PORTABILITY_OUTPUT"
+    echo ""
+    echo "BLOCKED: Portability violations found (PC001-PC003 errors)."
+    echo ""
+    FAILED=1
+elif [ $PORT_EXIT -eq 0 ]; then
+    # Check if there were warnings (status=WARNINGS but exit 0)
+    if echo "$PORTABILITY_OUTPUT" | grep -q '"status": "WARNINGS"'; then
+        echo "Advisory: Portability warnings found (non-blocking)."
+        echo ""
+    fi
+fi
+
+if [ $FAILED -eq 1 ]; then
+    echo "============================================"
+    echo "Commit blocked. Fix the issues above and try again."
+    echo "============================================"
+    exit 1
+fi
+
+echo "All checks passed."
+exit 0
