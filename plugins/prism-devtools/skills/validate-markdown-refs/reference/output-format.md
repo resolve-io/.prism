@@ -25,8 +25,8 @@
     }
   ],
   "scanned_locations": [
-    "project:.claude (D:\\dev\\.claude)",
-    "project:.prism (D:\\dev\\.prism)"
+    "project:.claude ({devRoot}\\.claude)",
+    "project:.prism ({devRoot}\\.prism)"
   ],
   "warnings": []
 }

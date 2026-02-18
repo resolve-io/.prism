@@ -175,10 +175,9 @@ def get_directories_to_scan(project_dir: Path, directories: list) -> list:
         if path.exists():
             dirs.append((path, f"project:{subdir}"))
 
-    # Also check user-level .claude
-    user_claude = Path.home() / '.claude'
-    if user_claude.exists() and '.claude' in directories:
-        dirs.append((user_claude, "user:~/.claude"))
+    # NOTE: We intentionally do NOT scan user-level ~/.claude here.
+    # This is a PRISM quality gate — it only validates project-level content
+    # that will be checked in. The session-start hook handles user-level scanning.
 
     return dirs
 

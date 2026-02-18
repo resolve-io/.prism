@@ -1,11 +1,14 @@
 ---
 name: initialize-project-memory
-description: Use to set up Obsidian vault and populate it with existing codebase knowledge. Enables context memory for AI development.
+description: "[DEPRECATED] PRISM-Memory has been archived. This skill is no longer active."
 version: 1.0.0
+deprecated: true
 ---
-# Task: Initialize Project Memory
+# Task: Initialize Project Memory (DEPRECATED)
 
-Set up Obsidian vault and populate it with existing codebase knowledge.
+> **DEPRECATED (2026-02-16):** PRISM-Memory has been archived to `Documents/Archive/PRISM-Memory.7z`. This skill is no longer active. The memory configuration in `core-config.yaml` has been disabled.
+
+~~Set up Obsidian vault and populate it with existing codebase knowledge.~~
 
 ## When to Use
 
