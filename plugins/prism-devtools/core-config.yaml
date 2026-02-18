@@ -164,36 +164,7 @@ jira:
   defaultProject: PLAT
   issueKeyPattern: "[A-Z]+-\\d+"
 memory:
-  enabled: true
-  storage_type: obsidian
-  vault: ../docs/memory
-  auto_capture: true
-
-  # Decay and Learning Settings
-  decay_half_life_days: 30        # How quickly unused memories lose confidence
-  review_threshold: 0.3           # Confidence below which memories need review/refresh
-  learning_rate: 0.1              # How much confidence increases on successful use
-
-  # Post-Story Learning
-  consolidate_on_story_complete: true   # Review and refresh memories after story completion
-  refresh_related_memories: true        # Update decayed memories with new learnings
-
-  # Capture Triggers
-  capture_on:
-    - file_changes
-    - commits
-    - story_completion
-    - decisions
-
-  # Vault Folder Structure
-  folders:
-    files: PRISM-Memory/Files
-    patterns: PRISM-Memory/Patterns
-    decisions: PRISM-Memory/Decisions
-    commits: PRISM-Memory/Commits
-    interactions: PRISM-Memory/Interactions
-    preferences: PRISM-Memory/Preferences
-    learnings: PRISM-Memory/Learnings
+  enabled: false  # PRISM-Memory archived 2026-02-16. Vault zipped to Documents/Archive/PRISM-Memory.7z
 
 # Project Documentation Settings (document-project task)
 documentation:

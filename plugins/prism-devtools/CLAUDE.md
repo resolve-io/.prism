@@ -29,7 +29,7 @@ When a `<persona-reminder>` tag appears in your context, you MUST prefix your re
 
 When executing `*exit` for a PRISM persona, you MUST also clear the persona state by running:
 ```bash
-python D:\dev\.claude\hooks\persona-clear.py
+python .claude/hooks/persona-clear.py
 ```
 
 This ensures the reminder hook stops injecting the persona reminder on subsequent messages.
@@ -565,26 +565,10 @@ gh pr review {PR_NUMBER} --comment --body "..."
 - **Audit trail** - Each conversation shows resolution status
 - **Blocks premature merge** - `--request-changes` prevents merge until re-reviewed
 
-## 2. Document Analysis (Local Persistence)
-
-Use the `/document-analysis` skill to save comprehensive analysis to:
-
-**Location:** `C:\Users\DanPuzon\OneDrive - Resolve Systems\Documents\Claude\docs\memory\NonPRISM-Memory\Tickets\{JIRA-ID}-{Description}\01-Code-Review-Analysis.md`
-
-**Contents should include:**
-- PR summary and links
-- Full analysis of each issue reviewed
-- Evidence and reasoning for each confidence score
-- Why issues were flagged or filtered
-- Recommendations for future improvements
-- Review metadata (duration, agents used, comment links)
-
 ## Workflow
 
 1. Complete code review process (eligibility check, agents, scoring)
 2. **ALWAYS** post detailed analysis comment to PR (see format above) - this applies regardless of whether issues were found or filtered
-3. **ALWAYS** save to document-analysis location
-4. Both persistence steps are MANDATORY, not optional
 
 **CRITICAL: The detailed comment format is REQUIRED even when no issues meet the 80+ threshold.** The table should show ALL issues that were reviewed and why each was filtered. This provides transparency into the review process.
 
@@ -593,4 +577,3 @@ Use the `/document-analysis` skill to save comprehensive analysis to:
 - Provides transparency into review decisions
 - Creates audit trail for filtered issues
 - Allows learning from false positive patterns
-- Preserves analysis across Claude sessions

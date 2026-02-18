@@ -29,7 +29,7 @@ When a `<persona-reminder>` tag appears in your context, you MUST prefix your re
 
 When executing `*exit` for a PRISM persona, you MUST also clear the persona state by running:
 ```bash
-python D:\dev\.claude\hooks\persona-clear.py
+python .claude/hooks/persona-clear.py
 ```
 
 This ensures the reminder hook stops injecting the persona reminder on subsequent messages.
