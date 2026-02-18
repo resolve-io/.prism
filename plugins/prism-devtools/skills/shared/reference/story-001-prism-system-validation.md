@@ -127,7 +127,7 @@ Comprehensive validation of the entire PRISM system to ensure all documentation 
   - Build in-memory documentation graph
 
 - [x] **Task 2.2**: Implement cross-reference validator (AC: 1)
-  - Validate all [link](path) references
+  - Validate all `[link](path)` references
   - Validate all #anchor references
   - Check for bidirectional navigation
   - Detect broken or circular references
