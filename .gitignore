@@ -73,3 +73,6 @@ skills/orca-*/
 
 # Current story tracking (local state)
 .prism-current-story.txt
+
+# PRISM context cache (local runtime only)
+.context/
