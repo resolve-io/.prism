@@ -40,24 +40,7 @@
             "type": "command",
             "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/validate-required-sections.py",
             "description": "Verify all required PRISM sections exist"
-          },
-          {
-            "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/capture-file-context-obsidian.py",
-            "description": "Capture file changes to Obsidian memory vault"
           }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/capture-commit-context-obsidian.py",
-            "description": "Capture git commit context to Obsidian memory vault"
-          }
-        ]
-      }
     ]
   }
 }
