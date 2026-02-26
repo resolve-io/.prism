@@ -1,6 +1,6 @@
 {
   "name": "prism-devtools",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "PRISM methodology plugin - software engineering workflow coordination with Dev, QA, Architecture, and Product Owner agents following Predictability, Resiliency, Intentionality, Sustainability, and Maintainability principles",
   "author": {
     "name": "Resolve Systems",

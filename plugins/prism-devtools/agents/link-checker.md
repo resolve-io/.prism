@@ -1,7 +1,7 @@
 ---
 name: link-checker
 description: Validate Markdown references in Claude instructions to find broken links. Use at session start or before documentation changes.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash
 model: haiku
 ---
 
@@ -27,7 +27,7 @@ You are called to validate documentation integrity. Common triggers:
 
 ### Step 1: Find Markdown Files
 
-Use Glob to find all markdown files in target directories:
+Use Glob to find **all** markdown files in target directories. Do not use `head_limit` - get the complete list:
 
 ```
 .claude/**/*.md
@@ -43,10 +43,11 @@ Exclude these patterns:
 - `build`
 - `archive` (unless include_archive is true)
 - `.smart-env` (generated cache files)
+- `plugins/cache` (duplicates of source plugins)
 
 ### Step 2: Extract References
 
-For each markdown file, extract references using these patterns:
+**Read each file** to extract references (do not use Grep to find links - you must read every file):
 
 **Standard markdown links:**
 ```text
@@ -174,6 +175,21 @@ Output:
   "recommendation": "FIX_REQUIRED"
 }
 ```
+
+## Verify Your Findings (Recommended)
+
+After completing your scan, verify results using the deterministic Python validator:
+
+```bash
+python .prism/plugins/prism-devtools/skills/validate-markdown-refs/scripts/validate-refs.py
+```
+
+Compare your findings with the script output. The script:
+- Properly handles code block detection
+- Excludes `plugins/cache` to avoid duplicates
+- Returns consistent, reproducible results
+
+If discrepancies exist, **trust the script output** - it has more reliable code block detection.
 
 ## Completion
 

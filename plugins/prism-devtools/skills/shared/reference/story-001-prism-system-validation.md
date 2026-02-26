@@ -127,7 +127,7 @@ Comprehensive validation of the entire PRISM system to ensure all documentation 
   - Build in-memory documentation graph
 
 - [x] **Task 2.2**: Implement cross-reference validator (AC: 1)
-  - Validate all [link](path) references
+  - Validate all `[link](path)` references
   - Validate all #anchor references
   - Check for bidirectional navigation
   - Detect broken or circular references
@@ -497,7 +497,7 @@ Successfully created comprehensive documentation validation system that validate
 
 **Reviewed By:** Quinn (QA Agent)
 **Review Type:** Pre-Implementation Advisory Review
-**Gate:** GATE-001-20251028T000000Z (see [docs/qa/gates/story-001-prism-system-validation.yml](../qa/gates/story-001-prism-system-validation.yml))
+**Gate:** GATE-001-20251028T000000Z (see [docs/qa/gates/story-001-prism-system-validation.yml](../../qa-gate/artifacts/story-001-prism-system-validation.yml))
 **Status:** ✅ PASS - Ready for Implementation
 
 ---
@@ -729,7 +729,7 @@ This pre-implementation review introduces a **shift-left quality pattern** - cat
 
 **Review Date:** 2025-10-29
 **Reviewer:** Quinn (QA Agent)
-**Gate:** [story-001-post-implementation-gate.yaml](../qa/gates/story-001-post-implementation-gate.yaml)
+**Gate:** [story-001-post-implementation-gate.yaml](../../qa-gate/artifacts/story-001-post-implementation-gate.yaml)
 **Gate ID:** GATE-001-20251029T134000Z
 
 ### Review Summary

@@ -652,9 +652,9 @@ skills/deep-skill/
 ## Related Documentation
 
 - [Story 001: Complete PRISM System Documentation Validation](./story-001-prism-system-validation.md)
-- [skill-builder: Progressive Disclosure](../../skills/skill-builder/reference/progressive-disclosure.md)
-- [skill-builder: Quick Reference](../../skills/skill-builder/reference/quick-reference.md)
-- [Validation Report](../validation/validation-report.md)
+- [skill-builder: Progressive Disclosure](../../skill-builder/reference/progressive-disclosure.md)
+- [skill-builder: Quick Reference](../../skill-builder/reference/quick-reference.md)
+- [Validation Report](./validation-report.md)
 
 ## Notes
 

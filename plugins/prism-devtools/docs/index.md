@@ -2,7 +2,7 @@
 
 **P**redictability · **R**esiliency · **I**ntentionality · **S**ustainability · **M**aintainability
 
-`Version 2.3.1` | `Last Updated: 2026-02-13`
+`Version 2.4.0` | `Last Updated: 2026-02-17`
 
 ---
 
@@ -365,16 +365,15 @@ Complete technical reference with progressive disclosure:
 ## 📊 System Status
 
 > [!NOTE]
-> **Current Version:** `2.3.1`
+> **Current Version:** `2.4.0`
 
-### What's New in v2.3.1
+### What's New in v2.4.0
 
-- **BYOS simplified** — Skills no longer need a `phase:` field. Declare `agent` only; the system resolves which steps to inject into.
-- **Loop steps externalized** — Step instructions moved to `hooks/core-steps/*.md` for easier editing.
-- **Files reorganized** — Checklists, QA artifacts, and validation stories moved into their owning skill directories.
-- **Docs restructured** — README and index now lead with the 3-tier usage hierarchy (loop → agent → skill).
+- **Pre-commit quality gate** — Git hook blocks commits with broken links, terminology issues, or hardcoded paths. Runs validate-docs.py + check-portability.py automatically.
+- **check-portability.py** — Deterministic PC001-PC005 scanner with 5-layer exemption logic (placeholders, output blocks, rule docs, tracebacks, historical sections).
+- **validate-all skill** — Run all validation checks in one shot. Say "validate all" or run `python skills/validate-all/scripts/validate-all.py`.
 
-### Highlights from v2.3.0
+### Highlights from v2.3.x
 
 - **Bring Your Own Skill (BYOS)** — Teams can now create project-level skills shared via git with automatic PRISM agent assignment. `/byos scaffold`, `/byos validate`, `/byos list` commands. Leverages existing `discover_prism_skills()` infrastructure — no sync needed.
 

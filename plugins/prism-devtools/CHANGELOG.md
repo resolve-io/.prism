@@ -5,6 +5,39 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-02-17
+
+### Added
+- **Pre-Commit Quality Gate** — Git pre-commit hook preventing broken content from being committed to `.prism`
+  - Runs full documentation validation (validate-docs.py, 6-phase scan) as Phase 1
+  - Runs portability check (check-portability.py, PC001-PC005) as Phase 2
+  - Blocks commit on CRITICAL doc issues or PC001-PC003 portability errors
+  - Warnings (PC004-PC005) printed as advisory but non-blocking
+  - Source tracked at `scripts/pre-commit`, installed to `.git/hooks/pre-commit`
+
+- **check-portability.py** — Deterministic portability checker implementing PC001-PC005 rules
+  - PC001 (Error): Drive letter in instruction context (`[A-Z]:\\`)
+  - PC002 (Error): Hardcoded username path (`C:\Users\{username}\`)
+  - PC003 (Error): Hardcoded OneDrive org name (`OneDrive - {OrgName}`)
+  - PC004 (Warning): `$env:USERPROFILE` with org-specific subdirectory
+  - PC005 (Warning): Absolute path where relative would work
+  - Five exemption layers: placeholder tokens, output code blocks, rule documentation, Python tracebacks, historical narrative (both 5-line window and section-level heading hierarchy)
+  - Forward-scan heading stack for code-block-aware section detection
+  - JSON output matching validate-refs.py style, exit codes 0/1/2
+  - Zero external dependencies (stdlib only)
+
+- **validate-all Skill** — Unified validation runner for manual "run all checks" invocation
+  - Runs all three validators: validate-docs.py, validate-refs.py, check-portability.py
+  - Human-readable summary with per-check PASS/FAIL status
+  - Invocable via `/validate-all`, "validate all", or "run all checks"
+  - Auto-discovers script locations relative to plugin root
+
+### Changed
+- **portability-checker Agent** — Now has a deterministic script counterpart
+  - Agent definition (`agents/portability-checker.md`) remains for AI-driven scanning
+  - New `scripts/check-portability.py` provides deterministic, scriptable alternative
+  - Both share the same PC001-PC005 rule set and exemption logic
+
 ## [2.3.1] - 2026-02-13
 
 ### Changed

@@ -69,12 +69,12 @@ file_resolution:
   rules:
     - Dependencies map to .prism/{type}/{name} (absolute path from project root)
     - type=folder (templates|checklists|docs|utils|etc...), name=file-name
-    - Tasks map to .prism/skills/{task-name}/SKILL.md
+    - Skills map to .prism/skills/{skill-name}/SKILL.md
     - Example: strangler-pattern.md → .prism/skills/strangler-pattern/SKILL.md
 
 request_resolution: |
   Match user requests to commands/dependencies flexibly.
-  Examples: "draft story"→create-next-story task, "make a new prd"→create-doc + prd-tmpl.md
+  Examples: "draft story"→/create-next-story skill, "make a new prd"→create-doc + prd-tmpl.md
   ALWAYS ask for clarification if no clear match.
 
 # ============================================

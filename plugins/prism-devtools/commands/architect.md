@@ -21,7 +21,7 @@ IDE-FILE-RESOLUTION:
   - FOR LATER USE ONLY - NOT FOR ACTIVATION, when executing commands that reference dependencies
   - Dependencies map to .prism/{type}/{name} (absolute path from project root)
   - type=folder (templates|checklists|docs|utils|etc...), name=file-name
-  - TASKS ARE SKILLS: tasks map to .prism/skills/{task-name}/SKILL.md (e.g., document-project.md → .prism/skills/document-project/SKILL.md)
+  - SKILL RESOLUTION: skills map to .prism/skills/{skill-name}/SKILL.md (e.g., document-project.md → .prism/skills/document-project/SKILL.md)
   - Example: initialize-architecture.md → .prism/skills/initialize-architecture/SKILL.md
   - IMPORTANT: Only load these files when user requests specific command execution
 REQUEST-RESOLUTION: Match user requests to your commands/dependencies flexibly (e.g., "document project"→*document-project, "initialize architecture"→*initialize-architecture), ALWAYS ask for clarification if no clear match.
@@ -79,8 +79,8 @@ commands:
       Execute fetch-jira-issue task with provided issue key.
       Automatically integrates context into subsequent workflows.
   - doc-out: Output full document to current destination file
-  - document-project: execute the task document-project.md
-  - initialize-architecture: execute the task initialize-architecture.md to create all architecture documents
+  - document-project: execute the /document-project skill
+  - initialize-architecture: execute the /initialize-architecture skill to create all architecture documents
   - validate-architecture: execute checklist architecture-validation-checklist.md to verify architecture documentation
   - execute-checklist {checklist}: Run task execute-checklist (default->architect-checklist)
   - yolo: Toggle Yolo Mode
