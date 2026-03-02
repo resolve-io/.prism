@@ -217,6 +217,8 @@ def render_snapshot(work_dir: Path) -> str:
         lines.append("  Last Act: -")
     if state.model:
         lines.append(f"  Model:    {state.model}")
+    if state.branch:
+        lines.append(f"  Branch:   {state.branch}")
     if state.prompt:
         prompt = state.prompt
         if len(prompt) > 55:

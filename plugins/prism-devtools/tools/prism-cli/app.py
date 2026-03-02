@@ -7,6 +7,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
+from textual.content import Content
 from textual.widgets import Footer, Header, Static
 
 from models import StoryInfo, WorkflowState
@@ -19,6 +20,15 @@ from widgets import (
     TimingPanel,
     WorkflowTable,
 )
+
+
+def _fmt_tokens(count: int) -> str:
+    """Format token count compactly: 1234 -> 1.2k, 1234567 -> 1.2M."""
+    if count < 1000:
+        return str(count)
+    if count < 1_000_000:
+        return f"{count / 1000:.1f}k"
+    return f"{count / 1_000_000:.1f}M"
 
 
 class PrismDashboard(App):
@@ -42,6 +52,30 @@ class PrismDashboard(App):
         self._interval = interval
         self._state: WorkflowState | None = None
         self._story: StoryInfo | None = None
+
+    def format_title(self, title: str, sub_title: str) -> Content:
+        """Render k9s-style header info bar with live workflow metadata."""
+        state = self._state
+        parts: list[str | Content | tuple[str, str]] = [
+            ("PRISM Dashboard", "bold"),
+        ]
+
+        if state and state.active:
+            parts.append(("  \u25cfACTIVE", "bold green"))
+            if state.session_id:
+                parts.append(f"  sess:{state.session_id[:8]}")
+            if state.model:
+                # Shorten model name: "claude-opus-4-6" -> "opus-4-6"
+                model_short = state.model
+                if model_short.startswith("claude-"):
+                    model_short = model_short[7:]
+                parts.append(("  " + model_short, "cyan"))
+            if state.total_tokens > 0:
+                parts.append(f"  {_fmt_tokens(state.total_tokens)} tok")
+        else:
+            parts.append(("  \u25cbIDLE", "dim"))
+
+        return Content.assemble(*parts)
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -77,6 +111,10 @@ class PrismDashboard(App):
             self._story = parse_story_file(story_path)
         else:
             self._story = None
+
+        # Force header refresh — mutate_reactive bypasses equality check
+        # so format_title() re-runs even if the title string hasn't changed
+        self.mutate_reactive(PrismDashboard.title)
 
         # Push to every widget on every tick — no reactive gating
         try:

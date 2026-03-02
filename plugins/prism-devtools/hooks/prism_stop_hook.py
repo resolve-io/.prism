@@ -464,6 +464,24 @@ Story file: {state.get('story_file', 'unknown')}"""
     return {"valid": True, "message": "Unknown validation type", "continue_instruction": None}
 
 
+def detect_git_branch() -> str:
+    """Detect the current git branch name.
+
+    Returns the branch name or empty string if not in a git repo.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=Path.cwd()
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return ""
+
+
 def get_session_id_from_input(input_data: dict) -> str:
     """
     Get session_id from Claude Code's hook JSON input.
@@ -542,6 +560,7 @@ def parse_frontmatter(content: str) -> dict:
         "started_at": "",
         "last_activity": "",
         "session_id": "",
+        "branch": "",
     }
 
     match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
@@ -577,6 +596,8 @@ def parse_frontmatter(content: str) -> dict:
                 result["last_activity"] = value
             elif key == "session_id":
                 result["session_id"] = value
+            elif key == "branch":
+                result["branch"] = value
 
     return result
 
@@ -784,6 +805,17 @@ def main():
         # Stale workflow - don't hijack this conversation
         # User should explicitly run /prism-loop or /prism-status to re-engage
         sys.exit(0)
+
+    # Update branch tracking on every active stop
+    current_branch = detect_git_branch()
+    stored_branch = state.get("branch", "")
+    if current_branch and current_branch != stored_branch:
+        branch_updates = {
+            "branch": current_branch,
+            "last_activity": datetime.now().isoformat(),
+        }
+        content = update_state_file(content, branch_updates)
+        STATE_FILE.write_text(content, encoding='utf-8')
 
     # Update token usage and model from transcript on every active stop
     transcript_path = input_data.get("transcript_path", "")

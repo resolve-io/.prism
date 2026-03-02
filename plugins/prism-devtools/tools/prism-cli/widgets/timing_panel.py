@@ -43,6 +43,14 @@ class TimingPanel(Static):
             lines.append("[red bold]ERROR: No session ID[/]")
             lines.append("[red]Workflow not tied to a session[/]")
 
+        # Model
+        if state.model:
+            lines.append(f"Model: [cyan]{state.model}[/]")
+
+        # Branch
+        if state.branch:
+            lines.append(f"Branch: [cyan]{state.branch}[/]")
+
         # Started at
         started = state.started_at_dt
         if started:

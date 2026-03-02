@@ -154,6 +154,25 @@ def initialize_context_system() -> bool:
         return False
 
 
+def detect_git_branch() -> str:
+    """Detect the current git branch name.
+
+    Returns the branch name or empty string if not in a git repo.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=Path.cwd()
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return ""
+
+
 def get_session_id(config: dict) -> str:
     """
     Get unique session identifier.
@@ -185,6 +204,7 @@ def create_state_file(config: dict):
 
     timestamp = datetime.now().isoformat()
     session_id = get_session_id(config)
+    branch = detect_git_branch()
 
     content = f"""---
 active: true
@@ -197,6 +217,7 @@ paused_for_manual: false
 prompt: "{config.get("prompt", "").replace('"', '\\"')}"
 started_at: "{timestamp}"
 session_id: "{session_id}"
+branch: "{branch}"
 ---
 
 # PRISM Workflow Loop

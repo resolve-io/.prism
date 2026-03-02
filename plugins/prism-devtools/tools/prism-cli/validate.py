@@ -92,6 +92,7 @@ async def _run_validation(work_dir: Path) -> ValidationResult:
     """Boot the TUI headlessly and validate widget states."""
     from app import PrismDashboard
     from textual.widgets import DataTable
+    from textual.widgets._header import HeaderTitle
 
     from widgets import (
         AgentRoster,
@@ -145,6 +146,21 @@ async def _run_validation(work_dir: Path) -> ValidationResult:
             "Quit" in shown_bindings,
             f"Footer shows: {shown_bindings}",
         )
+
+        # --- Check 1b: Header info bar ---
+        header_title_widget = app.query_one(HeaderTitle)
+        header_text = str(header_title_widget.content) if header_title_widget.content else ""
+        # Active workflow should show ACTIVE and session ID
+        result.check(
+            "\u25cfACTIVE" in header_text,
+            f"Header shows ACTIVE indicator",
+        )
+        if state.session_id:
+            short_sess = state.session_id[:8]
+            result.check(
+                short_sess in header_text,
+                f"Header contains session ID ({short_sess})",
+            )
 
         # --- Check 2: Current step in WorkflowTable ---
         wf_table_widget = app.query_one(WorkflowTable)

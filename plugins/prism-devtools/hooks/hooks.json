@@ -14,6 +14,15 @@
     ],
     "PostToolUse": [
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/prism_activity_hook.py",
+            "description": "Update dashboard with real-time activity"
+          }
+        ]
+      },
+      {
         "matcher": "Write",
         "hooks": [
           {

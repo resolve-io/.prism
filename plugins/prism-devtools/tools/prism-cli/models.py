@@ -36,6 +36,7 @@ class WorkflowState:
     model: str = ""
     total_tokens: int = 0
     last_thought: str = ""
+    branch: str = ""
 
     @property
     def started_at_dt(self) -> datetime | None:

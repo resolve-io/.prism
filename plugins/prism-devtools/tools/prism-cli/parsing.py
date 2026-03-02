@@ -77,6 +77,8 @@ def parse_state_file(path: Path) -> WorkflowState | None:
                 pass
         elif key == "last_thought":
             state.last_thought = value
+        elif key == "branch":
+            state.branch = value
 
     return state
 
