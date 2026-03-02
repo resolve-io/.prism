@@ -79,7 +79,7 @@ Return structured JSON:
       "severity": "Error",
       "file": "templates/.context/core/persona-rules.md",
       "line": 32,
-      "content": "python D:\\dev\\.claude\\hooks\\persona-clear.py",
+      "content": "python .claude/hooks/persona-clear.py",
       "fix": "Use relative path: python .claude/hooks/persona-clear.py"
     }
   ],

@@ -41,7 +41,7 @@ Human-readable summary to stdout:
 ```
 PRISM Unified Validation
 ============================================================
-Scan root: D:\dev\.prism\plugins\prism-devtools
+Scan root: plugins/prism-devtools
 
 [1/3] Documentation validation (6-phase structural scan)
   PASS
