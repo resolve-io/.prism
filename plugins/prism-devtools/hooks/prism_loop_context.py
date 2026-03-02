@@ -196,7 +196,20 @@ def _parse_skill_frontmatter(content: str) -> dict | None:
     }
 
 
-def discover_prism_skills(agent: str, phase: str | None = None) -> list:
+def _repo_root_from_story(story_file: str) -> Path | None:
+    """Walk up from story file to find the repo root (.git directory)."""
+    if not story_file:
+        return None
+    p = Path(story_file).resolve().parent
+    while p != p.parent:
+        if (p / ".git").exists():
+            return p
+        p = p.parent
+    return None
+
+
+def discover_prism_skills(agent: str, phase: str | None = None,
+                          story_file: str = "") -> list:
     """
     Discover local skills that declare prism.agent matching *agent*.
 
@@ -204,20 +217,29 @@ def discover_prism_skills(agent: str, phase: str | None = None) -> list:
     no longer used for matching — skills are matched by agent only.
     QA skills automatically appear in both ``red`` and ``review`` steps.
 
-    Scans project-local (.claude/skills/*/SKILL.md) and user-global
-    (~/.claude/skills/*/SKILL.md) directories. Returns sorted list by priority.
+    Scans story-repo (.claude/skills/*/SKILL.md), project-local, and
+    user-global (~/.claude/skills/*/SKILL.md) directories.
+    Deduplicates so the same directory is not scanned twice (e.g. when
+    CWD == story repo root).  Returns sorted list by priority.
     """
     results = []
-    scan_dirs = [
-        Path.cwd() / ".claude" / "skills",
-        Path.home() / ".claude" / "skills",
-    ]
+    scan_dirs = []
+    story_root = _repo_root_from_story(story_file)
+    if story_root:
+        scan_dirs.append(story_root / ".claude" / "skills")
+    scan_dirs.append(Path.cwd() / ".claude" / "skills")
+    scan_dirs.append(Path.home() / ".claude" / "skills")
 
+    seen: set[Path] = set()
     for skills_dir in scan_dirs:
         try:
-            if not skills_dir.is_dir():
+            resolved = skills_dir.resolve()
+            if resolved in seen:
                 continue
-            for skill_file in skills_dir.glob("*/SKILL.md"):
+            seen.add(resolved)
+            if not resolved.is_dir():
+                continue
+            for skill_file in resolved.glob("*/SKILL.md"):
                 try:
                     content = skill_file.read_text(encoding="utf-8")
                     meta = _parse_skill_frontmatter(content)
@@ -368,7 +390,7 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
         return _build_fallback_instruction(step_id, agent, story_file, conventions)
 
     agent_id, phase = phase_info
-    discovered_skills = discover_prism_skills(agent_id, phase)
+    discovered_skills = discover_prism_skills(agent_id, phase, story_file)
     skill_text = _format_discovered_skills(discovered_skills)
 
     # Load and split core step file into title (line 1) + body (rest)
