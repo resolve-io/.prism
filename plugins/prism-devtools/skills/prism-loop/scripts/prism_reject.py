@@ -7,6 +7,7 @@ Outputs the instruction for the step it loops back to.
 
 import re
 import sys
+import os
 from pathlib import Path
 
 # Add hooks directory to path for shared module import
@@ -19,7 +20,14 @@ def _find_plugin_root() -> Path:
         current = current.parent
     raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
 
-PLUGIN_ROOT = _find_plugin_root()
+try:
+    PLUGIN_ROOT = _find_plugin_root()
+except FileNotFoundError:
+    _env_root = os.environ.get('CLAUDE_PLUGIN_ROOT', '')
+    if _env_root:
+        PLUGIN_ROOT = Path(_env_root)
+    else:
+        raise
 sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
 from prism_loop_context import build_agent_instruction, parse_state as _parse_state
 from prism_stop_hook import detect_test_runner

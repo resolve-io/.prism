@@ -10,6 +10,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.content import Content
+from textual.css.query import NoMatches
 from textual.widgets import Footer, Header, Static
 
 from models import StoryInfo, WorkflowState
@@ -229,5 +230,5 @@ class PrismDashboard(App):
             self.query_one(TimingPanel).update_state(self._state)
             self.query_one(GatePanel).update_state(self._state)
             self.query_one(StoryPanel).update_story(self._story)
-        except Exception:
+        except NoMatches:
             pass  # Widgets not mounted yet during startup

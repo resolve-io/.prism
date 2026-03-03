@@ -53,7 +53,7 @@ class WorkflowState:
         try:
             import json
             return json.loads(self.step_history)
-        except Exception:
+        except (json.JSONDecodeError, ValueError, TypeError):
             return []
 
     @property

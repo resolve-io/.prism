@@ -176,7 +176,7 @@ async def _run_validation(work_dir: Path) -> ValidationResult:
         if row_count == 8:
             wf_rows = wf_data_table.ordered_rows
             wf_cols = wf_data_table.ordered_columns
-            status_col_key = wf_cols[9].key  # "Status" column (index 9 after Skills added)
+            status_col_key = next(c.key for c in wf_cols if str(c.label) == 'Status')
 
             # Read the status column for the current step row
             row_key = wf_rows[state.current_step_index].key
@@ -215,7 +215,7 @@ async def _run_validation(work_dir: Path) -> ValidationResult:
 
         agent_rows = agent_table.ordered_rows
         agent_cols = agent_table.ordered_columns
-        agent_state_col = agent_cols[4].key  # "State" column
+        agent_state_col = next(c.key for c in agent_cols if str(c.label) == 'State')
 
         for idx, (agent_id, expected_state) in enumerate(expected_agents):
             if idx < agent_table.row_count:

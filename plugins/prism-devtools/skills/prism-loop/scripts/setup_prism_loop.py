@@ -9,6 +9,7 @@ The script operates relative to the current working directory (the project folde
 """
 
 import sys
+import os
 import io
 import shlex
 import shutil
@@ -30,7 +31,14 @@ def _find_plugin_root() -> Path:
         current = current.parent
     raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
 
-PLUGIN_ROOT = _find_plugin_root()
+try:
+    PLUGIN_ROOT = _find_plugin_root()
+except FileNotFoundError:
+    _env_root = os.environ.get('CLAUDE_PLUGIN_ROOT', '')
+    if _env_root:
+        PLUGIN_ROOT = Path(_env_root)
+    else:
+        raise
 sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
 from prism_loop_context import build_agent_instruction
 from prism_stop_hook import detect_test_runner

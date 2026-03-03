@@ -37,7 +37,15 @@ def _find_plugin_root() -> Path:
         current = current.parent
     raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
 
-ENV_FILE_PATH = _find_plugin_root() / ".env"
+try:
+    _PLUGIN_ROOT = _find_plugin_root()
+except FileNotFoundError:
+    _env_root = os.environ.get('CLAUDE_PLUGIN_ROOT', '')
+    if _env_root:
+        _PLUGIN_ROOT = Path(_env_root)
+    else:
+        raise
+ENV_FILE_PATH = _PLUGIN_ROOT / '.env'
 
 
 def load_env_file(env_path: Path) -> dict:
