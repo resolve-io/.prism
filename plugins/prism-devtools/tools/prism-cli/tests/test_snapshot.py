@@ -109,10 +109,9 @@ class TestRenderSnapshot:
         assert "AC-1" in output
         assert "2 covered" in output
 
-    def test_shows_prompt_in_timing(self, work_dir: Path):
+    def test_prompt_not_shown_in_timing(self, work_dir: Path):
         output = render_snapshot(work_dir)
-        assert "Prompt:" in output
-        assert "test task" in output
+        assert "Prompt:" not in output
 
     def test_shows_last_thought_in_timing(self, tmp_path: Path):
         state_dir = tmp_path / ".claude"
@@ -163,6 +162,40 @@ started_at: "2026-03-02T12:00:00.000000"
         assert "ACTION REQUIRED" in output
         assert "RED GATE" in output
         assert "/prism-approve" in output
+
+    def test_last_thought_bare_tool_name_hidden(self, tmp_path: Path):
+        """Bare tool names like 'Bash' or 'Read' should not appear as last_thought."""
+        state_dir = tmp_path / ".claude"
+        state_dir.mkdir()
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        started = (now - timedelta(minutes=5)).isoformat()
+        last_act = (now - timedelta(seconds=10)).isoformat()
+        state_content = f'''---
+active: true
+current_step: implement_tasks
+current_step_index: 5
+started_at: "{started}"
+last_activity: "{last_act}"
+session_id: "sess-3"
+last_thought: "Bash"
+---
+'''
+        (state_dir / "prism-loop.local.md").write_text(state_content, encoding="utf-8")
+        output = render_snapshot(tmp_path)
+        assert "Last Thought:" not in output
+
+    def test_step_history_double_escaped_parsed(self, tmp_path: Path):
+        """Double-escaped step_history (from update_state_file) should parse correctly."""
+        import sys
+        sys.path.insert(0, str(tmp_path.parent.parent / "plugins" / "prism-devtools" / "tools" / "prism-cli"))
+        from snapshot import _parse_step_history
+        # Simulate the double-escaped value left after parse_state_file strips outer quotes
+        double_escaped = r'[{\"i\": 0, \"d\": 120, \"t\": 5000, \"s\": 2, \"tc\": 10}]'
+        result = _parse_step_history(double_escaped)
+        assert len(result) == 1
+        assert result[0]["i"] == 0
+        assert result[0]["d"] == 120
 
     def test_stale_detection(self, tmp_path: Path):
         state_dir = tmp_path / ".claude"

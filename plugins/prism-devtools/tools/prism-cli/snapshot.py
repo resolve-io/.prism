@@ -82,6 +82,26 @@ AGENTS = [
 ]
 
 
+def _parse_step_history(raw: str) -> list[dict]:
+    """Parse step_history JSON with fallback for double-escaped values.
+
+    update_state_file in prism_stop_hook.py wraps the JSON in quotes and
+    escapes inner double-quotes, producing e.g. step_history: "[{\"i\": 0}]".
+    parse_state_file strips outer quotes, leaving backslash-quote pairs that
+    json.loads rejects.  This function tries a second pass after unescaping.
+    """
+    if not raw:
+        return []
+    try:
+        return _json.loads(raw)
+    except (_json.JSONDecodeError, ValueError, TypeError):
+        pass
+    try:
+        return _json.loads(raw.replace('\\"', '"'))
+    except (_json.JSONDecodeError, ValueError, TypeError):
+        return []
+
+
 def _fmt_duration(seconds: int) -> str:
     if seconds < 60:
         return f"{seconds}s"
@@ -218,7 +238,7 @@ def render_snapshot(work_dir: Path) -> str:
 
     # History lookup: step_index -> {i, d, t}
     history: dict[int, dict] = {}
-    for entry in state.step_history_parsed:
+    for entry in _parse_step_history(state.step_history):
         try:
             history[int(entry["i"])] = entry
         except (KeyError, TypeError, ValueError):
@@ -328,16 +348,13 @@ def render_snapshot(work_dir: Path) -> str:
         lines.append(f"  Model:    {state.model}")
     if state.branch:
         lines.append(f"  Branch:   {state.branch}")
-    if state.prompt:
-        prompt = state.prompt
-        if len(prompt) > 55:
-            prompt = prompt[:52] + "..."
-        lines.append(f"  Prompt:   {prompt}")
     if state.last_thought:
         thought = state.last_thought
-        if len(thought) > 55:
-            thought = thought[:52] + "..."
-        lines.append(f"  Last Thought: {thought}")
+        # Skip bare tool names (no spaces and no context separator)
+        if " " in thought or ":" in thought:
+            if len(thought) > 55:
+                thought = thought[:52] + "..."
+            lines.append(f"  Last Thought: {thought}")
     lines.append("")
 
     # --- Step Detail ---
