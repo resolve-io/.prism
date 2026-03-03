@@ -35,6 +35,11 @@ Process: Read failing test -> implement minimal code -> run tests -> iterate""",
 RETRIEVAL_INSTRUCTION = """IMPORTANT: Prefer reading actual project files over pre-trained assumptions.
 Always Glob/Grep for project conventions before writing code or tests."""
 
+# --- Stop Directive ---
+STOP_DIRECTIVE = """STOP DIRECTIVE: When your task for this step is complete, STOP immediately.
+Do NOT edit state files, run workflow scripts, or attempt to advance the workflow manually.
+The stop hook detects your completion and auto-advances to the next step."""
+
 # --- Inline Rules (replacing "go read .context/X.md") ---
 INLINE_RULES = {
     "planning": """Rules:
@@ -365,6 +370,7 @@ def _build_fallback_instruction(step_id: str, agent: str, story_file: str,
     skill_text = _format_discovered_skills(discovered_skills)
     if skill_text:
         parts.extend(["", skill_text])
+    parts.extend(["", STOP_DIRECTIVE])
     return "\n".join(parts)
 
 
@@ -425,5 +431,8 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
     # BYOS discovered skills
     if skill_text:
         parts.extend(["", skill_text])
+
+    # Stop directive — always last so it's fresh when agent finishes
+    parts.extend(["", STOP_DIRECTIVE])
 
     return "\n".join(parts)

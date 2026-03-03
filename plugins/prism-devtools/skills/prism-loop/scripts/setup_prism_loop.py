@@ -353,7 +353,9 @@ def main():
     )
     print(instruction)
     print("")
-    print("The stop hook will auto-progress through agent steps.")
+    print("The stop hook auto-advances agent steps on completion.")
+    print("IMPORTANT: When each step is done, STOP. Do not edit state files or run")
+    print("workflow scripts manually — the stop hook handles all progression.")
     print("Gates pause for /prism-approve")
 
 

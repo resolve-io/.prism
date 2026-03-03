@@ -24,6 +24,7 @@ from prism_loop_context import (
     INLINE_RULES,
     WORKFLOW_INDEX,
     STEP_PHASE_MAP,
+    STOP_DIRECTIVE,
     build_agent_instruction,
     detect_project_conventions,
     parse_state,
@@ -154,6 +155,45 @@ def test_retrieval_instruction_in_all_steps():
         assert RETRIEVAL_INSTRUCTION in instruction, (
             f"RETRIEVAL_INSTRUCTION missing from {step_id}"
         )
+
+
+# --- REQ-4b: STOP directive in all steps ---
+
+def test_stop_directive_in_all_steps():
+    """Every step output must contain the STOP_DIRECTIVE so agents know to stop."""
+    for step_id, agent, action in AGENT_STEPS:
+        instruction = build_agent_instruction(
+            step_id, agent, action,
+            "docs/stories/test-story.md", "", MOCK_RUNNER
+        )
+        assert STOP_DIRECTIVE in instruction, (
+            f"STOP_DIRECTIVE missing from {step_id}"
+        )
+
+
+def test_stop_directive_is_last_section():
+    """STOP_DIRECTIVE must appear at the very end so it's fresh when agent finishes."""
+    for step_id, agent, action in AGENT_STEPS:
+        instruction = build_agent_instruction(
+            step_id, agent, action,
+            "docs/stories/test-story.md", "", MOCK_RUNNER
+        )
+        stop_idx = instruction.rfind(STOP_DIRECTIVE)
+        assert stop_idx != -1, f"STOP_DIRECTIVE missing from {step_id}"
+        # Nothing meaningful after STOP_DIRECTIVE (only trailing newline allowed)
+        after = instruction[stop_idx + len(STOP_DIRECTIVE):].strip()
+        assert after == "", (
+            f"Content found after STOP_DIRECTIVE in {step_id}: {after!r}"
+        )
+
+
+def test_stop_directive_fallback_step():
+    """STOP_DIRECTIVE must appear in fallback instructions for unknown steps too."""
+    instruction = build_agent_instruction(
+        "unknown_step", "dev", "some-action",
+        "docs/stories/test.md", "", MOCK_RUNNER
+    )
+    assert STOP_DIRECTIVE in instruction, "STOP_DIRECTIVE missing from fallback instruction"
 
 
 # --- REQ-5: Project conventions injected ---
