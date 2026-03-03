@@ -4,6 +4,7 @@ domains:
   - orchestration
   - byos
   - wsl-compat
+  - cli
 governance:
   max_entries: 100
   warn_entries: 150
