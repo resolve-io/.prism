@@ -1,0 +1,7 @@
+# Normalize line endings
+* text=auto
+
+# Shell scripts must use LF (bash breaks on CRLF)
+*.sh text eol=lf
+scripts/pre-commit text eol=lf
+plugins/prism-devtools/scripts/pre-commit text eol=lf

@@ -27,7 +27,17 @@ from pathlib import Path
 
 # Configuration
 JIRA_BASE_URL = "https://resolvesys.atlassian.net"
-ENV_FILE_PATH = Path(__file__).resolve().parents[3] / ".env"
+
+def _find_plugin_root() -> Path:
+    """Walk up from __file__ to find the plugin root (contains core-config.yaml)."""
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        if (current / "core-config.yaml").exists():
+            return current
+        current = current.parent
+    raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
+
+ENV_FILE_PATH = _find_plugin_root() / ".env"
 
 
 def load_env_file(env_path: Path) -> dict:

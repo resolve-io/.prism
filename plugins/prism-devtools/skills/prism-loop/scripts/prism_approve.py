@@ -16,7 +16,16 @@ if sys.stdout.encoding != 'utf-8':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Add hooks directory to path for shared module import
-PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+def _find_plugin_root() -> Path:
+    """Walk up from __file__ to find the plugin root (contains core-config.yaml)."""
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        if (current / "core-config.yaml").exists():
+            return current
+        current = current.parent
+    raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
+
+PLUGIN_ROOT = _find_plugin_root()
 sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
 from prism_loop_context import build_agent_instruction, parse_state as _parse_state
 from prism_stop_hook import detect_test_runner

@@ -80,3 +80,5 @@ skills/orca-*/
 
 # PRISM context cache (local runtime only)
 .context/
+!plugins/prism-devtools/templates/.context/
+!plugins/prism-devtools/templates/.context/**

@@ -1,3 +1,66 @@
+# MANDATORY: Local Plugin Development and Testing
+
+**This plugin (prism-devtools) is developed locally. The cache WILL serve stale files.**
+
+## The Problem
+
+Claude Code copies marketplace plugins to `~/.claude/plugins/cache/` and reads from there, NOT from the source directory. When developing locally:
+- Edits to scripts, skills, hooks, and agents in `E:\.prism\plugins\prism-devtools\` are **invisible** to Claude Code
+- The cached version at `~/.claude/plugins/cache/prism/prism-devtools/{VERSION}/` is what actually runs
+- `autoUpdate: true` only pulls git changes, it does NOT refresh the cache
+- Version bumps create new cache entries but old ones may still be resolved
+
+## How to Develop and Test Locally
+
+### Method 1: `--plugin-dir` Flag (Recommended)
+
+Launch Claude Code with the plugin loaded directly from source:
+
+```bash
+claude --plugin-dir E:/.prism/plugins/prism-devtools
+```
+
+This bypasses the cache entirely for the session. Changes take effect immediately on next session restart.
+
+### Method 2: Symlink Cache to Live Source
+
+Replace the cache directory with a symlink to the development directory so the cache always points to live source:
+
+```bash
+# Remove stale cache
+rm -rf ~/.claude/plugins/cache/prism/prism-devtools
+
+# Create symlink structure pointing to live source
+mkdir -p ~/.claude/plugins/cache/prism/prism-devtools
+ln -sfn E:/.prism/plugins/prism-devtools ~/.claude/plugins/cache/prism/prism-devtools/2.3.0
+```
+
+Changes are immediately visible without restarting.
+
+### Method 3: Manual Cache Clear
+
+After editing plugin files, delete the cache and restart:
+
+```bash
+rm -rf ~/.claude/plugins/cache/prism/prism-devtools
+# Then restart Claude Code session
+```
+
+## Pre-Development Checklist
+
+Before starting any prism-devtools development session:
+- [ ] Verify you are NOT running from cache: check `${CLAUDE_PLUGIN_ROOT}` resolves to the source dir, not `~/.claude/plugins/cache/`
+- [ ] If using `--plugin-dir`, confirm the flag is in your launch command
+- [ ] If using symlinks, verify: `ls -la ~/.claude/plugins/cache/prism/prism-devtools/*/` shows symlink to source
+- [ ] After any script change, validate by checking file contents at the resolved `${CLAUDE_PLUGIN_ROOT}` path
+
+## Known Issue References
+
+- [Plugin cache never refreshes (#17361)](https://github.com/anthropics/claude-code/issues/17361)
+- [CLAUDE_PLUGIN_ROOT points to stale version (#15642)](https://github.com/anthropics/claude-code/issues/15642)
+
+---
+
 # MANDATORY: PRISM Persona Persistence
 
 **When a PRISM persona is active (SM/Dev/QA/PO/Architect), you MUST remain in that persona until explicitly exited.**
