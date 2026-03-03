@@ -93,7 +93,7 @@ class TestAC1_FindPluginRoot:
         )
         assert callable(mod._find_plugin_root)
 
-    def test_ac1_find_plugin_root_returns_path_with_sentinel(self, tmp_path: Path):
+    def test_ac1_find_plugin_root_returns_path_with_sentinel(self):
         """
         AC-1: _find_plugin_root() finds directory containing core-config.yaml
         Requirement: Walk stops at sentinel, not at a hardcoded depth
@@ -119,7 +119,7 @@ class TestAC1_FindPluginRoot:
             "Cannot test: _find_plugin_root() not defined"
         )
         # Patch __file__ inside the module to point into an isolated tmp tree
-        import unittest.mock as mock
+        from unittest import mock
         isolated = tmp_path / "a" / "b" / "c" / "script.py"
         isolated.parent.mkdir(parents=True)
         isolated.touch()
