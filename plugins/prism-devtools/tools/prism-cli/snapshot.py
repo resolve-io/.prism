@@ -70,15 +70,19 @@ def render_snapshot(work_dir: Path) -> str:
 
     # Timing
     elapsed_secs = 0
+    step_elapsed_secs = 0
+    pre_step_secs = 0
     is_stale = False
     if state.started_at_dt:
-        elapsed_secs = max(
-            0, int((now - state.started_at_dt).total_seconds())
-        )
+        elapsed_secs = max(0, int((now - state.started_at_dt).total_seconds()))
+        step_ref = state.step_started_at_dt or state.started_at_dt
+        step_elapsed_secs = max(0, int((now - step_ref).total_seconds()))
+        if state.step_started_at_dt:
+            pre_step_secs = max(0, int(
+                (state.step_started_at_dt - state.started_at_dt).total_seconds()
+            ))
         if state.last_activity_dt:
-            stale_secs = int(
-                (now - state.last_activity_dt).total_seconds()
-            )
+            stale_secs = int((now - state.last_activity_dt).total_seconds())
             is_stale = stale_secs > 600
         elif elapsed_secs > 300:
             is_stale = True
@@ -90,7 +94,7 @@ def render_snapshot(work_dir: Path) -> str:
     lines.append("-" * 64)
     lines.append(
         f"{'St':<4} {'Agent':<14} {'Role':<18} {'Phase':<12} "
-        f"{'State':<10} {'Tokens':<8} {'Tok/min':<8}"
+        f"{'State':<10} {'Duration':<10} {'Tokens':<8} {'Tok/min':<8}"
     )
     for agent_id, name, role, step_indices in AGENTS:
         active_step = None
@@ -109,55 +113,90 @@ def render_snapshot(work_dir: Path) -> str:
             else:
                 dot, agent_state = "*", "working"
             phase = active_step.phase
+            agent_dur = _fmt_duration(step_elapsed_secs)  # ticks up: current step only
         elif all_done:
             dot, agent_state, phase = "v", "done", "done"
+            agent_dur = _fmt_duration(pre_step_secs)  # frozen: time before current step
         else:
             dot, agent_state = "o", "idle"
-            # Show the phase of the agent's NEXT upcoming step, not first
             next_si = next((si for si in step_indices if si > current_idx), step_indices[0])
             phase = WORKFLOW_STEPS[next_si].phase
+            agent_dur = "-"
 
-        # Token stats — only show for the active agent
+        # Token stats — per-step for working agent, pre-step for done
         tokens_str = "-"
         tpm_str = "-"
-        if state.total_tokens > 0 and active_step is not None:
-            tokens_str = _fmt_tokens(state.total_tokens)
-            if elapsed_secs > 0:
-                tpm = state.total_tokens / (elapsed_secs / 60)
-                tpm_str = _fmt_tokens(int(tpm))
+        if state.total_tokens > 0:
+            if active_step is not None:
+                step_toks = state.step_tokens
+                tokens_str = _fmt_tokens(step_toks)
+                if step_elapsed_secs > 0 and step_toks > 0:
+                    tpm = step_toks / (step_elapsed_secs / 60)
+                    tpm_str = _fmt_tokens(int(tpm))
+            elif all_done:
+                tokens_str = _fmt_tokens(state.step_tokens_start)
 
         display = f"{name} ({agent_id})"
         lines.append(
             f"{dot:<4} {display:<14} {role:<18} {phase:<12} "
-            f"{agent_state:<10} {tokens_str:<8} {tpm_str:<8}"
+            f"{agent_state:<10} {agent_dur:<10} {tokens_str:<8} {tpm_str:<8}"
         )
 
     lines.append("")
 
     # --- Workflow Steps ---
+    # Live timing for current step
+    step_ref = state.step_started_at_dt or state.started_at_dt
+    step_elapsed_live = max(0, int((now - step_ref).total_seconds())) if step_ref else 0
+    step_dur_str = _fmt_duration(step_elapsed_live) if step_ref else "-"
+
+    # History lookup: step_index -> {i, d, t}
+    history: dict[int, dict] = {}
+    for entry in state.step_history_parsed:
+        try:
+            history[int(entry["i"])] = entry
+        except (KeyError, TypeError, ValueError):
+            pass
+
     lines.append("WORKFLOW")
     lines.append("-" * 64)
     lines.append(
         f"{'#':<4} {'Step':<24} {'Phase':<12} {'Agent':<6} "
-        f"{'Type':<8} {'Status'}"
+        f"{'Type':<8} {'Duration':<10} {'Tokens':<8} {'Tok/min':<8} {'Status'}"
     )
     for step in WORKFLOW_STEPS:
         if step.index < current_idx:
+            hist = history.get(step.index)
+            if hist:
+                d_secs = int(hist.get("d", 0))
+                t_toks = int(hist.get("t", 0))
+                dur = _fmt_duration(d_secs)
+                tok = _fmt_tokens(t_toks)
+                tpm_val = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
+                tpm = _fmt_tokens(int(tpm_val)) if tpm_val > 0 else "-"
+            else:
+                dur, tok, tpm = "-", "-", "-"
             status = "DONE"
         elif step.index == current_idx:
-            dur = _fmt_duration(elapsed_secs)
-            if is_stale:
-                status = f"STALE ({dur})"
-            elif state.paused_for_manual and step.step_type == "gate":
-                status = f">> GATE ({dur})"
+            dur = step_dur_str
+            step_toks = state.step_tokens
+            tok = _fmt_tokens(step_toks) if step_toks > 0 else "0"
+            if step_elapsed_live > 0 and step_toks > 0:
+                tpm = _fmt_tokens(int(step_toks / (step_elapsed_live / 60)))
             else:
-                status = f">> RUNNING ({dur})"
+                tpm = "-"
+            if is_stale:
+                status = "STALE"
+            elif state.paused_for_manual and step.step_type == "gate":
+                status = ">> GATE"
+            else:
+                status = ">> RUNNING"
         else:
-            status = "."
+            dur, tok, tpm, status = "", "", "", "."
 
         lines.append(
             f"{step.index + 1:<4} {step.id:<24} {step.phase:<12} "
-            f"{step.agent:<6} {step.step_type:<8} {status}"
+            f"{step.agent:<6} {step.step_type:<8} {dur:<10} {tok:<8} {tpm:<8} {status}"
         )
 
     lines.append("")
@@ -232,12 +271,21 @@ def render_snapshot(work_dir: Path) -> str:
         story_path = Path(state.story_file)
         if not story_path.is_absolute():
             story_path = work_dir / story_path
-        story = parse_story_file(story_path)
+        story = parse_story_file(story_path, work_dir)
 
     lines.append("STORY")
     lines.append("-" * 64)
     if story and story.exists:
         lines.append(f"  File: {story.path}")
+        # Green test progress bar (ASCII, no Rich markup)
+        p, t = story.green_tests_passing, story.green_tests_total
+        if t > 0:
+            width = 20
+            filled = round((p / t) * width)
+            progress = "#" * filled + "." * (width - filled)
+            lines.append(f"  Green: [{progress}] {p}/{t} ({int(p/t*100)}%)")
+        else:
+            lines.append("  Green: [....................] no tests yet")
         lines.append(f"  ACs:  {len(story.acceptance_criteria)} found")
         for ac in story.acceptance_criteria[:6]:
             display = ac if len(ac) <= 55 else ac[:52] + "..."
