@@ -8,8 +8,10 @@ Performance target: < 50ms per invocation.
 """
 
 import json
+import os
 import re
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -96,17 +98,29 @@ def main():
         replacement = f'{key}: "{value}"'
         if re.search(pattern, text, re.MULTILINE):
             return re.sub(pattern, lambda m: replacement, text, flags=re.MULTILINE)
-        # Add before closing ---
-        return re.sub(r"^(---)$", lambda m: f"{replacement}\n---", text, count=1, flags=re.MULTILINE)
+        # Add before closing --- (skip opening delimiter)
+        first_end = text.index('---') + 3
+        rest = text[first_end:]
+        return text[:first_end] + re.sub(
+            r"^(---)$", lambda m: f"{replacement}\n---", rest, count=1, flags=re.MULTILINE
+        )
 
     content = _update_field(content, "last_activity", now)
     if thought:
         content = _update_field(content, "last_thought", thought)
 
+    # Atomic write: use tempfile + os.replace to avoid race conditions (F2+F6)
+    fd, tmp_path = tempfile.mkstemp(dir=STATE_FILE.parent, suffix='.tmp')
     try:
-        STATE_FILE.write_text(content, encoding="utf-8")
-    except (IOError, OSError):
-        pass
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(content)
+        os.replace(tmp_path, str(STATE_FILE))
+    except OSError as exc:
+        print(f'prism_activity_hook: failed to write state: {exc}', file=sys.stderr)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
     sys.exit(0)
 
