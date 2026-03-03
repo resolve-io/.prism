@@ -10,11 +10,68 @@ Usage:
 
 from __future__ import annotations
 
+import glob as _glob
+import json as _json
 from datetime import datetime
 from pathlib import Path
 
 from models import WORKFLOW_STEPS, WorkflowState, StoryInfo
-from parsing import parse_state_file, parse_story_file
+from parsing import check_plugin_cache_stale, parse_state_file, parse_story_file
+
+
+def _inject_live_tokens(state: WorkflowState) -> None:
+    """Parse the session transcript to get live token totals.
+
+    Fixes step_tokens_start when it's 0 but step_history has data.
+    Mutates state in-place for display only.
+    """
+    if not state.session_id:
+        return
+    pattern = str(
+        Path.home() / ".claude" / "projects" / "*" / f"{state.session_id}.jsonl"
+    )
+    matches = _glob.glob(pattern)
+    if not matches:
+        return
+    tp = Path(matches[0])
+    if not tp.exists():
+        return
+
+    total = 0
+    model = ""
+    try:
+        with open(tp, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                try:
+                    entry = _json.loads(stripped)
+                except _json.JSONDecodeError:
+                    continue
+                usage = entry.get("usage")
+                if not usage and isinstance(entry.get("message"), dict):
+                    usage = entry["message"].get("usage")
+                if usage and isinstance(usage, dict):
+                    total += usage.get("input_tokens", 0)
+                    total += usage.get("cache_creation_input_tokens", 0)
+                    total += usage.get("cache_read_input_tokens", 0)
+                    total += usage.get("output_tokens", 0)
+                m = entry.get("model")
+                if not m and isinstance(entry.get("message"), dict):
+                    m = entry["message"].get("model")
+                if m:
+                    model = m
+    except (IOError, OSError):
+        return
+
+    state.total_tokens = max(state.total_tokens, total)
+    if model and not state.model:
+        state.model = model
+    if state.step_tokens_start == 0 and state.step_history_parsed:
+        computed = sum(int(e.get("t", 0)) for e in state.step_history_parsed)
+        if computed > 0:
+            state.step_tokens_start = computed
 
 
 # Agent definitions (mirrors agent_roster.py)
@@ -52,12 +109,21 @@ def render_snapshot(work_dir: Path) -> str:
     lines: list[str] = []
     now = datetime.now()
 
+    if state and state.active:
+        _inject_live_tokens(state)
+
+    cache = check_plugin_cache_stale(work_dir)
+
     # Header
     lines.append("=" * 64)
     lines.append("  PRISM Dashboard Snapshot")
     lines.append(f"  {now.strftime('%Y-%m-%d %H:%M:%S')}")
     if state and state.active and state.current_step:
         lines.append(f"  Step: {state.current_step}")
+    if cache["linked"]:
+        lines.append("  [*] CACHE LIVE — junction active, edits apply instantly")
+    elif cache["stale"]:
+        lines.append("  [!] CACHE STALE — source newer than ~/.claude/plugins/cache")
     lines.append("=" * 64)
     lines.append("")
 

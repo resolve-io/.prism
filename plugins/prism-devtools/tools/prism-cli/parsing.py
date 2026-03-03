@@ -13,6 +13,72 @@ from pathlib import Path
 from models import StoryInfo, WorkflowState
 
 
+def check_plugin_cache_stale(work_dir: Path) -> dict:
+    """Check the plugin cache status relative to the source directory.
+
+    Returns a dict with:
+      - "linked": True if the cache version dir is a symlink/junction to source
+      - "stale":  True if any source file is newer than the cached copy
+      - "missing": True if source or cache dir doesn't exist
+
+    When "linked" is True, cache IS the source — never stale by definition.
+    """
+    result = {"linked": False, "stale": False, "missing": False}
+
+    source_dir = work_dir / "plugins" / "prism-devtools"
+    if not source_dir.exists():
+        result["missing"] = True
+        return result
+
+    cache_base = (
+        Path.home() / ".claude" / "plugins" / "cache" / "prism" / "prism-devtools"
+    )
+    if not cache_base.exists():
+        result["missing"] = True
+        return result
+
+    version_dirs = [d for d in cache_base.iterdir() if d.is_dir()]
+    if not version_dirs:
+        result["missing"] = True
+        return result
+
+    # Check if any version dir is a symlink/junction pointing at the source.
+    # Windows junctions don't set is_symlink(), so compare resolved paths directly.
+    source_resolved = source_dir.resolve()
+    for vd in version_dirs:
+        try:
+            if vd.resolve() == source_resolved:
+                result["linked"] = True
+                return result
+        except OSError:
+            pass
+
+    # No junction — compare mtimes to detect staleness
+    def _real_files(base: Path):
+        for f in base.rglob("*"):
+            if f.is_file() and "__pycache__" not in f.parts:
+                yield f
+
+    try:
+        cache_mtime = max(
+            (f.stat().st_mtime for vd in version_dirs for f in _real_files(vd)),
+            default=0.0,
+        )
+    except OSError:
+        cache_mtime = 0.0
+    if cache_mtime == 0.0:
+        return result
+
+    try:
+        result["stale"] = any(
+            f.stat().st_mtime > cache_mtime for f in _real_files(source_dir)
+        )
+    except OSError:
+        pass
+
+    return result
+
+
 def _count_green_tests(work_dir: Path) -> tuple[int, int]:
     """Read pytest cache to count passing vs total tests.
 

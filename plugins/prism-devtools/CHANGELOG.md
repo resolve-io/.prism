@@ -5,6 +5,77 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-03-02
+
+### Added
+
+- **PRISM Dashboard TUI** (`/prism-dashboard`) — Live Textual terminal dashboard for monitoring
+  PRISM workflow state in real time
+  - Polls `prism-loop.local.md` and renders an 8-step workflow table with color-coded progress
+  - Agent roster showing active/idle agents with session tracking
+  - Timing panel: elapsed time, last activity timestamp, staleness indicator
+  - Gate alerts when workflow is paused at an approval gate
+  - Story info panel with acceptance criteria and plan coverage from the active story file
+  - Keyboard binding: `Q` to quit
+
+- **CLI Snapshot Mode** — `python prism-cli --snapshot` outputs a non-interactive ASCII
+  snapshot of the full dashboard state suitable for embedding in Claude agent sessions
+  - Renders: workflow steps, agent roster, timing (session, branch, elapsed), story info,
+    and gate alerts
+  - Used by `/prism-status` for inline session display
+
+- **`/prism-dashboard` command** — Launch the live Textual TUI dashboard from any session
+
+- **`/validate-cli` command** — Headless validation that the dashboard renders correctly
+  without requiring an interactive terminal (CI-safe)
+
+- **`prism_activity_hook.py`** — New activity tracking hook that records the last-active
+  timestamp on every Claude Code event, enabling staleness detection in the timing panel
+
+- **Session-story-branch correlation** — The PRISM state file now tracks the active git
+  branch alongside session ID and story file, displayed in the snapshot TIMING section
+  - State file gains `branch:` field populated on workflow init and updated by stop hook
+  - Snapshot shows `Branch: PLAT-XXXX-description` in the TIMING block
+
+### Fixed
+
+- **Plugin root resolution** — `_find_plugin_root()` now uses a sentinel-walk (searching
+  ancestor directories for `core-config.yaml`) instead of a hardcoded `parents[3]` depth.
+  Fixes breakage when scripts are invoked from the marketplace cache path
+  (`~/.claude/plugins/cache/prism/prism-devtools/2.4.0/`) where the depth differs from
+  the source tree. Affects: `jira_fetch.py`, `jira_search.py`, `prism_approve.py`,
+  `prism_reject.py`, `setup_prism_loop.py`
+
+- **Pre-commit gate installation** — `.git/hooks/pre-commit` is now wired to delegate to
+  `scripts/pre-commit` (which runs `plugins/prism-devtools/scripts/pre-commit`). The gate
+  was added in v2.4.0 but not installed into the local `.git/hooks/` directory, meaning
+  commits bypassed the quality gate entirely
+
+- **validate-all repo-root path bug** — Fixed 234 false-positive documentation errors when
+  `validate-all.py` was invoked from the repository root. The fix uses `--root .` with
+  `cwd=scan_root` instead of passing an absolute `--root` path, matching the invocation
+  constraint documented in `scripts/pre-commit`
+
+- **Stop hook session detection** — The stop hook now behaves leniently when no stored
+  session ID exists in the state file, preventing orphaned workflows from being permanently
+  stuck when the state file predates session tracking
+
+- **`.gitattributes` LF enforcement** — Shell scripts (`*.sh`, `pre-commit`) are now
+  tracked with `text eol=lf` to prevent CRLF line-ending issues on Windows that caused
+  bash invocation failures in sub-processes
+
+### Infrastructure
+
+- **`pyproject.toml`** — Added project-level pytest configuration (`testpaths`,
+  `asyncio_mode`) and pylint overrides for the `prism-cli` test suite, enabling
+  `python -m pytest` to run from the repository root without extra flags
+
+- **Test suite: 95 passing tests** — The `prism-cli` package now has 95 tests across
+  5 test files covering parsing, snapshot rendering, acceptance criteria, branch
+  correlation, and the pre-commit quality gate
+
+---
+
 ## [2.4.0] - 2026-02-17
 
 ### Added

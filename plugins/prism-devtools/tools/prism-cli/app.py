@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import glob as _glob
+import json as _json
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -11,7 +13,7 @@ from textual.content import Content
 from textual.widgets import Footer, Header, Static
 
 from models import StoryInfo, WorkflowState
-from parsing import parse_state_file, parse_story_file
+from parsing import check_plugin_cache_stale, parse_state_file, parse_story_file
 from widgets import (
     AgentRoster,
     GatePanel,
@@ -52,6 +54,15 @@ class PrismDashboard(App):
         self._interval = interval
         self._state: WorkflowState | None = None
         self._story: StoryInfo | None = None
+        self._cache_stale: bool = False
+        self._cache_linked: bool = False
+        self._cache_check_tick: int = 0
+        # Live transcript reading — incremental, never re-reads from the start
+        self._live_session_id: str = ""
+        self._transcript_path: str = ""
+        self._transcript_offset: int = 0
+        self._live_total_tokens: int = 0
+        self._live_model: str = ""
 
     def format_title(self, title: str, sub_title: str) -> Content:
         """Render k9s-style header info bar with live workflow metadata."""
@@ -75,6 +86,11 @@ class PrismDashboard(App):
         else:
             parts.append(("  \u25cbIDLE", "dim"))
 
+        if self._cache_linked:
+            parts.append(("  \u25cfCACHE LIVE", "bold cyan"))
+        elif self._cache_stale:
+            parts.append(("  \u26a1CACHE STALE", "bold yellow"))
+
         return Content.assemble(*parts)
 
     def compose(self) -> ComposeResult:
@@ -96,13 +112,102 @@ class PrismDashboard(App):
         self.set_interval(self._interval, self._poll_state)
         self._poll_state()
 
+    def _read_live_tokens(self, state: WorkflowState) -> None:
+        """Incrementally read new transcript lines for live per-tick token counts.
+
+        Seeks to the last read position so only new lines are parsed each tick.
+        Mutates state.total_tokens / state.model in-memory for display only —
+        never writes to the state file.
+        """
+        if not state or not state.session_id:
+            return
+
+        # Reset if a new session started
+        if state.session_id != self._live_session_id:
+            self._live_session_id = state.session_id
+            self._transcript_path = ""
+            self._transcript_offset = 0
+            self._live_total_tokens = 0
+            self._live_model = ""
+
+        # Locate the transcript once per session
+        if not self._transcript_path:
+            pattern = str(
+                Path.home() / ".claude" / "projects" / "*"
+                / f"{state.session_id}.jsonl"
+            )
+            matches = _glob.glob(pattern)
+            if matches:
+                self._transcript_path = matches[0]
+        if not self._transcript_path:
+            return
+
+        tp = Path(self._transcript_path)
+        if not tp.exists():
+            return
+
+        try:
+            with open(tp, encoding="utf-8", errors="replace") as f:
+                f.seek(self._transcript_offset)
+                last_good = self._transcript_offset
+                for raw in f:
+                    stripped = raw.strip()
+                    if not stripped:
+                        last_good = f.tell()
+                        continue
+                    try:
+                        entry = _json.loads(stripped)
+                    except _json.JSONDecodeError:
+                        break  # Incomplete line being written — retry next tick
+
+                    usage = entry.get("usage")
+                    if not usage and isinstance(entry.get("message"), dict):
+                        usage = entry["message"].get("usage")
+                    if usage and isinstance(usage, dict):
+                        self._live_total_tokens += usage.get("input_tokens", 0)
+                        self._live_total_tokens += usage.get("cache_creation_input_tokens", 0)
+                        self._live_total_tokens += usage.get("cache_read_input_tokens", 0)
+                        self._live_total_tokens += usage.get("output_tokens", 0)
+
+                    m = entry.get("model")
+                    if not m and isinstance(entry.get("message"), dict):
+                        m = entry["message"].get("model")
+                    if m:
+                        self._live_model = m
+
+                    last_good = f.tell()
+                self._transcript_offset = last_good
+        except (IOError, OSError):
+            return
+
+        # Inject into state for display (never go backwards)
+        state.total_tokens = max(state.total_tokens, self._live_total_tokens)
+        if self._live_model and not state.model:
+            state.model = self._live_model
+
+        # Fix step_tokens_start when it's 0 but completed steps have history.
+        # This happens when the POSIX-path bug prevented earlier writes.
+        if state.step_tokens_start == 0 and state.step_history_parsed:
+            computed = sum(int(e.get("t", 0)) for e in state.step_history_parsed)
+            if computed > 0:
+                state.step_tokens_start = computed
+
     def _poll_state(self) -> None:
         """Re-read state file and push to ALL widgets every tick.
 
         Bypasses Textual's reactive equality check so timers,
         durations, and staleness indicators update in real-time.
         """
+        self._cache_check_tick += 1
+        if self._cache_check_tick % 10 == 1:
+            cache = check_plugin_cache_stale(self._work_dir)
+            self._cache_linked = cache["linked"]
+            self._cache_stale = cache["stale"]
+
         self._state = parse_state_file(self._state_file)
+
+        if self._state and self._state.active:
+            self._read_live_tokens(self._state)
 
         if self._state and self._state.story_file:
             story_path = Path(self._state.story_file)
