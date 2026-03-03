@@ -9,6 +9,7 @@ The script operates relative to the current working directory (the project folde
 """
 
 import sys
+import os
 import io
 import shlex
 import shutil
@@ -21,7 +22,23 @@ if sys.stdout.encoding != 'utf-8':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Add hooks directory to path for shared module import
-PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+def _find_plugin_root() -> Path:
+    """Walk up from __file__ to find the plugin root (contains core-config.yaml)."""
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        if (current / "core-config.yaml").exists():
+            return current
+        current = current.parent
+    raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
+
+try:
+    PLUGIN_ROOT = _find_plugin_root()
+except FileNotFoundError:
+    _env_root = os.environ.get('CLAUDE_PLUGIN_ROOT', '')
+    if _env_root:
+        PLUGIN_ROOT = Path(_env_root)
+    else:
+        raise
 sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
 from prism_loop_context import build_agent_instruction
 from prism_stop_hook import detect_test_runner
@@ -29,7 +46,7 @@ from prism_stop_hook import detect_test_runner
 STATE_DIR = Path(".claude")
 STATE_FILE = STATE_DIR / "prism-loop.local.md"
 CONTEXT_DIR = Path(".context")
-PRISM_TEMPLATES = Path(r"C:\Dev\.prism\plugins\prism-devtools\templates\.context")
+PRISM_TEMPLATES = PLUGIN_ROOT / "templates" / ".context"
 
 # Workflow steps - TDD Flow: Planning → RED Gate → GREEN (DEV+QA) → Green Gate (Final)
 # Step types: agent (auto-progress), gate (pause for /prism-approve)
@@ -154,14 +171,48 @@ def initialize_context_system() -> bool:
         return False
 
 
+def detect_git_branch() -> str:
+    """Detect the current git branch name.
+
+    Returns the branch name or empty string if not in a git repo.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=Path.cwd()
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return ""
+
+
 def get_session_id(config: dict) -> str:
     """
     Get unique session identifier.
 
     Returns session_id from config (passed via --session-id from skill),
     which comes from Claude Code's ${CLAUDE_SESSION_ID} template substitution.
+
+    Raises SystemExit if session_id is empty — the workflow MUST be tied
+    to a session for tracking and cross-session isolation.
     """
-    return config.get("session_id", "")
+    session_id = config.get("session_id", "")
+    if not session_id:
+        print("ERROR: No session ID provided.")
+        print("")
+        print("The PRISM workflow requires a session ID for tracking.")
+        print("This should come from Claude Code's ${CLAUDE_SESSION_ID}")
+        print("template variable via the --session-id flag.")
+        print("")
+        print("If ${CLAUDE_SESSION_ID} is not being substituted,")
+        print("check that you're invoking /prism-loop from within")
+        print("a Claude Code session (not a raw script invocation).")
+        sys.exit(1)
+    return session_id
 
 
 def create_state_file(config: dict):
@@ -170,6 +221,7 @@ def create_state_file(config: dict):
 
     timestamp = datetime.now().isoformat()
     session_id = get_session_id(config)
+    branch = detect_git_branch()
 
     content = f"""---
 active: true
@@ -181,7 +233,14 @@ story_file: ""
 paused_for_manual: false
 prompt: "{config.get("prompt", "").replace('"', '\\"')}"
 started_at: "{timestamp}"
+last_activity: "{timestamp}"
+last_thought: ""
+step_started_at: "{timestamp}"
+step_tokens_start: 0
+step_transcript_line: 0
+step_history: "[]"
 session_id: "{session_id}"
+branch: "{branch}"
 ---
 
 # PRISM Workflow Loop
