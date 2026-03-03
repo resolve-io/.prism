@@ -5,6 +5,7 @@ domains:
   - byos
   - wsl-compat
   - cli
+  - tui
 governance:
   max_entries: 100
   warn_entries: 150
