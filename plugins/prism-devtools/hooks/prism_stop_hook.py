@@ -583,8 +583,10 @@ def update_state_file(content: str, updates: dict) -> str:
             value_str = "true" if value else "false"
         elif isinstance(value, list):
             value_str = f"[{', '.join(value)}]"
-        else:
+        elif isinstance(value, (int, float)):
             value_str = str(value)
+        else:
+            value_str = '"' + str(value).replace('"', '\\"') + '"'
 
         pattern = rf"^{key}:\s*.*$"
         replacement = f"{key}: {value_str}"
