@@ -6,6 +6,7 @@ domains:
   - wsl-compat
   - cli
   - tui
+  - architecture
 governance:
   max_entries: 100
   warn_entries: 150
