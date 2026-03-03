@@ -11,7 +11,7 @@
 
 ### 2. Configure Credentials
 
-Add to `C:/Dev/.prism/plugins/prism-devtools/.env`:
+Add to `${CLAUDE_PLUGIN_ROOT}/.env`:
 
 ```
 JIRA_EMAIL=your.email@resolve.io
@@ -21,7 +21,7 @@ JIRA_API_TOKEN=your_token_here
 ### 3. Test Connection
 
 ```bash
-python "C:/Dev/.prism/plugins/prism-devtools/skills/jira/scripts/jira_fetch.py" PLAT-1
+python "${CLAUDE_PLUGIN_ROOT}/skills/jira/scripts/jira_fetch.py" PLAT-1
 ```
 
 ## Scripts Usage

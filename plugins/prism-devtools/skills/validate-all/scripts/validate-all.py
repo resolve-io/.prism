@@ -44,11 +44,11 @@ def find_script(plugin_dir: Path, name: str) -> Path:
     raise FileNotFoundError(f"Script not found: {name}")
 
 
-def run_check(label: str, cmd: list[str]) -> dict:
+def run_check(label: str, cmd: list[str], cwd: str | None = None) -> dict:
     """Run a validation command and capture results."""
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120
+            cmd, capture_output=True, text=True, timeout=120, cwd=cwd
         )
         return {
             'label': label,
@@ -109,11 +109,15 @@ def main():
     results = []
 
     # --- Check 1: Documentation validation ---
+    # IMPORTANT: validate-docs.py must be run with --root . from inside the
+    # plugin/scan directory. Passing an absolute --root triggers a path
+    # resolution bug producing ~234 false-positive cross-reference errors.
+    # Mirror the fix already present in plugins/prism-devtools/scripts/pre-commit.
     print("[1/3] Documentation validation (6-phase structural scan)")
     r = run_check('Documentation', [
         sys.executable, str(scripts['validate-docs.py']),
-        '--root', str(scan_root), '--output', 'nul'
-    ])
+        '--root', '.', '--output', 'nul'
+    ], cwd=str(scan_root))
     results.append(r)
     if r['exit_code'] == 1:
         # Extract critical count from stderr/stdout

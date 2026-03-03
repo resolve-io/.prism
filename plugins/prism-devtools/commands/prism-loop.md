@@ -9,7 +9,7 @@ Start the PRISM TDD workflow loop.
 ## Execute
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" "$ARGUMENTS"
+python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" --session-id "${CLAUDE_SESSION_ID}" "$ARGUMENTS"
 ```
 
 ## Workflow

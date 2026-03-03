@@ -28,13 +28,13 @@ Read-only Jira integration using Python scripts for reliable issue fetching and 
 ### Fetch Single Issue
 
 ```bash
-python "C:/Dev/.prism/plugins/prism-devtools/skills/jira/scripts/jira_fetch.py" PLAT-123
+python "${CLAUDE_PLUGIN_ROOT}/skills/jira/scripts/jira_fetch.py" PLAT-123
 ```
 
 ### Search Issues with JQL
 
 ```bash
-python "C:/Dev/.prism/plugins/prism-devtools/skills/jira/scripts/jira_search.py" "project = PLAT AND type = Story"
+python "${CLAUDE_PLUGIN_ROOT}/skills/jira/scripts/jira_search.py" "project = PLAT AND type = Story"
 ```
 
 ### Common Search Patterns

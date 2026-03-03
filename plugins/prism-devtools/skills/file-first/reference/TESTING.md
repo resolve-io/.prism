@@ -8,13 +8,13 @@ Run the analyzer against any repository:
 
 ```bash
 # Basic usage (markdown output)
-python "C:/Dev/.prism/plugins/prism-devtools/skills/file-first/scripts/analyze_codebase.py" "C:/path/to/repo"
+python "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts/analyze_codebase.py" "C:/path/to/repo"
 
 # JSON output for programmatic use
-python "C:/Dev/.prism/plugins/prism-devtools/skills/file-first/scripts/analyze_codebase.py" "C:/path/to/repo" --format json
+python "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts/analyze_codebase.py" "C:/path/to/repo" --format json
 
 # Force a specific project type
-python "C:/Dev/.prism/plugins/prism-devtools/skills/file-first/scripts/analyze_codebase.py" "C:/path/to/repo" --type react_frontend
+python "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts/analyze_codebase.py" "C:/path/to/repo" --type react_frontend
 ```
 
 ### 2. Test Story Validation
@@ -23,10 +23,10 @@ Run the validator against a story file:
 
 ```bash
 # Basic usage
-python "C:/Dev/.prism/plugins/prism-devtools/skills/file-first/scripts/validate_file_first.py" --story "C:/path/to/story.md"
+python "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts/validate_file_first.py" --story "C:/path/to/story.md"
 
 # JSON output
-python "C:/Dev/.prism/plugins/prism-devtools/skills/file-first/scripts/validate_file_first.py" --story "C:/path/to/story.md" --format json
+python "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts/validate_file_first.py" --story "C:/path/to/story.md" --format json
 ```
 
 ---

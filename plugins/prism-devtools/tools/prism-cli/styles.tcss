@@ -1,0 +1,43 @@
+/* PRISM Dashboard — Textual CSS */
+
+Screen {
+    background: $surface;
+}
+
+#body {
+    layout: vertical;
+    height: 1fr;
+}
+
+AgentRoster {
+    height: auto;
+    max-height: 7;
+    margin-bottom: 1;
+}
+
+WorkflowTable {
+    height: auto;
+    max-height: 14;
+    margin-bottom: 1;
+}
+
+#details {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#left-col {
+    width: 1fr;
+    layout: vertical;
+}
+
+#right-col {
+    width: 1fr;
+    layout: vertical;
+}
+
+#no-workflow {
+    content-align: center middle;
+    height: 1fr;
+    text-style: dim;
+}
