@@ -83,12 +83,7 @@ def main():
             tool_input = {}
 
     context = _brief_context(tool_name, tool_input)
-    if context:
-        thought = f"{tool_name}: {context}"
-    elif tool_name:
-        thought = tool_name
-    else:
-        thought = ""
+    thought = f"{tool_name}: {context}" if context else ""
 
     # Update last_activity and last_thought in frontmatter
     now = datetime.now().isoformat()
@@ -106,7 +101,9 @@ def main():
         )
 
     content = _update_field(content, "last_activity", now)
-    if thought:
+    if context:
+        # Only update last_thought when we have meaningful context, not just a tool name.
+        # This preserves the last meaningful thought when context can't be extracted.
         content = _update_field(content, "last_thought", thought)
 
     # Atomic write: use tempfile + os.replace to avoid race conditions (F2+F6)

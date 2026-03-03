@@ -701,7 +701,9 @@ def update_state_file(content: str, updates: dict) -> str:
         if isinstance(value, bool):
             value_str = "true" if value else "false"
         elif isinstance(value, list):
-            value_str = f"[{', '.join(value)}]"
+            # Use json.dumps so nested dicts serialize correctly and can be
+            # read back with json.loads without double-escaping issues.
+            value_str = json.dumps(value, separators=(',', ':'))
         elif isinstance(value, (int, float)):
             value_str = str(value)
         else:
@@ -944,7 +946,7 @@ def main():
         "step_started_at": now_ts.isoformat(),
         "step_tokens_start": str(usage["total_tokens"]),
         "step_transcript_line": str(usage["total_lines"]),
-        "step_history": json.dumps(history),
+        "step_history": history,  # Pass list directly; update_state_file uses json.dumps
     }
 
     # After draft_story, detect and capture the story file
