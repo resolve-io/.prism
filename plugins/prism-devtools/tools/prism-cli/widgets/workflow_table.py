@@ -29,6 +29,47 @@ def _fmt_tokens(count: int) -> str:
     return f"{count / 1_000_000:.1f}M"
 
 
+def _fmt_bar(value: int, total: int, width: int = 10, agent_color: str | None = None) -> str:
+    """Proportional block bar: '██░░░░░░░░' means value/total fraction filled.
+
+    agent_color: Rich color name (e.g. 'blue', 'red', 'green', 'dim') to wrap filled blocks.
+    """
+    if total <= 0 or value <= 0:
+        return ""
+    filled = min(width, round(value / total * width))
+    filled_str = "█" * filled
+    empty_str = "░" * (width - filled)
+    if agent_color and filled > 0:
+        return f"[{agent_color}]{filled_str}[/]{empty_str}"
+    return filled_str + empty_str
+
+
+def _fmt_phase(phase: str, dim: bool = False) -> str:
+    """Format phase with color coding. Planning=blue, TDD RED=red, TDD GREEN=green."""
+    color_map = {
+        "Planning": "blue",
+        "TDD RED": "red",
+        "TDD GREEN": "green",
+    }
+    color = color_map.get(phase, "")
+    if not color:
+        return f"[dim]{phase}[/]" if dim else phase
+    if dim:
+        return f"[dim {color}]{phase}[/]"
+    return f"[{color}]{phase}[/]"
+
+
+def _agent_bar_color(agent: str) -> str:
+    """Map agent identifier to Rich color for bar rendering."""
+    if agent == "SM":
+        return "blue"
+    if agent == "QA":
+        return "red"
+    if agent == "DEV":
+        return "green"
+    return "dim"
+
+
 def _fmt_skills(skill_calls: int, tool_calls: int, dim: bool = False) -> str:
     """Format skill usage as 'N/TC' where N=skills, TC=total tool calls.
 
@@ -64,8 +105,8 @@ class WorkflowTable(Static):
         table.cursor_type = "none"
         table.zebra_stripes = True
         table.add_columns(
-            "#", "Step", "Phase", "Agent", "Type",
-            "Duration", "Tokens", "Tok/min", "Skills", "Status"
+            "#", "Step", "Agent", "Phase",
+            "Duration", "DurBar", "Tokens", "TokBar", "Tok/min", "Skills", "Status"
         )
         self._populate(None)
 
@@ -105,6 +146,17 @@ class WorkflowTable(Static):
                 except (KeyError, TypeError, ValueError):
                     pass
 
+        # Totals for proportional bar scaling
+        # Exclude current step if it's a gate or stale — avoids gate duration dominating bars
+        total_dur = sum(int(e.get("d", 0)) for e in history.values())
+        total_toks = sum(int(e.get("t", 0)) for e in history.values())
+        if state and state.active:
+            _cur_step = next((s for s in WORKFLOW_STEPS if s.index == current_idx), None)
+            _is_cur_gate = _cur_step is not None and _cur_step.step_type == "gate"
+            if not _is_cur_gate and not is_stale:
+                total_dur += step_elapsed_secs
+                total_toks += (state.step_tokens or 0)
+
         for step in WORKFLOW_STEPS:
             if state and state.active:
                 if step.index < current_idx:
@@ -120,11 +172,16 @@ class WorkflowTable(Static):
                         tpm = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
                         tpm_col = f"[dim]{_fmt_tokens(int(tpm))}[/]" if tpm > 0 else "[dim]-[/]"
                         skills_col = _fmt_skills(s_calls, tc_calls, dim=True)
+                        bar_color = _agent_bar_color(step.agent)
+                        dur_bar = _fmt_bar(d_secs, total_dur, agent_color=bar_color)
+                        tok_bar = _fmt_bar(t_toks, total_toks, agent_color=bar_color)
                     else:
                         dur_col = "[dim]-[/]"
                         tok_col = "[dim]-[/]"
                         tpm_col = "[dim]-[/]"
                         skills_col = "[dim]-[/]"
+                        dur_bar = ""
+                        tok_bar = ""
                     status = "[green]\u2713 DONE[/]"
 
                 elif step.index == current_idx:
@@ -142,6 +199,13 @@ class WorkflowTable(Static):
                         tpm_col = "[dim]-[/]"
 
                     skills_col = "[dim]live[/]"
+                    bar_color = _agent_bar_color(step.agent)
+                    if step.step_type == "gate":
+                        dur_bar = ""
+                        tok_bar = ""
+                    else:
+                        dur_bar = _fmt_bar(step_elapsed_secs, total_dur, agent_color=bar_color)
+                        tok_bar = _fmt_bar(step_toks, total_toks, agent_color=bar_color)
 
                     if is_stale:
                         status = "[bold red]\u25a0 STALE[/]"
@@ -156,39 +220,36 @@ class WorkflowTable(Static):
                     tok_col = ""
                     tpm_col = ""
                     skills_col = ""
+                    dur_bar = ""
+                    tok_bar = ""
                     status = "[dim]\u00b7[/]"
             else:
                 dur_col = ""
                 tok_col = ""
                 tpm_col = ""
                 skills_col = ""
+                dur_bar = ""
+                tok_bar = ""
                 status = "[dim]\u00b7[/]"
-
-            # Phase color
-            if step.phase == "Planning":
-                phase = f"[blue]{step.phase}[/]"
-            elif step.phase == "TDD RED":
-                phase = f"[red]{step.phase}[/]"
-            else:
-                phase = f"[green]{step.phase}[/]"
 
             # Bold current row, dim completed
             idx_str = str(step.index + 1)
             name = step.id
             agent = step.agent
-            stype = step.step_type
 
             if state and state.active and step.index == current_idx:
                 idx_str = f"[bold yellow]{idx_str}[/]"
                 name = f"[bold yellow]{name}[/]"
                 agent = f"[bold yellow]{agent}[/]"
-                stype = f"[bold yellow]{stype}[/]"
+                phase_col = _fmt_phase(step.phase)
             elif state and state.active and step.index < current_idx:
                 name = f"[dim]{name}[/]"
                 agent = f"[dim]{agent}[/]"
-                stype = f"[dim]{stype}[/]"
+                phase_col = _fmt_phase(step.phase, dim=True)
+            else:
+                phase_col = f"[dim]{step.phase}[/]"
 
             table.add_row(
-                idx_str, name, phase, agent, stype,
-                dur_col, tok_col, tpm_col, skills_col, status
+                idx_str, name, agent, phase_col,
+                dur_col, dur_bar, tok_col, tok_bar, tpm_col, skills_col, status
             )

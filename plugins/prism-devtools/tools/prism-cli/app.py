@@ -19,11 +19,11 @@ from textual.widgets import Footer, Header, Static
 from models import StoryInfo, WorkflowState
 from parsing import check_plugin_cache_stale, parse_state_file, parse_story_file
 from widgets import (
+    ActivityFeed,
     AgentRoster,
     GatePanel,
     StepDetail,
     StoryPanel,
-    TimingPanel,
     WorkflowTable,
 )
 
@@ -122,11 +122,11 @@ class PrismDashboard(App):
             yield WorkflowTable()
             with Horizontal(id="details"):
                 with Vertical(id="left-col"):
+                    yield GatePanel()
                     yield StepDetail()
                     yield StoryPanel()
                 with Vertical(id="right-col"):
-                    yield TimingPanel()
-                    yield GatePanel()
+                    yield ActivityFeed()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -263,7 +263,7 @@ class PrismDashboard(App):
             self.query_one(AgentRoster).update_state(self._state)
             self.query_one(WorkflowTable).update_state(self._state)
             self.query_one(StepDetail).update_state(self._state)
-            self.query_one(TimingPanel).update_state(self._state)
+            self.query_one(ActivityFeed).update_state(self._state)
             self.query_one(GatePanel).update_state(self._state)
             self.query_one(StoryPanel).update_story(self._story)
         except NoMatches:

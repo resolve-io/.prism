@@ -21,6 +21,15 @@ WorkflowTable {
     margin-bottom: 1;
 }
 
+GatePanel {
+    height: auto;
+}
+
+StoryPanel {
+    height: auto;
+    margin-bottom: 1;
+}
+
 #details {
     layout: horizontal;
     height: 1fr;
@@ -29,11 +38,16 @@ WorkflowTable {
 #left-col {
     width: 1fr;
     layout: vertical;
+    overflow-y: auto;
 }
 
 #right-col {
     width: 1fr;
     layout: vertical;
+}
+
+#right-col ActivityFeed {
+    height: 1fr;
 }
 
 #no-workflow {

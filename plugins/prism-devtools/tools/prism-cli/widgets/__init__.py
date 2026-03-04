@@ -1,5 +1,6 @@
 """PRISM Dashboard widgets."""
 
+from widgets.activity_feed import ActivityFeed
 from widgets.agent_roster import AgentRoster
 from widgets.gate_panel import GatePanel
 from widgets.step_detail import StepDetail
@@ -8,6 +9,7 @@ from widgets.timing_panel import TimingPanel
 from widgets.workflow_table import WorkflowTable
 
 __all__ = [
+    "ActivityFeed",
     "AgentRoster",
     "GatePanel",
     "StepDetail",

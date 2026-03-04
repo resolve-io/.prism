@@ -139,6 +139,86 @@ def _fmt_tokens(count: int) -> str:
     return f"{count / 1_000_000:.1f}M"
 
 
+def _fmt_bar(value: int, total: int, width: int = 10) -> str:
+    """Proportional block bar: '██░░░░░░░░' means value/total fraction filled."""
+    if total <= 0 or value <= 0:
+        return ""
+    filled = min(width, round(value / total * width))
+    return "█" * filled + "░" * (width - filled)
+
+
+def _render_activity_feed(state: "WorkflowState", lines: list[str], max_entries: int = 10) -> None:
+    """Append ACTIVITY FEED section lines: recent tool calls from transcript."""
+    if not state.session_id:
+        lines.append("  No session ID — cannot read transcript")
+        lines.append("")
+        return
+    pattern = str(
+        Path.home() / ".claude" / "projects" / "*" / f"{state.session_id}.jsonl"
+    )
+    matches = _glob.glob(pattern)
+    if not matches:
+        lines.append("  No transcript found")
+        lines.append("")
+        return
+    tp = Path(matches[0])
+    entries: list[str] = []
+    try:
+        with open(tp, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                try:
+                    entry = _json.loads(stripped)
+                except _json.JSONDecodeError:
+                    continue
+                # Extract tool_use items from message content arrays
+                content = None
+                if isinstance(entry.get("message"), dict):
+                    content = entry["message"].get("content")
+                elif isinstance(entry.get("content"), list):
+                    content = entry["content"]
+                if not isinstance(content, list):
+                    continue
+                ts_raw = entry.get("timestamp") or entry.get("message", {}).get("timestamp", "")
+                if ts_raw:
+                    try:
+                        ts_dt = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                        ts_str = ts_dt.strftime("%H:%M:%S")
+                    except (ValueError, AttributeError):
+                        ts_str = ts_raw[:8] if len(ts_raw) >= 8 else ts_raw
+                else:
+                    ts_str = "--:--:--"
+                for item in content:
+                    if not isinstance(item, dict) or item.get("type") != "tool_use":
+                        continue
+                    tool_name = item.get("name", "?")
+                    inp = item.get("input") or {}
+                    # Build compact args string
+                    if isinstance(inp, dict):
+                        parts = []
+                        for k, v in list(inp.items())[:2]:
+                            v_str = str(v).replace("\n", " ")
+                            if len(v_str) > 30:
+                                v_str = v_str[:27] + "..."
+                            parts.append(f"{k}={v_str}")
+                        args_str = ", ".join(parts)
+                    else:
+                        args_str = str(inp)[:40]
+                    entries.append(f"  {ts_str} TOOL {tool_name:<18} {args_str}")
+    except (IOError, OSError):
+        lines.append("  Error reading transcript")
+        lines.append("")
+        return
+    recent = entries[-max_entries:] if len(entries) > max_entries else entries
+    if recent:
+        lines.extend(recent)
+    else:
+        lines.append("  No tool calls in transcript")
+    lines.append("")
+
+
 def render_snapshot(work_dir: Path) -> str:
     """Render a full ASCII snapshot of the PRISM dashboard state."""
     state_file = work_dir / ".claude" / "prism-loop.local.md"
@@ -276,11 +356,21 @@ def render_snapshot(work_dir: Path) -> str:
         except (KeyError, TypeError, ValueError):
             pass
 
+    # Totals for proportional bar scaling
+    # Exclude current step if it's a gate or stale — avoids gate duration dominating bars
+    total_dur = sum(int(h.get("d", 0)) for h in history.values())
+    total_toks = sum(int(h.get("t", 0)) for h in history.values())
+    _cur_step_snap = WORKFLOW_STEPS[current_idx] if 0 <= current_idx < len(WORKFLOW_STEPS) else None
+    _is_cur_gate = _cur_step_snap is not None and _cur_step_snap.step_type == "gate"
+    if not _is_cur_gate and not is_stale:
+        total_dur += step_elapsed_live
+        total_toks += state.step_tokens if state else 0
+
     lines.append("WORKFLOW")
-    lines.append("-" * 72)
+    lines.append("-" * 80)
     lines.append(
-        f"{'#':<4} {'Step':<24} {'Phase':<12} {'Agent':<6} "
-        f"{'Type':<8} {'Duration':<10} {'Tokens':<8} {'Tok/min':<8} {'Skills':<8} {'Status'}"
+        f"{'#':<4} {'Step':<24} {'Agent':<6} {'Phase':<12} "
+        f"{'Duration':<10} {'DurBar':<8} {'Tokens':<8} {'TokBar':<8} {'Tok/min':<8} {'Skills':<8} {'Status'}"
     )
     for step in WORKFLOW_STEPS:
         if step.index < current_idx:
@@ -295,8 +385,11 @@ def render_snapshot(work_dir: Path) -> str:
                 tpm_val = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
                 tpm = _fmt_tokens(int(tpm_val)) if tpm_val > 0 else "-"
                 skills = f"{s_calls}/{tc_calls}" if tc_calls > 0 else "-"
+                dur_bar = _fmt_bar(d_secs, total_dur)
+                tok_bar = _fmt_bar(t_toks, total_toks)
             else:
                 dur, tok, tpm, skills = "-", "-", "-", "-"
+                dur_bar, tok_bar = "", ""
             status = "DONE"
         elif step.index == current_idx:
             dur = step_dur_str
@@ -307,6 +400,12 @@ def render_snapshot(work_dir: Path) -> str:
             else:
                 tpm = "-"
             skills = "live"
+            if step.step_type == "gate":
+                dur_bar = ""
+                tok_bar = ""
+            else:
+                dur_bar = _fmt_bar(step_elapsed_live, total_dur)
+                tok_bar = _fmt_bar(step_toks, total_toks)
             if is_stale:
                 status = "STALE"
             elif state.paused_for_manual and step.step_type == "gate":
@@ -315,10 +414,11 @@ def render_snapshot(work_dir: Path) -> str:
                 status = ">> RUNNING"
         else:
             dur, tok, tpm, skills, status = "", "", "", "", "."
+            dur_bar, tok_bar = "", ""
 
         lines.append(
-            f"{step.index + 1:<4} {step.id:<24} {step.phase:<12} "
-            f"{step.agent:<6} {step.step_type:<8} {dur:<10} {tok:<8} {tpm:<8} {skills:<8} {status}"
+            f"{step.index + 1:<4} {step.id:<24} {step.agent:<6} {step.phase:<12} "
+            f"{dur:<10} {dur_bar:<8} {tok:<8} {tok_bar:<8} {tpm:<8} {skills:<8} {status}"
         )
 
     lines.append("")
@@ -344,67 +444,6 @@ def render_snapshot(work_dir: Path) -> str:
         lines.append("  /prism-reject  -> Loop back to Planning")
         lines.append("!" * 64)
         lines.append("")
-
-    # --- Timing Panel ---
-    lines.append("TIMING")
-    lines.append("-" * 64)
-    if state.session_id:
-        lines.append(f"  Session: {state.session_id[:8]}")
-    else:
-        lines.append("  ERROR: No session ID — workflow not tied to session")
-    if state.started_at_dt:
-        lines.append(
-            f"  Started:  {state.started_at_dt.strftime('%H:%M:%S')}"
-        )
-        h, rem = divmod(elapsed_secs, 3600)
-        m, s = divmod(rem, 60)
-        lines.append(f"  Elapsed:  {h:02d}:{m:02d}:{s:02d}")
-    if state.last_activity_dt:
-        lines.append(
-            f"  Last Act: "
-            f"{state.last_activity_dt.strftime('%H:%M:%S')}"
-        )
-        stale_secs = int(
-            (now - state.last_activity_dt).total_seconds()
-        )
-        if stale_secs < 300:
-            indicator = f"{stale_secs}s ago (ok)"
-        elif stale_secs < 600:
-            indicator = f"{stale_secs // 60}m ago (slow)"
-        else:
-            indicator = f"{stale_secs // 60}m ago (STALE)"
-        lines.append(f"  Staleness: {indicator}")
-    else:
-        lines.append("  Last Act: -")
-    if state.model:
-        lines.append(f"  Model:    {state.model}")
-    if state.branch:
-        lines.append(f"  Branch:   {state.branch}")
-    if state.last_thought:
-        thought = state.last_thought
-        # Skip bare tool names (no spaces and no context separator)
-        if " " in thought or ":" in thought:
-            if len(thought) > 55:
-                thought = thought[:52] + "..."
-            lines.append(f"  Last Thought: {thought}")
-    lines.append("")
-
-    # --- Step Detail ---
-    lines.append("STEP DETAIL")
-    lines.append("-" * 64)
-    idx = state.current_step_index
-    if 0 <= idx < len(WORKFLOW_STEPS):
-        step = WORKFLOW_STEPS[idx]
-        type_desc = "gate (manual review)" if step.step_type == "gate" else "agent (auto)"
-        validation = step.validation or "none"
-        lines.append(f"  Step {step.index + 1}: {step.id}")
-        lines.append(f"  Phase: {step.phase}")
-        lines.append(f"  Type:  {type_desc}")
-        lines.append(f"  Agent: {step.agent}")
-        lines.append(f"  Validation: {validation}")
-    else:
-        lines.append(f"  Step index {idx} out of range")
-    lines.append("")
 
     # --- Story Panel ---
     story: StoryInfo | None = None
@@ -444,6 +483,29 @@ def render_snapshot(work_dir: Path) -> str:
         lines.append(f"  File: {state.story_file} (not found)")
     else:
         lines.append("  No story file")
+
+    lines.append("")
+
+    # --- Activity Feed ---
+    lines.append("ACTIVITY FEED")
+    lines.append("-" * 64)
+    _render_activity_feed(state, lines, max_entries=10)
+
+    # --- Step Detail ---
+    lines.append("STEP DETAIL")
+    lines.append("-" * 64)
+    idx = state.current_step_index
+    if 0 <= idx < len(WORKFLOW_STEPS):
+        step = WORKFLOW_STEPS[idx]
+        type_desc = "gate (manual review)" if step.step_type == "gate" else "agent (auto)"
+        validation = step.validation or "none"
+        lines.append(f"  Step {step.index + 1}: {step.id}")
+        lines.append(f"  Phase: {step.phase}")
+        lines.append(f"  Type:  {type_desc}")
+        lines.append(f"  Agent: {step.agent}")
+        lines.append(f"  Validation: {validation}")
+    else:
+        lines.append(f"  Step index {idx} out of range")
 
     lines.append("")
     lines.append("=" * 64)
