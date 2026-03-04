@@ -175,6 +175,14 @@ def render_snapshot(work_dir: Path) -> str:
 
     current_idx = state.current_step_index
 
+    # Parse step_history once for agent token lookups
+    step_hist_index: dict[int, dict] = {}
+    for entry in _parse_step_history(state.step_history):
+        try:
+            step_hist_index[int(entry["i"])] = entry
+        except (KeyError, TypeError, ValueError):
+            pass
+
     # --- Agent Roster ---
     lines.append("AGENTS")
     lines.append("-" * 64)
@@ -220,7 +228,12 @@ def render_snapshot(work_dir: Path) -> str:
                     tpm = step_toks / (step_elapsed_secs / 60)
                     tpm_str = _fmt_tokens(int(tpm))
             elif all_done:
-                tokens_str = _fmt_tokens(state.step_tokens_start)
+                agent_toks = sum(
+                    int(step_hist_index[si].get("t", 0))
+                    for si in step_indices
+                    if si in step_hist_index
+                )
+                tokens_str = _fmt_tokens(agent_toks)
 
         display = f"{name} ({agent_id})"
         lines.append(

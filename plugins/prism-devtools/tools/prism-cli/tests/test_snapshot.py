@@ -246,6 +246,37 @@ step_history: [{{"i": 0, "d": 60, "t": 2000, "s": 3, "tc": 15}}, {{"i": 1, "d": 
         # tc=8 > 0 so shows '0/8'
         assert "0/8" in output, f"Expected '0/8' for zero-skill step in output, got:\n{output}"
 
+    def test_done_agent_shows_per_agent_tokens(self, tmp_path: Path):
+        """Done agents must show only their own step tokens, not session cumulative."""
+        state_dir = tmp_path / ".claude"
+        state_dir.mkdir()
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        started = (now - timedelta(minutes=10)).isoformat()
+        step_started = (now - timedelta(minutes=5)).isoformat()
+        # SM owns steps 0,1,2 with 1000+2000+3000=6000 tokens
+        # QA owns steps 3,6 — only step 3 done here (current_step_index=5, DEV working)
+        # step_tokens_start = 10000 (cumulative at step 5 start) — should NOT appear for SM
+        state_content = f'''---
+active: true
+current_step: implement_tasks
+current_step_index: 5
+started_at: "{started}"
+step_started_at: "{step_started}"
+total_tokens: 15000
+step_tokens_start: 10000
+step_history: [{{"i": 0, "d": 60, "t": 1000}}, {{"i": 1, "d": 60, "t": 2000}}, {{"i": 2, "d": 60, "t": 3000}}, {{"i": 3, "d": 60, "t": 4000}}]
+---
+'''
+        (state_dir / "prism-loop.local.md").write_text(state_content, encoding="utf-8")
+        output = render_snapshot(tmp_path)
+        # SM done: steps 0+1+2 = 1000+2000+3000 = 6000 → "6.0k"
+        assert "6.0k" in output, f"Expected SM per-agent total 6.0k, got:\n{output}"
+        # QA done (step 3 only done, step 6 not yet): 4000 → "4.0k"
+        assert "4.0k" in output, f"Expected QA per-agent total 4.0k, got:\n{output}"
+        # step_tokens_start (10000 → "10.0k") should NOT appear for done agents
+        assert "10.0k" not in output, f"session cumulative 10.0k should not appear for done agents, got:\n{output}"
+
     def test_stale_detection(self, tmp_path: Path):
         state_dir = tmp_path / ".claude"
         state_dir.mkdir()

@@ -88,6 +88,15 @@ class AgentRoster(Static):
             elif elapsed_secs > 300:
                 is_stale = True
 
+        # Parse step_history once for per-agent token lookups
+        step_hist_index: dict[int, dict] = {}
+        if state and state.active:
+            for entry in state.step_history_parsed:
+                try:
+                    step_hist_index[int(entry["i"])] = entry
+                except (KeyError, TypeError, ValueError):
+                    pass
+
         for agent_id, name, role, step_indices in AGENTS:
             # Determine agent state from workflow position
             if not state or not state.active:
@@ -157,8 +166,13 @@ class AgentRoster(Static):
                         tpm = step_toks / (step_elapsed_secs / 60)
                         tpm_str = f"[green]{_fmt_tokens(int(tpm))}[/]"
                 elif all_done:
-                    # Done agent: tokens used before current step started
-                    tokens_str = f"[dim]{_fmt_tokens(state.step_tokens_start)}[/]"
+                    # Done agent: sum tokens for this agent's steps only
+                    agent_toks = sum(
+                        int(step_hist_index[si].get("t", 0))
+                        for si in step_indices
+                        if si in step_hist_index
+                    )
+                    tokens_str = f"[dim]{_fmt_tokens(agent_toks)}[/]"
 
             display_name = f"[bold]{name}[/] ({agent_id})" if state and state.active else f"{name} ({agent_id})"
 
