@@ -160,7 +160,7 @@ def _parse_skill_frontmatter(content: str) -> dict | None:
     Parse skill metadata from SKILL.md frontmatter.
 
     Returns dict with name, description, agent (optional), priority
-    or None if no valid frontmatter with name found.
+    or None if name or description is missing.
 
     Any skill in .claude/skills/*/SKILL.md is discovered — no special
     metadata required. If a prism: block is present, agent and priority
@@ -177,7 +177,7 @@ def _parse_skill_frontmatter(content: str) -> dict | None:
     name_match = re.search(r"^name:\s*(.+)$", fm_text, re.MULTILINE)
     desc_match = re.search(r"^description:\s*(.+)$", fm_text, re.MULTILINE)
 
-    if not name_match:
+    if not name_match or not desc_match:
         return None
 
     # Extract prism: nested values if present (optional)

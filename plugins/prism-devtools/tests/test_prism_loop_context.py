@@ -440,8 +440,20 @@ def test_parse_skill_frontmatter_invalid_agent():
 
 
 def test_parse_skill_frontmatter_missing_required_fields():
-    """Returns None when name is missing (agent is no longer required)."""
+    """Returns None when name is missing."""
     result = _parse_skill_frontmatter(SKILL_MD_MISSING_FIELDS)
+    assert result is None
+
+
+def test_parse_skill_frontmatter_missing_description():
+    """Returns None when description is missing — agent needs it to decide."""
+    content = """---
+name: no-desc-skill
+prism:
+  priority: 5
+---
+"""
+    result = _parse_skill_frontmatter(content)
     assert result is None
 
 
