@@ -140,11 +140,11 @@ def _fmt_tokens(count: int) -> str:
 
 
 def _fmt_bar(value: int, total: int, width: int = 6) -> str:
-    """Proportional ASCII bar: '##----' means value/total fraction filled."""
+    """Proportional block bar: '██░░░░' means value/total fraction filled."""
     if total <= 0 or value <= 0:
         return ""
     filled = min(width, round(value / total * width))
-    return "#" * filled + "-" * (width - filled)
+    return "█" * filled + "░" * (width - filled)
 
 
 def render_snapshot(work_dir: Path) -> str:
