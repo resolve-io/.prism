@@ -293,6 +293,42 @@ last_activity: "2025-01-01T00:00:00.000000"
         assert "STALE" in output
 
 
+    def test_version_in_header(self, work_dir: Path):
+        """Snapshot header includes version from plugin.json."""
+        import re
+        output = render_snapshot(work_dir)
+        # Should show either "v<semver>" or just "PRISM Dashboard Snapshot" if no plugin.json
+        # The canonical plugin.json exists relative to the CLI tool, so version should appear
+        assert re.search(r"PRISM Dashboard Snapshot( v\d+\.\d+\.\d+)?", output), (
+            f"Expected version pattern in header, got:\n{output}"
+        )
+
+    def test_version_fallback_no_plugin_json(self, tmp_path: Path):
+        """Snapshot renders without crashing when plugin.json is absent."""
+        import snapshot as _snap
+        orig = _snap._PLUGIN_VERSION
+        try:
+            _snap._PLUGIN_VERSION = ""
+            state_dir = tmp_path / ".claude"
+            state_dir.mkdir()
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            state_content = f'''---
+active: true
+current_step: implement_tasks
+current_step_index: 5
+started_at: "{(now - timedelta(minutes=5)).isoformat()}"
+last_activity: "{(now - timedelta(seconds=10)).isoformat()}"
+---
+'''
+            (state_dir / "prism-loop.local.md").write_text(state_content, encoding="utf-8")
+            output = render_snapshot(tmp_path)
+            assert "PRISM Dashboard Snapshot" in output
+            assert " v" not in output.split("\n")[1]
+        finally:
+            _snap._PLUGIN_VERSION = orig
+
+
 class TestHooksJson:
     """Tests for hooks.json validity — traces to AC-3."""
 

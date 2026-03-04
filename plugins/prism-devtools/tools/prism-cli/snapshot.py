@@ -19,6 +19,19 @@ from models import WORKFLOW_STEPS, WorkflowState, StoryInfo
 from parsing import check_plugin_cache_stale, parse_state_file, parse_story_file
 
 
+def _read_plugin_version() -> str:
+    """Read version from plugin.json; returns empty string on failure."""
+    try:
+        plugin_json = Path(__file__).resolve().parent.parent.parent / ".claude-plugin" / "plugin.json"
+        data = _json.loads(plugin_json.read_text(encoding="utf-8"))
+        return str(data.get("version", ""))
+    except Exception:
+        return ""
+
+
+_PLUGIN_VERSION: str = _read_plugin_version()
+
+
 def _inject_live_tokens(state: WorkflowState) -> None:
     """Parse the session transcript to get live token totals.
 
@@ -136,7 +149,8 @@ def render_snapshot(work_dir: Path) -> str:
 
     # Header
     lines.append("=" * 64)
-    lines.append("  PRISM Dashboard Snapshot")
+    _version_suffix = f" v{_PLUGIN_VERSION}" if _PLUGIN_VERSION else ""
+    lines.append(f"  PRISM Dashboard Snapshot{_version_suffix}")
     lines.append(f"  {now.strftime('%Y-%m-%d %H:%M:%S')}")
     if state and state.active and state.current_step:
         lines.append(f"  Step: {state.current_step}")

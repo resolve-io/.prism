@@ -28,6 +28,19 @@ from widgets import (
 )
 
 
+def _read_plugin_version() -> str:
+    """Read version from plugin.json; returns empty string on failure."""
+    try:
+        plugin_json = Path(__file__).parent.parent.parent / ".claude-plugin" / "plugin.json"
+        data = _json.loads(plugin_json.read_text(encoding="utf-8"))
+        return str(data.get("version", ""))
+    except Exception:
+        return ""
+
+
+_PLUGIN_VERSION: str = _read_plugin_version()
+
+
 def _fmt_tokens(count: int) -> str:
     """Format token count compactly: 1234 -> 1.2k, 1234567 -> 1.2M."""
     if count < 1000:
@@ -72,7 +85,7 @@ class PrismDashboard(App):
         """Render k9s-style header info bar with live workflow metadata."""
         state = self._state
         parts: list[str | Content | tuple[str, str]] = [
-            ("PRISM Dashboard", "bold"),
+            ("PRISM Dashboard" + (_PLUGIN_VERSION and f" v{_PLUGIN_VERSION}"), "bold"),
         ]
 
         if state and state.active:
