@@ -8,4 +8,4 @@ Steps:
 5. Break into tasks sized 1-3 days each
 6. Save to docs/stories/ directory
 
-Note: The /sm *draft skill is available for complex story drafting but is not required.
+

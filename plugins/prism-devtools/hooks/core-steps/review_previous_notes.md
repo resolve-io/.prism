@@ -7,4 +7,4 @@ Steps:
 4. Identify patterns, conventions, and technical decisions
 5. Summarize key findings that will inform the next story
 
-Note: The /sm *planning-review skill is available for complex planning orchestration but is not required.
+

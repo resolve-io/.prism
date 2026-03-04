@@ -44,4 +44,4 @@ Steps:
 CRITICAL: Tests must FAIL cleanly (assertion failures, not errors).
 The stop hook will run tests and validate RED state before advancing.
 
-Note: The /qa *write-failing-tests skill is available for complex test orchestration but is not required.
+

@@ -11,4 +11,4 @@ Steps:
 CRITICAL: The stop hook validates that ALL tests pass.
 Do NOT stop until tests are GREEN.
 
-Note: The /dev *develop-story skill is available for complex implementation but is not required.
+

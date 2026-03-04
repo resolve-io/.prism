@@ -10,4 +10,4 @@ Steps:
 
 The stop hook validates tests + lint before advancing to completion gate.
 
-Note: The /qa *verify-green-state skill is available for complex verification but is not required.
+

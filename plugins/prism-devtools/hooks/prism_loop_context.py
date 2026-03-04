@@ -251,7 +251,7 @@ def _format_discovered_skills(skills: list) -> str:
     """Format discovered skills for injection into agent instructions."""
     if not skills:
         return ""
-    lines = ["Available skills. Use a matching skill when it fits the task:"]
+    lines = ["Available skills — review these and invoke any that apply to your current work:"]
     for s in skills:
         desc = f" - {s['description']}" if s["description"] else ""
         lines.append(f"  - /{s['name']}{desc}")

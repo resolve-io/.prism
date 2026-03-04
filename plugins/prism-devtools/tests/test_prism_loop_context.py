@@ -238,15 +238,15 @@ def test_detect_project_conventions_with_runner():
 
 # --- REQ-6: Skills as optional enhancement ---
 
-def test_skills_available_in_core_steps():
-    """Core step instructions mention skill availability."""
+def test_no_hardcoded_skill_references_in_core_steps():
+    """Core steps should not hardcode specific skill names — discovery handles it."""
     for step_id, agent, action in AGENT_STEPS:
         instruction = build_agent_instruction(
             step_id, agent, action,
             "docs/stories/test-story.md", "", MOCK_RUNNER
         )
-        assert "available" in instruction.lower(), (
-            f"Skill availability not mentioned in {step_id}"
+        assert "is available for" not in instruction, (
+            f"Hardcoded skill reference found in {step_id}"
         )
 
 
