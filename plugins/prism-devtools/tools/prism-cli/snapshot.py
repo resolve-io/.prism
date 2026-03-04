@@ -445,28 +445,6 @@ def render_snapshot(work_dir: Path) -> str:
         lines.append("!" * 64)
         lines.append("")
 
-    # --- Activity Feed ---
-    lines.append("ACTIVITY FEED")
-    lines.append("-" * 64)
-    _render_activity_feed(state, lines, max_entries=10)
-
-    # --- Step Detail ---
-    lines.append("STEP DETAIL")
-    lines.append("-" * 64)
-    idx = state.current_step_index
-    if 0 <= idx < len(WORKFLOW_STEPS):
-        step = WORKFLOW_STEPS[idx]
-        type_desc = "gate (manual review)" if step.step_type == "gate" else "agent (auto)"
-        validation = step.validation or "none"
-        lines.append(f"  Step {step.index + 1}: {step.id}")
-        lines.append(f"  Phase: {step.phase}")
-        lines.append(f"  Type:  {type_desc}")
-        lines.append(f"  Agent: {step.agent}")
-        lines.append(f"  Validation: {validation}")
-    else:
-        lines.append(f"  Step index {idx} out of range")
-    lines.append("")
-
     # --- Story Panel ---
     story: StoryInfo | None = None
     if state.story_file:
@@ -505,6 +483,29 @@ def render_snapshot(work_dir: Path) -> str:
         lines.append(f"  File: {state.story_file} (not found)")
     else:
         lines.append("  No story file")
+
+    lines.append("")
+
+    # --- Activity Feed ---
+    lines.append("ACTIVITY FEED")
+    lines.append("-" * 64)
+    _render_activity_feed(state, lines, max_entries=10)
+
+    # --- Step Detail ---
+    lines.append("STEP DETAIL")
+    lines.append("-" * 64)
+    idx = state.current_step_index
+    if 0 <= idx < len(WORKFLOW_STEPS):
+        step = WORKFLOW_STEPS[idx]
+        type_desc = "gate (manual review)" if step.step_type == "gate" else "agent (auto)"
+        validation = step.validation or "none"
+        lines.append(f"  Step {step.index + 1}: {step.id}")
+        lines.append(f"  Phase: {step.phase}")
+        lines.append(f"  Type:  {type_desc}")
+        lines.append(f"  Agent: {step.agent}")
+        lines.append(f"  Validation: {validation}")
+    else:
+        lines.append(f"  Step index {idx} out of range")
 
     lines.append("")
     lines.append("=" * 64)

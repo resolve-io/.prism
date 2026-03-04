@@ -203,7 +203,7 @@ class TestAC3_FixedItemsDocumented:
 
 
 # ---------------------------------------------------------------------------
-# AC-4: plugin.json version is 2.5.6
+# AC-4: plugin.json version is 2.5.8
 # ---------------------------------------------------------------------------
 class TestAC4_PluginJsonVersion:
     def test_ac4_plugin_json_exists(self):
@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_257(self):
+    def test_ac4_plugin_json_version_is_258(self):
         """
-        AC-4: plugin.json 'version' field is '2.5.7'
-        Requirement: Version bump from 2.5.6 → 2.5.7 signals the patch release
-        Expected: json.loads(plugin.json)['version'] == '2.5.7'
+        AC-4: plugin.json 'version' field is '2.5.8'
+        Requirement: Version bump from 2.5.7 → 2.5.8 signals the patch release
+        Expected: json.loads(plugin.json)['version'] == '2.5.8'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "2.5.7", (
-            f"plugin.json version is '{data.get('version')}', expected '2.5.7'"
+        assert data.get("version") == "2.5.8", (
+            f"plugin.json version is '{data.get('version')}', expected '2.5.8'"
         )
 
 
