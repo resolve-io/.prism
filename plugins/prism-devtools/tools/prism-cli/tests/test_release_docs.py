@@ -8,7 +8,7 @@ and bumps plugin.json to 2.5.0.
 AC-1: CHANGELOG has [2.5.0] section dated 2026-03-02
 AC-2: Five Added features documented in [2.5.0]
 AC-3: Four Fixed items documented in [2.5.0]
-AC-4: plugin.json version is "2.5.9"
+AC-4: plugin.json version is "2.6.0"
 AC-5: [2.5.0] appears before [2.4.0] in CHANGELOG
 AC-6: ### Infrastructure subsection exists with pyproject.toml, .gitattributes, tests
 """
@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_259(self):
+    def test_ac4_plugin_json_version_is_260(self):
         """
-        AC-4: plugin.json 'version' field is '2.5.9'
-        Requirement: Version bump from 2.5.8 → 2.5.9 signals the patch release
-        Expected: json.loads(plugin.json)['version'] == '2.5.9'
+        AC-4: plugin.json 'version' field is '2.6.0'
+        Requirement: Version bump from 2.5.9 → 2.6.0 signals the minor release
+        Expected: json.loads(plugin.json)['version'] == '2.6.0'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "2.5.9", (
-            f"plugin.json version is '{data.get('version')}', expected '2.5.9'"
+        assert data.get("version") == "2.6.0", (
+            f"plugin.json version is '{data.get('version')}', expected '2.6.0'"
         )
 
 
