@@ -147,6 +147,78 @@ def _fmt_bar(value: int, total: int, width: int = 6) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+def _render_activity_feed(state: "WorkflowState", lines: list[str], max_entries: int = 10) -> None:
+    """Append ACTIVITY FEED section lines: recent tool calls from transcript."""
+    if not state.session_id:
+        lines.append("  No session ID — cannot read transcript")
+        lines.append("")
+        return
+    pattern = str(
+        Path.home() / ".claude" / "projects" / "*" / f"{state.session_id}.jsonl"
+    )
+    matches = _glob.glob(pattern)
+    if not matches:
+        lines.append("  No transcript found")
+        lines.append("")
+        return
+    tp = Path(matches[0])
+    entries: list[str] = []
+    try:
+        with open(tp, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                try:
+                    entry = _json.loads(stripped)
+                except _json.JSONDecodeError:
+                    continue
+                # Extract tool_use items from message content arrays
+                content = None
+                if isinstance(entry.get("message"), dict):
+                    content = entry["message"].get("content")
+                elif isinstance(entry.get("content"), list):
+                    content = entry["content"]
+                if not isinstance(content, list):
+                    continue
+                ts_raw = entry.get("timestamp") or entry.get("message", {}).get("timestamp", "")
+                if ts_raw:
+                    try:
+                        ts_dt = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                        ts_str = ts_dt.strftime("%H:%M:%S")
+                    except (ValueError, AttributeError):
+                        ts_str = ts_raw[:8] if len(ts_raw) >= 8 else ts_raw
+                else:
+                    ts_str = "--:--:--"
+                for item in content:
+                    if not isinstance(item, dict) or item.get("type") != "tool_use":
+                        continue
+                    tool_name = item.get("name", "?")
+                    inp = item.get("input") or {}
+                    # Build compact args string
+                    if isinstance(inp, dict):
+                        parts = []
+                        for k, v in list(inp.items())[:2]:
+                            v_str = str(v).replace("\n", " ")
+                            if len(v_str) > 30:
+                                v_str = v_str[:27] + "..."
+                            parts.append(f"{k}={v_str}")
+                        args_str = ", ".join(parts)
+                    else:
+                        args_str = str(inp)[:40]
+                    entries.append(f"  {ts_str} TOOL {tool_name:<18} {args_str}")
+    except (IOError, OSError):
+        lines.append("  Error reading transcript")
+        lines.append("")
+        return
+    recent = entries[-max_entries:] if len(entries) > max_entries else entries
+    if recent:
+        lines.extend(recent)
+    else:
+        lines.append("  No tool calls in transcript")
+    lines.append("")
+
+
 def render_snapshot(work_dir: Path) -> str:
     """Render a full ASCII snapshot of the PRISM dashboard state."""
     state_file = work_dir / ".claude" / "prism-loop.local.md"
@@ -365,49 +437,10 @@ def render_snapshot(work_dir: Path) -> str:
         lines.append("!" * 64)
         lines.append("")
 
-    # --- Timing Panel ---
-    lines.append("TIMING")
+    # --- Activity Feed ---
+    lines.append("ACTIVITY FEED")
     lines.append("-" * 64)
-    if state.session_id:
-        lines.append(f"  Session: {state.session_id[:8]}")
-    else:
-        lines.append("  ERROR: No session ID — workflow not tied to session")
-    if state.started_at_dt:
-        lines.append(
-            f"  Started:  {state.started_at_dt.strftime('%H:%M:%S')}"
-        )
-        h, rem = divmod(elapsed_secs, 3600)
-        m, s = divmod(rem, 60)
-        lines.append(f"  Elapsed:  {h:02d}:{m:02d}:{s:02d}")
-    if state.last_activity_dt:
-        lines.append(
-            f"  Last Act: "
-            f"{state.last_activity_dt.strftime('%H:%M:%S')}"
-        )
-        stale_secs = int(
-            (now - state.last_activity_dt).total_seconds()
-        )
-        if stale_secs < 300:
-            indicator = f"{stale_secs}s ago (ok)"
-        elif stale_secs < 600:
-            indicator = f"{stale_secs // 60}m ago (slow)"
-        else:
-            indicator = f"{stale_secs // 60}m ago (STALE)"
-        lines.append(f"  Staleness: {indicator}")
-    else:
-        lines.append("  Last Act: -")
-    if state.model:
-        lines.append(f"  Model:    {state.model}")
-    if state.branch:
-        lines.append(f"  Branch:   {state.branch}")
-    if state.last_thought:
-        thought = state.last_thought
-        # Skip bare tool names (no spaces and no context separator)
-        if " " in thought or ":" in thought:
-            if len(thought) > 55:
-                thought = thought[:52] + "..."
-            lines.append(f"  Last Thought: {thought}")
-    lines.append("")
+    _render_activity_feed(state, lines, max_entries=10)
 
     # --- Step Detail ---
     lines.append("STEP DETAIL")
