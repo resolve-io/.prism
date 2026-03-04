@@ -21,6 +21,11 @@ WorkflowTable {
     margin-bottom: 1;
 }
 
+GatePanel {
+    height: auto;
+    margin-bottom: 1;
+}
+
 #details {
     layout: horizontal;
     height: 1fr;
