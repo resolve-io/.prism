@@ -44,6 +44,21 @@ def _fmt_bar(value: int, total: int, width: int = 10, agent_color: str | None = 
     return filled_str + empty_str
 
 
+def _fmt_phase(phase: str, dim: bool = False) -> str:
+    """Format phase with color coding. Planning=blue, TDD RED=red, TDD GREEN=green."""
+    color_map = {
+        "Planning": "blue",
+        "TDD RED": "red",
+        "TDD GREEN": "green",
+    }
+    color = color_map.get(phase, "")
+    if not color:
+        return f"[dim]{phase}[/]" if dim else phase
+    if dim:
+        return f"[dim {color}]{phase}[/]"
+    return f"[{color}]{phase}[/]"
+
+
 def _agent_bar_color(agent: str) -> str:
     """Map agent identifier to Rich color for bar rendering."""
     if agent == "SM":
@@ -90,7 +105,7 @@ class WorkflowTable(Static):
         table.cursor_type = "none"
         table.zebra_stripes = True
         table.add_columns(
-            "#", "Step", "Agent",
+            "#", "Step", "Agent", "Phase",
             "Duration", "DurBar", "Tokens", "TokBar", "Tok/min", "Skills", "Status"
         )
         self._populate(None)
@@ -226,11 +241,15 @@ class WorkflowTable(Static):
                 idx_str = f"[bold yellow]{idx_str}[/]"
                 name = f"[bold yellow]{name}[/]"
                 agent = f"[bold yellow]{agent}[/]"
+                phase_col = _fmt_phase(step.phase)
             elif state and state.active and step.index < current_idx:
                 name = f"[dim]{name}[/]"
                 agent = f"[dim]{agent}[/]"
+                phase_col = _fmt_phase(step.phase, dim=True)
+            else:
+                phase_col = f"[dim]{step.phase}[/]"
 
             table.add_row(
-                idx_str, name, agent,
+                idx_str, name, agent, phase_col,
                 dur_col, dur_bar, tok_col, tok_bar, tpm_col, skills_col, status
             )
