@@ -132,11 +132,15 @@ class WorkflowTable(Static):
                     pass
 
         # Totals for proportional bar scaling
+        # Exclude current step if it's a gate or stale — avoids gate duration dominating bars
         total_dur = sum(int(e.get("d", 0)) for e in history.values())
         total_toks = sum(int(e.get("t", 0)) for e in history.values())
         if state and state.active:
-            total_dur += step_elapsed_secs
-            total_toks += (state.step_tokens or 0)
+            _cur_step = next((s for s in WORKFLOW_STEPS if s.index == current_idx), None)
+            _is_cur_gate = _cur_step is not None and _cur_step.step_type == "gate"
+            if not _is_cur_gate and not is_stale:
+                total_dur += step_elapsed_secs
+                total_toks += (state.step_tokens or 0)
 
         for step in WORKFLOW_STEPS:
             if state and state.active:
@@ -181,8 +185,12 @@ class WorkflowTable(Static):
 
                     skills_col = "[dim]live[/]"
                     bar_color = _agent_bar_color(step.agent)
-                    dur_bar = _fmt_bar(step_elapsed_secs, total_dur, agent_color=bar_color)
-                    tok_bar = _fmt_bar(step_toks, total_toks, agent_color=bar_color)
+                    if step.step_type == "gate":
+                        dur_bar = ""
+                        tok_bar = ""
+                    else:
+                        dur_bar = _fmt_bar(step_elapsed_secs, total_dur, agent_color=bar_color)
+                        tok_bar = _fmt_bar(step_toks, total_toks, agent_color=bar_color)
 
                     if is_stale:
                         status = "[bold red]\u25a0 STALE[/]"

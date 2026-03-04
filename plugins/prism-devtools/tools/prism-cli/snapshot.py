@@ -357,10 +357,14 @@ def render_snapshot(work_dir: Path) -> str:
             pass
 
     # Totals for proportional bar scaling
+    # Exclude current step if it's a gate or stale — avoids gate duration dominating bars
     total_dur = sum(int(h.get("d", 0)) for h in history.values())
     total_toks = sum(int(h.get("t", 0)) for h in history.values())
-    total_dur += step_elapsed_live
-    total_toks += state.step_tokens if state else 0
+    _cur_step_snap = WORKFLOW_STEPS[current_idx] if 0 <= current_idx < len(WORKFLOW_STEPS) else None
+    _is_cur_gate = _cur_step_snap is not None and _cur_step_snap.step_type == "gate"
+    if not _is_cur_gate and not is_stale:
+        total_dur += step_elapsed_live
+        total_toks += state.step_tokens if state else 0
 
     lines.append("WORKFLOW")
     lines.append("-" * 80)
@@ -396,8 +400,12 @@ def render_snapshot(work_dir: Path) -> str:
             else:
                 tpm = "-"
             skills = "live"
-            dur_bar = _fmt_bar(step_elapsed_live, total_dur)
-            tok_bar = _fmt_bar(step_toks, total_toks)
+            if step.step_type == "gate":
+                dur_bar = ""
+                tok_bar = ""
+            else:
+                dur_bar = _fmt_bar(step_elapsed_live, total_dur)
+                tok_bar = _fmt_bar(step_toks, total_toks)
             if is_stale:
                 status = "STALE"
             elif state.paused_for_manual and step.step_type == "gate":
