@@ -29,6 +29,14 @@ def _fmt_tokens(count: int) -> str:
     return f"{count / 1_000_000:.1f}M"
 
 
+def _fmt_bar(value: int, total: int, width: int = 6) -> str:
+    """Proportional ASCII bar: '##----' means value/total fraction filled."""
+    if total <= 0 or value <= 0:
+        return ""
+    filled = min(width, round(value / total * width))
+    return "#" * filled + "-" * (width - filled)
+
+
 def _fmt_skills(skill_calls: int, tool_calls: int, dim: bool = False) -> str:
     """Format skill usage as 'N/TC' where N=skills, TC=total tool calls.
 
@@ -64,8 +72,8 @@ class WorkflowTable(Static):
         table.cursor_type = "none"
         table.zebra_stripes = True
         table.add_columns(
-            "#", "Step", "Phase", "Agent", "Type",
-            "Duration", "Tokens", "Tok/min", "Skills", "Status"
+            "#", "Step", "Agent",
+            "Duration", "DurBar", "Tokens", "TokBar", "Tok/min", "Skills", "Status"
         )
         self._populate(None)
 
@@ -105,6 +113,13 @@ class WorkflowTable(Static):
                 except (KeyError, TypeError, ValueError):
                     pass
 
+        # Totals for proportional bar scaling
+        total_dur = sum(int(e.get("d", 0)) for e in history.values())
+        total_toks = sum(int(e.get("t", 0)) for e in history.values())
+        if state and state.active:
+            total_dur += step_elapsed_secs
+            total_toks += (state.step_tokens or 0)
+
         for step in WORKFLOW_STEPS:
             if state and state.active:
                 if step.index < current_idx:
@@ -120,11 +135,15 @@ class WorkflowTable(Static):
                         tpm = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
                         tpm_col = f"[dim]{_fmt_tokens(int(tpm))}[/]" if tpm > 0 else "[dim]-[/]"
                         skills_col = _fmt_skills(s_calls, tc_calls, dim=True)
+                        dur_bar = _fmt_bar(d_secs, total_dur)
+                        tok_bar = _fmt_bar(t_toks, total_toks)
                     else:
                         dur_col = "[dim]-[/]"
                         tok_col = "[dim]-[/]"
                         tpm_col = "[dim]-[/]"
                         skills_col = "[dim]-[/]"
+                        dur_bar = ""
+                        tok_bar = ""
                     status = "[green]\u2713 DONE[/]"
 
                 elif step.index == current_idx:
@@ -142,6 +161,8 @@ class WorkflowTable(Static):
                         tpm_col = "[dim]-[/]"
 
                     skills_col = "[dim]live[/]"
+                    dur_bar = _fmt_bar(step_elapsed_secs, total_dur)
+                    tok_bar = _fmt_bar(step_toks, total_toks)
 
                     if is_stale:
                         status = "[bold red]\u25a0 STALE[/]"
@@ -156,39 +177,32 @@ class WorkflowTable(Static):
                     tok_col = ""
                     tpm_col = ""
                     skills_col = ""
+                    dur_bar = ""
+                    tok_bar = ""
                     status = "[dim]\u00b7[/]"
             else:
                 dur_col = ""
                 tok_col = ""
                 tpm_col = ""
                 skills_col = ""
+                dur_bar = ""
+                tok_bar = ""
                 status = "[dim]\u00b7[/]"
-
-            # Phase color
-            if step.phase == "Planning":
-                phase = f"[blue]{step.phase}[/]"
-            elif step.phase == "TDD RED":
-                phase = f"[red]{step.phase}[/]"
-            else:
-                phase = f"[green]{step.phase}[/]"
 
             # Bold current row, dim completed
             idx_str = str(step.index + 1)
             name = step.id
             agent = step.agent
-            stype = step.step_type
 
             if state and state.active and step.index == current_idx:
                 idx_str = f"[bold yellow]{idx_str}[/]"
                 name = f"[bold yellow]{name}[/]"
                 agent = f"[bold yellow]{agent}[/]"
-                stype = f"[bold yellow]{stype}[/]"
             elif state and state.active and step.index < current_idx:
                 name = f"[dim]{name}[/]"
                 agent = f"[dim]{agent}[/]"
-                stype = f"[dim]{stype}[/]"
 
             table.add_row(
-                idx_str, name, phase, agent, stype,
-                dur_col, tok_col, tpm_col, skills_col, status
+                idx_str, name, agent,
+                dur_col, dur_bar, tok_col, tok_bar, tpm_col, skills_col, status
             )

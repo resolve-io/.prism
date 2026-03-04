@@ -139,6 +139,14 @@ def _fmt_tokens(count: int) -> str:
     return f"{count / 1_000_000:.1f}M"
 
 
+def _fmt_bar(value: int, total: int, width: int = 6) -> str:
+    """Proportional ASCII bar: '##----' means value/total fraction filled."""
+    if total <= 0 or value <= 0:
+        return ""
+    filled = min(width, round(value / total * width))
+    return "#" * filled + "-" * (width - filled)
+
+
 def render_snapshot(work_dir: Path) -> str:
     """Render a full ASCII snapshot of the PRISM dashboard state."""
     state_file = work_dir / ".claude" / "prism-loop.local.md"
@@ -276,11 +284,17 @@ def render_snapshot(work_dir: Path) -> str:
         except (KeyError, TypeError, ValueError):
             pass
 
+    # Totals for proportional bar scaling
+    total_dur = sum(int(h.get("d", 0)) for h in history.values())
+    total_toks = sum(int(h.get("t", 0)) for h in history.values())
+    total_dur += step_elapsed_live
+    total_toks += state.step_tokens if state else 0
+
     lines.append("WORKFLOW")
-    lines.append("-" * 72)
+    lines.append("-" * 80)
     lines.append(
-        f"{'#':<4} {'Step':<24} {'Phase':<12} {'Agent':<6} "
-        f"{'Type':<8} {'Duration':<10} {'Tokens':<8} {'Tok/min':<8} {'Skills':<8} {'Status'}"
+        f"{'#':<4} {'Step':<24} {'Agent':<6} "
+        f"{'Duration':<10} {'DurBar':<8} {'Tokens':<8} {'TokBar':<8} {'Tok/min':<8} {'Skills':<8} {'Status'}"
     )
     for step in WORKFLOW_STEPS:
         if step.index < current_idx:
@@ -295,8 +309,11 @@ def render_snapshot(work_dir: Path) -> str:
                 tpm_val = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
                 tpm = _fmt_tokens(int(tpm_val)) if tpm_val > 0 else "-"
                 skills = f"{s_calls}/{tc_calls}" if tc_calls > 0 else "-"
+                dur_bar = _fmt_bar(d_secs, total_dur)
+                tok_bar = _fmt_bar(t_toks, total_toks)
             else:
                 dur, tok, tpm, skills = "-", "-", "-", "-"
+                dur_bar, tok_bar = "", ""
             status = "DONE"
         elif step.index == current_idx:
             dur = step_dur_str
@@ -307,6 +324,8 @@ def render_snapshot(work_dir: Path) -> str:
             else:
                 tpm = "-"
             skills = "live"
+            dur_bar = _fmt_bar(step_elapsed_live, total_dur)
+            tok_bar = _fmt_bar(step_toks, total_toks)
             if is_stale:
                 status = "STALE"
             elif state.paused_for_manual and step.step_type == "gate":
@@ -315,10 +334,11 @@ def render_snapshot(work_dir: Path) -> str:
                 status = ">> RUNNING"
         else:
             dur, tok, tpm, skills, status = "", "", "", "", "."
+            dur_bar, tok_bar = "", ""
 
         lines.append(
-            f"{step.index + 1:<4} {step.id:<24} {step.phase:<12} "
-            f"{step.agent:<6} {step.step_type:<8} {dur:<10} {tok:<8} {tpm:<8} {skills:<8} {status}"
+            f"{step.index + 1:<4} {step.id:<24} {step.agent:<6} "
+            f"{dur:<10} {dur_bar:<8} {tok:<8} {tok_bar:<8} {tpm:<8} {skills:<8} {status}"
         )
 
     lines.append("")
