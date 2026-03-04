@@ -21,8 +21,13 @@ from parsing import check_plugin_cache_stale, parse_state_file, parse_story_file
 
 def _read_plugin_version() -> str:
     """Read version from plugin.json; returns empty string on failure."""
+    import os
     try:
-        plugin_json = Path(__file__).resolve().parent.parent.parent / ".claude-plugin" / "plugin.json"
+        root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+        if root:
+            plugin_json = Path(root) / ".claude-plugin" / "plugin.json"
+        else:
+            plugin_json = Path(__file__).resolve().parent.parent.parent / ".claude-plugin" / "plugin.json"
         data = _json.loads(plugin_json.read_text(encoding="utf-8"))
         return str(data.get("version", ""))
     except Exception:

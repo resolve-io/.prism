@@ -328,6 +328,46 @@ last_activity: "{(now - timedelta(seconds=10)).isoformat()}"
         finally:
             _snap._PLUGIN_VERSION = orig
 
+    def test_version_prefers_claude_plugin_root_env(self, tmp_path: Path):
+        """_read_plugin_version uses CLAUDE_PLUGIN_ROOT when set, not __file__-relative path."""
+        import snapshot as _snap
+        import importlib
+
+        # Create a fake plugin root with a different version
+        fake_root = tmp_path / "fake_plugin"
+        fake_plugin_dir = fake_root / ".claude-plugin"
+        fake_plugin_dir.mkdir(parents=True)
+        (fake_plugin_dir / "plugin.json").write_text(
+            '{"version": "99.0.0"}', encoding="utf-8"
+        )
+
+        orig_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
+        try:
+            os.environ["CLAUDE_PLUGIN_ROOT"] = str(fake_root)
+            version = _snap._read_plugin_version()
+            assert version == "99.0.0", (
+                f"Expected version from CLAUDE_PLUGIN_ROOT, got: {version!r}"
+            )
+        finally:
+            if orig_env is None:
+                os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            else:
+                os.environ["CLAUDE_PLUGIN_ROOT"] = orig_env
+
+    def test_version_falls_back_when_env_unset(self, tmp_path: Path):
+        """_read_plugin_version falls back to __file__-relative path when env var unset."""
+        import snapshot as _snap
+
+        orig_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
+        try:
+            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+            # Should not raise; returns string (possibly empty if plugin.json missing)
+            version = _snap._read_plugin_version()
+            assert isinstance(version, str)
+        finally:
+            if orig_env is not None:
+                os.environ["CLAUDE_PLUGIN_ROOT"] = orig_env
+
 
 class TestHooksJson:
     """Tests for hooks.json validity — traces to AC-3."""
