@@ -610,3 +610,177 @@ def test_core_step_files_exist():
     for step_id in STEP_PHASE_MAP:
         step_file = core_steps_dir / f"{step_id}.md"
         assert step_file.exists(), f"Missing core step file: {step_file}"
+
+
+# --- step_history serialization round-trip ---
+
+# Import update_state_file and parse_frontmatter from stop hook for round-trip test.
+import json as _json
+import importlib.util as _importlib_util
+
+_stop_hook_path = HOOKS_DIR / "prism_stop_hook.py"
+_stop_hook_spec = _importlib_util.spec_from_file_location("prism_stop_hook", _stop_hook_path)
+_stop_hook = _importlib_util.util = _importlib_util.module_from_spec(_stop_hook_spec)
+_stop_hook_spec.loader.exec_module(_stop_hook)
+update_state_file = _stop_hook.update_state_file
+parse_frontmatter = _stop_hook.parse_frontmatter
+
+_BASE_STATE = """---
+active: true
+current_step: write_failing_tests
+current_step_index: 2
+story_file: docs/stories/auth.md
+step_history: []
+---
+
+# Notes
+"""
+
+
+def test_step_history_round_trip_simple_list():
+    """Write a list → read back → json.loads → same data. No double-escaping."""
+    history = [{"step": "review_previous_notes", "status": "done"}]
+    updated = update_state_file(_BASE_STATE, {"step_history": history})
+    parsed = parse_frontmatter(updated)
+    recovered = _json.loads(parsed["step_history"])
+    assert recovered == history
+
+
+def test_step_history_round_trip_multiple_entries():
+    """Multiple step entries survive the round-trip without corruption."""
+    history = [
+        {"step": "review_previous_notes", "status": "done", "tokens": 1234},
+        {"step": "draft_story", "status": "done", "tokens": 5678},
+        {"step": "write_failing_tests", "status": "in_progress", "tokens": 0},
+    ]
+    updated = update_state_file(_BASE_STATE, {"step_history": history})
+    parsed = parse_frontmatter(updated)
+    recovered = _json.loads(parsed["step_history"])
+    assert recovered == history
+
+
+def test_step_history_round_trip_empty_list():
+    """Empty list writes and reads back as empty list."""
+    updated = update_state_file(_BASE_STATE, {"step_history": []})
+    parsed = parse_frontmatter(updated)
+    recovered = _json.loads(parsed["step_history"])
+    assert recovered == []
+
+
+def test_step_history_no_double_escaping():
+    """step_history value in file is compact JSON, not double-escaped string."""
+    history = [{"step": "draft_story", "note": 'has "quotes"'}]
+    updated = update_state_file(_BASE_STATE, {"step_history": history})
+    # The raw line should contain JSON array directly, not a JSON-in-JSON string
+    step_line = next(
+        line for line in updated.splitlines() if line.startswith("step_history:")
+    )
+    raw_value = step_line.split(":", 1)[1].strip()
+    # Must start with '[' (direct JSON array), not '"[' (double-encoded string)
+    assert raw_value.startswith("["), (
+        f"step_history should be a JSON array, not a string: {raw_value!r}"
+    )
+    # Must be parseable in one json.loads call
+    recovered = _json.loads(raw_value)
+    assert recovered == history
+
+
+# --- Multi-skill discovery E2E with 4 skill types ---
+
+SKILL_MD_VALID_PRISM = """---
+name: valid-prism-skill
+description: A valid skill with full prism metadata
+prism:
+  agent: sm
+  priority: 1
+---
+
+# Valid Prism Skill
+"""
+
+SKILL_MD_VALID_NO_PRISM = """---
+name: valid-no-prism
+description: A valid skill without prism metadata block
+---
+
+# Plain Skill
+"""
+
+SKILL_MD_MISSING_NAME = """---
+description: Missing name field entirely
+prism:
+  agent: dev
+  priority: 5
+---
+"""
+
+SKILL_MD_MISSING_DESC = """---
+name: missing-desc-skill
+prism:
+  agent: qa
+  priority: 3
+---
+"""
+
+
+def test_discover_four_skill_types(tmp_path, monkeypatch):
+    """Multi-skill E2E: 4 skills of different types, only valid ones returned.
+
+    Setup mirrors the /tmp/prism-test scenario:
+    - valid-prism-skill: has name + description + prism block  → included
+    - valid-no-prism:    has name + description, no prism      → included
+    - missing-name:      no name field                          → excluded
+    - missing-desc:      no description field                   → excluded
+    """
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+
+    _create_skill(skills_dir, "valid-prism-skill", SKILL_MD_VALID_PRISM)
+    _create_skill(skills_dir, "valid-no-prism", SKILL_MD_VALID_NO_PRISM)
+    _create_skill(skills_dir, "missing-name", SKILL_MD_MISSING_NAME)
+    _create_skill(skills_dir, "missing-desc", SKILL_MD_MISSING_DESC)
+
+    result = discover_prism_skills()
+
+    names = [s["name"] for s in result]
+    assert "valid-prism-skill" in names, "Valid prism skill should be discovered"
+    assert "valid-no-prism" in names, "Valid no-prism skill should be discovered"
+    assert "missing-name" not in names, "Skill missing name should be excluded"
+    assert len([n for n in names if "missing" in n and "desc" in n]) == 0, (
+        "Skill missing description should be excluded"
+    )
+    assert len(result) == 2
+
+
+def test_four_skill_types_priority_ordering(tmp_path, monkeypatch):
+    """Valid skills from 4-skill setup are returned in priority order."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+
+    _create_skill(skills_dir, "valid-prism-skill", SKILL_MD_VALID_PRISM)
+    _create_skill(skills_dir, "valid-no-prism", SKILL_MD_VALID_NO_PRISM)
+    _create_skill(skills_dir, "missing-name", SKILL_MD_MISSING_NAME)
+    _create_skill(skills_dir, "missing-desc", SKILL_MD_MISSING_DESC)
+
+    result = discover_prism_skills()
+    # valid-prism-skill has priority 1, valid-no-prism defaults to 99
+    assert result[0]["name"] == "valid-prism-skill"
+    assert result[1]["name"] == "valid-no-prism"
+
+
+def test_four_skill_types_instruction_lists_valid_skills(tmp_path, monkeypatch):
+    """build_agent_instruction includes only the 2 valid skills in output."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+
+    _create_skill(skills_dir, "valid-prism-skill", SKILL_MD_VALID_PRISM)
+    _create_skill(skills_dir, "valid-no-prism", SKILL_MD_VALID_NO_PRISM)
+    _create_skill(skills_dir, "missing-name", SKILL_MD_MISSING_NAME)
+    _create_skill(skills_dir, "missing-desc", SKILL_MD_MISSING_DESC)
+
+    instruction = build_agent_instruction(
+        "write_failing_tests", "qa", "write-failing-tests",
+        "docs/stories/test.md", "", MOCK_RUNNER,
+    )
+    assert "valid-prism-skill" in instruction
+    assert "valid-no-prism" in instruction
