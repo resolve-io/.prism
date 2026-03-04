@@ -660,3 +660,89 @@ class TestTokenTracking_FmtTokens:
         """AC-2: Exactly 1M tokens shown as '1.0M'."""
         from widgets.agent_roster import _fmt_tokens
         assert _fmt_tokens(1_000_000) == "1.0M"
+
+
+# ===========================================================================
+# Token counting consistency: get_usage_from_transcript 4-field formula
+# ===========================================================================
+
+def _load_stop_hook_mod():
+    """Load prism_stop_hook module for direct function testing."""
+    import importlib.util
+    hook_path = _find_stop_hook()
+    hook_dir = hook_path.parent
+    spec = importlib.util.spec_from_file_location("prism_stop_hook_tc", hook_path)
+    mod = importlib.util.module_from_spec(spec)
+    old_path = sys.path[:]
+    sys.path.insert(0, str(hook_dir))
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        sys.path[:] = old_path
+    return mod
+
+
+class TestTokenCountingConsistency:
+    """Verify get_usage_from_transcript uses the 4-field formula matching display code."""
+
+    def test_basic_input_output_tokens(self, tmp_path):
+        """get_usage_from_transcript sums input_tokens + output_tokens."""
+        mod = _load_stop_hook_mod()
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            '{"usage": {"input_tokens": 100, "output_tokens": 50}}\n'
+        )
+        result = mod.get_usage_from_transcript(str(transcript))
+        assert result["total_tokens"] == 150
+
+    def test_cache_creation_tokens_included(self, tmp_path):
+        """get_usage_from_transcript includes cache_creation_input_tokens."""
+        mod = _load_stop_hook_mod()
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            '{"usage": {"input_tokens": 100, "cache_creation_input_tokens": 200, "output_tokens": 50}}\n'
+        )
+        result = mod.get_usage_from_transcript(str(transcript))
+        assert result["total_tokens"] == 350
+
+    def test_cache_read_tokens_included(self, tmp_path):
+        """get_usage_from_transcript includes cache_read_input_tokens."""
+        mod = _load_stop_hook_mod()
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            '{"usage": {"input_tokens": 100, "cache_read_input_tokens": 300, "output_tokens": 50}}\n'
+        )
+        result = mod.get_usage_from_transcript(str(transcript))
+        assert result["total_tokens"] == 450
+
+    def test_all_four_fields_summed(self, tmp_path):
+        """get_usage_from_transcript sums all 4 fields matching display formula."""
+        mod = _load_stop_hook_mod()
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            '{"usage": {"input_tokens": 100, "cache_creation_input_tokens": 200, '
+            '"cache_read_input_tokens": 300, "output_tokens": 400}}\n'
+        )
+        result = mod.get_usage_from_transcript(str(transcript))
+        assert result["total_tokens"] == 1000
+
+    def test_missing_cache_fields_default_zero(self, tmp_path):
+        """Cache fields absent default to 0 (no KeyError)."""
+        mod = _load_stop_hook_mod()
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            '{"usage": {"input_tokens": 50, "output_tokens": 50}}\n'
+        )
+        result = mod.get_usage_from_transcript(str(transcript))
+        assert result["total_tokens"] == 100
+
+    def test_nested_message_usage_four_fields(self, tmp_path):
+        """Cache tokens in nested message.usage are also summed."""
+        mod = _load_stop_hook_mod()
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            '{"message": {"usage": {"input_tokens": 10, "cache_creation_input_tokens": 20, '
+            '"cache_read_input_tokens": 30, "output_tokens": 40}}}\n'
+        )
+        result = mod.get_usage_from_transcript(str(transcript))
+        assert result["total_tokens"] == 100

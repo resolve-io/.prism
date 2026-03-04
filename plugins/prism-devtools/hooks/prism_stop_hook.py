@@ -538,6 +538,8 @@ def get_usage_from_transcript(transcript_path: str, step_line_start: int = 0) ->
                     usage = entry["message"].get("usage")
                 if usage and isinstance(usage, dict):
                     total_input += usage.get("input_tokens", 0)
+                    total_input += usage.get("cache_creation_input_tokens", 0)
+                    total_input += usage.get("cache_read_input_tokens", 0)
                     total_output += usage.get("output_tokens", 0)
 
                 # Model can be at top level or nested under message
