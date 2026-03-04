@@ -251,7 +251,7 @@ def _format_discovered_skills(skills: list) -> str:
     """Format discovered skills for injection into agent instructions."""
     if not skills:
         return ""
-    lines = ["Available skills — review these and invoke any that apply to your current work:"]
+    lines = ["MANDATORY: You MUST invoke each of the following skills using the Skill tool before completing your current task. Do not skip any skill listed here:"]
     for s in skills:
         desc = f" - {s['description']}" if s["description"] else ""
         lines.append(f"  - /{s['name']}{desc}")
