@@ -120,9 +120,9 @@ class PrismDashboard(App):
         with Container(id="body"):
             yield AgentRoster()
             yield WorkflowTable()
-            yield GatePanel()
             with Horizontal(id="details"):
                 with Vertical(id="left-col"):
+                    yield GatePanel()
                     yield StepDetail()
                     yield StoryPanel()
                 with Vertical(id="right-col"):

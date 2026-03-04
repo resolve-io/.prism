@@ -23,7 +23,6 @@ WorkflowTable {
 
 GatePanel {
     height: auto;
-    margin-bottom: 1;
 }
 
 StoryPanel {
@@ -39,6 +38,7 @@ StoryPanel {
 #left-col {
     width: 1fr;
     layout: vertical;
+    overflow-y: auto;
 }
 
 #right-col {
