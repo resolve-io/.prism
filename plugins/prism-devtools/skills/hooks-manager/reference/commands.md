@@ -264,7 +264,7 @@ What would you like to edit?
 
 **Direct Edit**:
 ```
-*edit-hook my-validation --command "python3 hooks/new-validator.py"
+*edit-hook my-validation --command "python hooks/new-validator.py"
 *edit-hook my-validation --matcher "Edit|Write"
 *edit-hook my-validation --disable
 ```

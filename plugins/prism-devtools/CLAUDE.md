@@ -90,12 +90,7 @@ When a `<persona-reminder>` tag appears in your context, you MUST prefix your re
 
 ## Exiting a Persona
 
-When executing `*exit` for a PRISM persona, you MUST also clear the persona state by running:
-```bash
-python .claude/hooks/persona-clear.py
-```
-
-This ensures the reminder hook stops injecting the persona reminder on subsequent messages.
+When executing `*exit` for a PRISM persona, the `persona-tracker.js` PostToolUse hook automatically detects the `*exit` command and clears the persona from session metadata. No manual script invocation is needed.
 
 ---
 
