@@ -144,12 +144,12 @@ class PrismDashboard(App):
             entity_suffix = ""
             if self._brain_entity_count > 0:
                 entity_suffix = f"/{self._brain_entity_count}e"
-            brain_used = state is not None and any(
-                int(e.get("bq", 0)) > 0 for e in state.step_history_parsed
-            )
-            if brain_used:
+            brain_mem_count = sum(
+                int(e.get("bq", 0)) for e in state.step_history_parsed
+            ) if state is not None else 0
+            if brain_mem_count > 0:
                 parts.append((
-                    "  \u25cfBRAIN ACTIVE " + f"{self._brain_doc_count}d{entity_suffix}",
+                    "  \u25cfBRAIN ACTIVE " + f"{self._brain_doc_count}d{entity_suffix} ({brain_mem_count} mem)",
                     "bold bright_green",
                 ))
             else:

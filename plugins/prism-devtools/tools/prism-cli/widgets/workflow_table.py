@@ -106,7 +106,7 @@ class WorkflowTable(Static):
         table.zebra_stripes = True
         table.add_columns(
             "#", "Step", "Agent", "Phase",
-            "Duration", "DurBar", "Tokens", "TokBar", "Tok/min", "Skills", "Brain", "Status"
+            "Duration", "DurBar", "Tokens", "TokBar", "Tok/min", "Skills", "Mem", "Status"
         )
         self._populate(None)
 
@@ -176,7 +176,7 @@ class WorkflowTable(Static):
                         bar_color = _agent_bar_color(step.agent)
                         dur_bar = _fmt_bar(d_secs, total_dur, agent_color=bar_color)
                         tok_bar = _fmt_bar(t_toks, total_toks, agent_color=bar_color)
-                        brain_col = "[dim green]\u25cf[/]" if bq > 0 else "[dim]\u00b7[/]"
+                        brain_col = f"[dim green]{bq}[/]" if bq > 0 else "[dim]-[/]"
                     else:
                         dur_col = "[dim]-[/]"
                         tok_col = "[dim]-[/]"
@@ -184,7 +184,7 @@ class WorkflowTable(Static):
                         skills_col = "[dim]-[/]"
                         dur_bar = ""
                         tok_bar = ""
-                        brain_col = "[dim]\u00b7[/]"
+                        brain_col = "[dim]-[/]"
                     status = "[green]\u2713 DONE[/]"
 
                 elif step.index == current_idx:

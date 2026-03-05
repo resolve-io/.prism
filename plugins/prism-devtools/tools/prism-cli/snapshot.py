@@ -370,7 +370,7 @@ def render_snapshot(work_dir: Path) -> str:
     lines.append("-" * 80)
     lines.append(
         f"{'#':<4} {'Step':<24} {'Agent':<6} {'Phase':<12} "
-        f"{'Duration':<10} {'DurBar':<8} {'Tokens':<8} {'TokBar':<8} {'Tok/min':<8} {'Skills':<8} {'Brain':<6} {'Status'}"
+        f"{'Duration':<10} {'DurBar':<8} {'Tokens':<8} {'TokBar':<8} {'Tok/min':<8} {'Skills':<8} {'Mem':<6} {'Status'}"
     )
     for step in WORKFLOW_STEPS:
         if step.index < current_idx:
@@ -386,7 +386,7 @@ def render_snapshot(work_dir: Path) -> str:
                 tpm_val = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
                 tpm = _fmt_tokens(int(tpm_val)) if tpm_val > 0 else "-"
                 skills = f"{s_calls}/{tc_calls}" if tc_calls > 0 else "-"
-                brain = "\u25cf" if bq > 0 else "-"
+                brain = str(bq) if bq > 0 else "-"
                 dur_bar = _fmt_bar(d_secs, total_dur)
                 tok_bar = _fmt_bar(t_toks, total_toks)
             else:
