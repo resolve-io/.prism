@@ -8,7 +8,7 @@ and bumps plugin.json to 2.5.0.
 AC-1: CHANGELOG has [2.5.0] section dated 2026-03-02
 AC-2: Five Added features documented in [2.5.0]
 AC-3: Four Fixed items documented in [2.5.0]
-AC-4: plugin.json version is "3.0.0"
+AC-4: plugin.json version is "3.0.1"
 AC-5: [2.5.0] appears before [2.4.0] in CHANGELOG
 AC-6: ### Infrastructure subsection exists with pyproject.toml, .gitattributes, tests
 """
@@ -203,7 +203,7 @@ class TestAC3_FixedItemsDocumented:
 
 
 # ---------------------------------------------------------------------------
-# AC-4: plugin.json version is 3.0.0
+# AC-4: plugin.json version is 3.0.1
 # ---------------------------------------------------------------------------
 class TestAC4_PluginJsonVersion:
     def test_ac4_plugin_json_exists(self):
@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_300(self):
+    def test_ac4_plugin_json_version_is_301(self):
         """
-        AC-4: plugin.json 'version' field is '3.0.0'
-        Requirement: Version bump from 2.6.4 → 3.0.0 signals the Brain+Conductor major release
-        Expected: json.loads(plugin.json)['version'] == '3.0.0'
+        AC-4: plugin.json 'version' field is '3.0.1'
+        Requirement: Version bump from 3.0.0 → 3.0.1 for bugfix batch (prism-bug, brain init, brain UI indicator)
+        Expected: json.loads(plugin.json)['version'] == '3.0.1'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.0.0", (
-            f"plugin.json version is '{data.get('version')}', expected '3.0.0'"
+        assert data.get("version") == "3.0.1", (
+            f"plugin.json version is '{data.get('version')}', expected '3.0.1'"
         )
 
 
