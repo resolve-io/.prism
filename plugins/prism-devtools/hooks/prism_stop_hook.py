@@ -999,7 +999,7 @@ def main():
             next_step_id, next_agent, next_action,
             state["story_file"], state["prompt"], runner,
         )
-        brain_queries = 1 if conductor.last_had_brain_context else 0
+        brain_queries = conductor.last_had_brain_context
     except (ImportError, Exception):
         # Conductor unavailable — reindex Brain directly so knowledge stays current
         try:

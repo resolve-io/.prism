@@ -169,6 +169,7 @@ class Brain:
         self._graph_db_path = graph_db
         self._scores_db_path = scores_db
         self._current_step_id: Optional[str] = None
+        self.last_result_count: int = 0
 
         for path in (brain_db, graph_db, scores_db):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -644,8 +645,10 @@ class Brain:
 
         results = self.search(query, limit=limit)
         if not results:
+            self.last_result_count = 0
             return ""
 
+        self.last_result_count = len(results)
         parts = ["<brain_context>"]
         for i, r in enumerate(results, 1):
             parts.append(f"[{i}] {r['doc_id']}")
