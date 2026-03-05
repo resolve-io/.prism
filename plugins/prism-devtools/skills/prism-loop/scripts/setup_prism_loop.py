@@ -180,15 +180,24 @@ def brain_bootstrap():
         from brain_engine import Brain
         brain = Brain()
         sources = []
-        docs_dir = Path.cwd() / "docs"
+        cwd = Path.cwd()
+        # Index docs and plugin core-steps
+        docs_dir = cwd / "docs"
         if docs_dir.exists():
             sources.append(str(docs_dir))
         core_steps = PLUGIN_ROOT / "hooks" / "core-steps"
         if core_steps.exists():
             sources.append(str(core_steps))
-        if sources:
-            count = brain.ingest(sources)
-            print(f"Brain: indexed {count} documents")
+        # Index project source files from common directories
+        for src_dir in ("src", "lib", "scripts", "plugins", "hooks"):
+            candidate = cwd / src_dir
+            if candidate.exists() and candidate.is_dir():
+                sources.append(str(candidate))
+        # Fallback: index project root if no specific source dirs found
+        if not sources:
+            sources.append(str(cwd))
+        count = brain.ingest(sources)
+        print(f"Brain: indexed {count} documents")
     except (ImportError, Exception) as exc:
         print(f"Brain: bootstrap skipped ({exc})", file=sys.stderr)
 

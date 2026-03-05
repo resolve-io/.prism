@@ -1000,6 +1000,12 @@ def main():
             state["story_file"], state["prompt"], runner,
         )
     except (ImportError, Exception):
+        # Conductor unavailable — reindex Brain directly so knowledge stays current
+        try:
+            from brain_engine import Brain
+            Brain().incremental_reindex()
+        except Exception:
+            pass
         instruction = build_agent_instruction(
             next_step_id, next_agent, next_action,
             state["story_file"], state["prompt"], runner,
