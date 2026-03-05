@@ -177,8 +177,15 @@ def brain_bootstrap():
         hooks_dir = PLUGIN_ROOT / "hooks"
         if str(hooks_dir) not in sys.path:
             sys.path.insert(0, str(hooks_dir))
-        from brain_engine import Brain
-        brain = Brain()
+        from brain_engine import Brain, BrainCorruptError
+        try:
+            brain = Brain()
+        except BrainCorruptError as exc:
+            print(f"Brain: corrupt database detected ({exc}), recovering...", file=sys.stderr)
+            brain_dir = Path(".prism/brain")
+            for db_file in brain_dir.glob("*.db"):
+                db_file.unlink()
+            brain = Brain()
         sources = []
         cwd = Path.cwd()
         # Index docs and plugin core-steps

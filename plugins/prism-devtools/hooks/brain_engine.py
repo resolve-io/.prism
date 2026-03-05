@@ -23,6 +23,14 @@ from pathlib import Path
 from typing import Optional
 
 # ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+class BrainCorruptError(Exception):
+    """Raised when a Brain database file fails SQLite integrity check."""
+
+
+# ---------------------------------------------------------------------------
 # Optional dependency detection
 # ---------------------------------------------------------------------------
 _MODEL = None
@@ -157,9 +165,17 @@ class Brain:
         self._graph = self._connect(graph_db)
         self._scores = self._connect(scores_db)
 
-        for db in (self._brain, self._graph, self._scores):
-            db.execute("PRAGMA journal_mode=WAL")
+        for label, db in (
+            (brain_db, self._brain),
+            (graph_db, self._graph),
+            (scores_db, self._scores),
+        ):
+            try:
+                db.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.DatabaseError as exc:
+                raise BrainCorruptError(f"{label} is corrupt: {exc}") from exc
 
+        self._check_db_integrity()
         self.vector_enabled = _try_enable_vector(self._brain)
 
         self._init_brain_schema()
@@ -171,6 +187,21 @@ class Brain:
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
         return conn
+
+    def _check_db_integrity(self) -> None:
+        """Run PRAGMA integrity_check on each DB. Raise BrainCorruptError if any fails."""
+        for label, conn in (
+            (self._brain_db_path, self._brain),
+            (self._graph_db_path, self._graph),
+            (self._scores_db_path, self._scores),
+        ):
+            try:
+                row = conn.execute("PRAGMA integrity_check").fetchone()
+                result = row[0] if row else "no result"
+            except Exception as exc:
+                raise BrainCorruptError(f"{label} integrity check error: {exc}") from exc
+            if result != "ok":
+                raise BrainCorruptError(f"{label} is corrupt: {result}")
 
     # ------------------------------------------------------------------
     # Schema initialisation
