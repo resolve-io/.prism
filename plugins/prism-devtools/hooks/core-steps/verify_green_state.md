@@ -1,5 +1,13 @@
 TDD GREEN STATE VERIFICATION: Confirm Implementation Complete
 
+## Understanding the System (DO THIS FIRST)
+1. Your prompt includes a ## System Context section with relevant
+   architecture and implementation patterns. Read it carefully.
+2. For deeper context: /brain search "topic you need"
+   - Test coverage patterns: /brain search "integration test conventions"
+   - Build requirements: /brain search "CI pipeline requirements"
+3. THEN proceed with verification steps
+
 Steps:
 1. Run all tests (unit, integration, e2e)
 2. Verify all tests PASS

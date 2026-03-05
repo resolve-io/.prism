@@ -166,6 +166,36 @@ jira:
 memory:
   enabled: false  # Deprecated — PRISM-Memory is no longer active
 
+brain:
+  enabled: true
+  db_dir: .prism/brain
+  sources:
+    - code           # Project source files (AST-chunked)
+    - docs           # Markdown documentation
+    - mulch          # .mulch/expertise/*.jsonl (read-only)
+    - overstory      # .overstory/ metrics
+    - git            # Recent commit history
+  exclude_patterns:
+    - node_modules/
+    - .git/
+    - dist/
+    - build/
+    - "*.min.js"
+
+conductor:
+  enabled: true
+  exploration:
+    epsilon_start: 0.3
+    epsilon_min: 0.05
+    decay_per: 50
+    min_outcomes: 5
+  retirement:
+    min_runs: 10
+    threshold: -1.0
+    consecutive: 5
+  generation:
+    threshold: 20   # Outcomes before suggesting variant generation
+
 # Project Documentation Settings (document-project task)
 documentation:
   output_folder: docs/project       # Where documentation will be generated

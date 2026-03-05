@@ -171,6 +171,28 @@ def initialize_context_system() -> bool:
         return False
 
 
+def brain_bootstrap():
+    """Run initial Brain indexing if brain is available."""
+    try:
+        hooks_dir = PLUGIN_ROOT / "hooks"
+        if str(hooks_dir) not in sys.path:
+            sys.path.insert(0, str(hooks_dir))
+        from brain_engine import Brain
+        brain = Brain()
+        sources = []
+        docs_dir = Path.cwd() / "docs"
+        if docs_dir.exists():
+            sources.append(str(docs_dir))
+        core_steps = PLUGIN_ROOT / "hooks" / "core-steps"
+        if core_steps.exists():
+            sources.append(str(core_steps))
+        if sources:
+            count = brain.ingest(sources)
+            print(f"Brain: indexed {count} documents")
+    except (ImportError, Exception) as exc:
+        print(f"Brain: bootstrap skipped ({exc})", file=sys.stderr)
+
+
 def detect_git_branch() -> str:
     """Detect the current git branch name.
 
@@ -323,6 +345,8 @@ def main():
         else:
             print("⚠ Could not fully initialize .context - continuing anyway")
         print("")
+
+    brain_bootstrap()
 
     create_state_file(config)
 

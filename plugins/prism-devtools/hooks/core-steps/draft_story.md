@@ -1,5 +1,14 @@
 STORY DRAFTING: Create Next Story
 
+## Understanding the System (DO THIS FIRST)
+1. Your prompt includes a ## System Context section with relevant
+   architecture, similar past stories, and known constraints. Read it carefully.
+2. For deeper understanding: /brain search "topic you need"
+   - Domain knowledge: /brain search "user authentication architecture"
+   - Past story patterns: /brain search "story template acceptance criteria"
+   - Technical constraints: /brain search "database migration conventions"
+3. THEN Glob for epic and architecture docs as fallback
+
 Steps:
 1. Glob for epic and architecture docs: docs/*.md, docs/epics/*.md
 2. Read requirements and technical constraints
