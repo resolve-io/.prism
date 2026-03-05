@@ -17,17 +17,33 @@ Search all indexed knowledge. Returns ranked results from:
 - Mulch expertise (conventions, patterns, decisions)
 - Metrics (agent performance, test results)
 
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" search "<query>"
+```
+
 ### /brain status
 Show index health: chunk count, entity count, degradation mode,
 last indexed timestamp.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" status
+```
 
 ### /brain init
 Full index of all project sources. Runs automatically on first
 prism-loop but can be triggered manually.
 
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" init
+```
+
 ### /brain ingest
 Re-index everything. Use after major changes or to pick up
 new source types.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" ingest
+```
 
 ## Architecture
 

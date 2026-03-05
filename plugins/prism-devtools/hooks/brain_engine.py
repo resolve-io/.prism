@@ -911,3 +911,104 @@ class Brain:
         if metric_name == "retry_rate":
             return max(0.0, 1.0 - (value / 3.0))
         return value
+
+
+# ---------------------------------------------------------------------------
+# CLI entrypoint
+# ---------------------------------------------------------------------------
+
+def _cli_source_dirs() -> list[str]:
+    """Return source directories to index, mirroring brain_bootstrap logic."""
+    sources: list[str] = []
+    cwd = Path.cwd()
+    plugin_root = Path(__file__).resolve().parent.parent
+    docs_dir = cwd / "docs"
+    if docs_dir.exists():
+        sources.append(str(docs_dir))
+    core_steps = plugin_root / "hooks" / "core-steps"
+    if core_steps.exists():
+        sources.append(str(core_steps))
+    for src_dir in ("src", "lib", "scripts", "plugins", "hooks"):
+        candidate = cwd / src_dir
+        if candidate.exists() and candidate.is_dir():
+            sources.append(str(candidate))
+    if not sources:
+        sources.append(str(cwd))
+    return sources
+
+
+def _cmd_init(brain: "Brain") -> int:
+    sources = _cli_source_dirs()
+    count = brain.ingest(sources)
+    print(f"Brain: indexed {count} documents from {len(sources)} source(s)")
+    return 0
+
+
+def _cmd_search(brain: "Brain", query: str) -> int:
+    results = brain.search(query)
+    if not results:
+        print("No results found.")
+        return 0
+    for i, r in enumerate(results, 1):
+        score = round(r.get("rrf_score", 0.0), 4)
+        print(f"[{i}] {r['doc_id']}  (score={score})")
+        snippet = r.get("content", "")[:200].replace("\n", " ")
+        print(f"    {snippet}")
+    return 0
+
+
+def _cmd_status(brain: "Brain") -> int:
+    doc_count = brain._brain.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
+    entity_count = brain._graph.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
+    last_indexed = brain._get_last_index_timestamp()
+    vector_mode = "enabled" if brain.vector_enabled else "disabled (BM25+GraphRAG)"
+    print(f"Documents indexed : {doc_count}")
+    print(f"Graph entities    : {entity_count}")
+    print(f"Vector search     : {vector_mode}")
+    print(f"Last indexed      : {last_indexed}")
+    return 0
+
+
+def _print_usage() -> None:
+    print("Usage: python3 brain_engine.py <command> [args]")
+    print("")
+    print("Commands:")
+    print("  init              Index project source files")
+    print("  ingest            Re-index all sources (same as init)")
+    print("  search <query>    Search indexed knowledge")
+    print("  status            Show index health and statistics")
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    if not args:
+        _print_usage()
+        sys.exit(1)
+
+    cmd = args[0]
+    try:
+        b = Brain()
+    except BrainCorruptError as exc:
+        print(f"Brain: corrupt database ({exc}), deleting and re-initialising...",
+              file=sys.stderr)
+        brain_dir = Path(".prism/brain")
+        for db_file in brain_dir.glob("*.db"):
+            db_file.unlink(missing_ok=True)
+        b = Brain()
+
+    if cmd in ("init", "ingest"):
+        rc = _cmd_init(b)
+    elif cmd == "search":
+        if len(args) < 2:
+            print("Error: search requires a query argument", file=sys.stderr)
+            _print_usage()
+            sys.exit(1)
+        rc = _cmd_search(b, " ".join(args[1:]))
+    elif cmd == "status":
+        rc = _cmd_status(b)
+    else:
+        print(f"Error: unknown command '{cmd}'", file=sys.stderr)
+        _print_usage()
+        sys.exit(1)
+
+    sys.exit(rc)
