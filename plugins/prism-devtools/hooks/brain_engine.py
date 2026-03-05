@@ -153,6 +153,12 @@ class Brain:
         ".md", ".yaml", ".yml", ".json", ".txt", ".sh",
     }
 
+    _EXCLUDED_PATH_SEGMENTS = {
+        ".claude", ".prism", "__pycache__", "node_modules", ".git",
+        ".venv", "venv", ".env", "dist", "build", ".tox",
+        ".mypy_cache", ".pytest_cache", ".overstory",
+    }
+
     def __init__(
         self,
         brain_db: str = ".prism/brain/brain.db",
@@ -343,7 +349,10 @@ class Brain:
             return None
 
     def _should_index(self, filepath: str) -> bool:
-        return Path(filepath).suffix in self._INDEXABLE_SUFFIXES
+        p = Path(filepath)
+        if any(part in self._EXCLUDED_PATH_SEGMENTS for part in p.parts):
+            return False
+        return p.suffix in self._INDEXABLE_SUFFIXES
 
     def _get_last_index_timestamp(self) -> str:
         row = self._brain.execute(
