@@ -25,6 +25,7 @@ class Conductor:
     def __init__(self) -> None:
         self._brain = None
         self._brain_available = False
+        self.last_had_brain_context: bool = False
         self._try_init_brain()
 
     def _try_init_brain(self) -> None:
@@ -64,6 +65,7 @@ class Conductor:
             except Exception:
                 brain_ctx = ""
 
+        self.last_had_brain_context = bool(brain_ctx)
         return _base(
             step_id, agent, action, story_file, prompt, runner,
             brain_context=brain_ctx,

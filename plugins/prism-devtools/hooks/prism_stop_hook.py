@@ -914,7 +914,7 @@ def main():
     next_step = get_step_info(next_index)
     next_step_id, next_agent, next_action, next_step_type, next_loop_back, next_validation = next_step
 
-    # Build step history entry for the step we just completed
+    # Build step history metrics for the step we just completed
     now_ts = datetime.now()
     step_dur_secs = 0
     step_ref_str = state.get("step_started_at", state.get("started_at", ""))
@@ -931,15 +931,8 @@ def main():
         history: list = json.loads(state.get("step_history", "[]"))
     except Exception:
         history = []
-    history.append({
-        "i": current_index,
-        "d": step_dur_secs,
-        "t": step_toks_used,
-        "s": step_skill_calls,
-        "tc": step_tool_calls,
-    })
 
-    # Update state to next step
+    # Update state to next step (step_history appended below after bq is known)
     updates = {
         "current_step": next_step_id,
         "current_step_index": next_index,
@@ -947,7 +940,6 @@ def main():
         "step_started_at": now_ts.isoformat(),
         "step_tokens_start": str(usage["total_tokens"]),
         "step_transcript_line": str(usage["total_lines"]),
-        "step_history": history,  # Pass list directly; update_state_file uses json.dumps
     }
 
     # After draft_story, detect and capture the story file
@@ -959,6 +951,15 @@ def main():
 
     # Handle GATE steps - pause for /prism-approve
     if next_step_type == "gate":
+        history.append({
+            "i": current_index,
+            "d": step_dur_secs,
+            "t": step_toks_used,
+            "s": step_skill_calls,
+            "tc": step_tool_calls,
+            "bq": 0,
+        })
+        updates["step_history"] = history
         updates["paused_for_manual"] = True
         updates["step_started_at"] = datetime.now().isoformat()
         updates["step_tokens_start"] = str(usage["total_tokens"])
@@ -973,12 +974,10 @@ def main():
         }))
         sys.exit(0)
 
-    # Handle AGENT steps - block and provide instructions
-    updates["paused_for_manual"] = False
-    updated_content = update_state_file(content, updates)
-    STATE_FILE.write_text(updated_content, encoding='utf-8')
-
+    # Handle AGENT steps — call Conductor first to determine brain_queries,
+    # then build history entry with accurate bq before writing state.
     runner = detect_test_runner()
+    brain_queries = 0
     # Record outcome + build next instruction via Conductor when available
     try:
         from conductor_engine import Conductor
@@ -1000,6 +999,7 @@ def main():
             next_step_id, next_agent, next_action,
             state["story_file"], state["prompt"], runner,
         )
+        brain_queries = 1 if conductor.last_had_brain_context else 0
     except (ImportError, Exception):
         # Conductor unavailable — reindex Brain directly so knowledge stays current
         try:
@@ -1011,6 +1011,20 @@ def main():
             next_step_id, next_agent, next_action,
             state["story_file"], state["prompt"], runner,
         )
+
+    history.append({
+        "i": current_index,
+        "d": step_dur_secs,
+        "t": step_toks_used,
+        "s": step_skill_calls,
+        "tc": step_tool_calls,
+        "bq": brain_queries,
+    })
+    updates["step_history"] = history
+    updates["paused_for_manual"] = False
+    updated_content = update_state_file(content, updates)
+    STATE_FILE.write_text(updated_content, encoding='utf-8')
+
     print(json.dumps({
         "decision": "block",
         "reason": f"[PRISM - Step {next_index + 1}/{len(WORKFLOW_STEPS)}: {next_step_id}]\n\n{instruction}"
