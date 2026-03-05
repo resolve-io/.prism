@@ -46,9 +46,12 @@ def _try_enable_vector(db: sqlite3.Connection) -> bool:
         sqlite_vec.load(db)
         db.enable_load_extension(False)
         _SQLITE_VEC_LOADED = True
-    except (ImportError, AttributeError, Exception) as exc:
-        print(f"Brain: sqlite-vec unavailable ({exc}), using BM25+GraphRAG only",
-              file=sys.stderr)
+    except (ImportError, AttributeError, Exception):
+        print(
+            "Brain: running in BM25+GraphRAG mode "
+            "(install sqlite-vec model2vec for vector search)",
+            file=sys.stderr,
+        )
         return False
 
     try:
@@ -56,9 +59,12 @@ def _try_enable_vector(db: sqlite3.Connection) -> bool:
         if _MODEL is None:
             _MODEL = StaticModel.from_pretrained("minishlab/potion-base-32M")
         return True
-    except (ImportError, OSError, Exception) as exc:
-        print(f"Brain: model2vec unavailable ({exc}), using BM25+GraphRAG only",
-              file=sys.stderr)
+    except (ImportError, OSError, Exception):
+        print(
+            "Brain: running in BM25+GraphRAG mode "
+            "(install sqlite-vec model2vec for vector search)",
+            file=sys.stderr,
+        )
         return False
 
 
@@ -940,7 +946,11 @@ def _cli_source_dirs() -> list[str]:
 def _cmd_init(brain: "Brain") -> int:
     sources = _cli_source_dirs()
     count = brain.ingest(sources)
-    print(f"Brain: indexed {count} documents from {len(sources)} source(s)")
+    if brain.vector_enabled:
+        mode = "Full \u2014 BM25+Vector+GraphRAG"
+    else:
+        mode = "BM25+GraphRAG"
+    print(f"Brain: indexed {count} documents from {len(sources)} source(s) (mode: {mode})")
     return 0
 
 
@@ -961,10 +971,13 @@ def _cmd_status(brain: "Brain") -> int:
     doc_count = brain._brain.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
     entity_count = brain._graph.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
     last_indexed = brain._get_last_index_timestamp()
-    vector_mode = "enabled" if brain.vector_enabled else "disabled (BM25+GraphRAG)"
+    if brain.vector_enabled:
+        mode = "Full \u2014 BM25+Vector+GraphRAG"
+    else:
+        mode = "BM25+GraphRAG (install sqlite-vec model2vec for Full mode)"
+    print(f"Mode              : {mode}")
     print(f"Documents indexed : {doc_count}")
     print(f"Graph entities    : {entity_count}")
-    print(f"Vector search     : {vector_mode}")
     print(f"Last indexed      : {last_indexed}")
     return 0
 
@@ -986,6 +999,23 @@ if __name__ == "__main__":
         sys.exit(1)
 
     cmd = args[0]
+    if cmd in ("init", "ingest"):
+        try:
+            import sqlite_vec  # type: ignore  # noqa: F401
+            from model2vec import StaticModel  # type: ignore  # noqa: F401
+        except ImportError:
+            print("Brain: attempting to install optional deps (sqlite-vec model2vec)...",
+                  file=sys.stderr)
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q", "sqlite-vec", "model2vec"],
+                capture_output=True,
+            )
+            if result.returncode != 0:
+                print(
+                    "Brain: optional deps unavailable, continuing in BM25+GraphRAG mode",
+                    file=sys.stderr,
+                )
+
     try:
         b = Brain()
     except BrainCorruptError as exc:
