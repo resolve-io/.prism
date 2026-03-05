@@ -9,6 +9,7 @@ domains:
   - architecture
   - agents
   - platform
+  - prompts
 governance:
   max_entries: 100
   warn_entries: 150
