@@ -5,6 +5,7 @@ from __future__ import annotations
 import glob as _glob
 import json as _json
 import logging
+import sqlite3
 from pathlib import Path
 
 _log = logging.getLogger(__name__)
@@ -46,6 +47,29 @@ def _read_plugin_version() -> str:
 _PLUGIN_VERSION: str = _read_plugin_version()
 
 
+def _brain_status(work_dir: Path) -> tuple[int, int]:
+    """Return (doc_count, entity_count); -1 means DB absent or error."""
+    doc_count = -1
+    entity_count = -1
+    brain_db = work_dir / ".prism" / "brain" / "brain.db"
+    graph_db = work_dir / ".prism" / "brain" / "graph.db"
+    if brain_db.exists():
+        try:
+            conn = sqlite3.connect(str(brain_db))
+            doc_count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            conn.close()
+        except Exception:
+            pass
+    if graph_db.exists():
+        try:
+            conn = sqlite3.connect(str(graph_db))
+            entity_count = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
+            conn.close()
+        except Exception:
+            pass
+    return doc_count, entity_count
+
+
 def _fmt_tokens(count: int) -> str:
     """Format token count compactly: 1234 -> 1.2k, 1234567 -> 1.2M."""
     if count < 1000:
@@ -85,6 +109,9 @@ class PrismDashboard(App):
         self._transcript_offset: int = 0
         self._live_total_tokens: int = 0
         self._live_model: str = ""
+        self._brain_check_tick: int = 0
+        self._brain_doc_count: int = -1
+        self._brain_entity_count: int = -1
 
     def format_title(self, title: str, sub_title: str) -> Content:
         """Render k9s-style header info bar with live workflow metadata."""
@@ -112,6 +139,16 @@ class PrismDashboard(App):
             parts.append(("  \u25cfCACHE LIVE", "bold cyan"))
         elif self._cache_stale:
             parts.append(("  \u26a1CACHE STALE", "bold yellow"))
+
+        if self._brain_doc_count > 0:
+            entity_suffix = ""
+            if self._brain_entity_count > 0:
+                entity_suffix = f"/{self._brain_entity_count}e"
+            parts.append(("  \u25cfBRAIN " + f"{self._brain_doc_count}d{entity_suffix}", "bold green"))
+        elif self._brain_doc_count == 0:
+            parts.append(("  \u25cbBRAIN 0", "yellow"))
+        else:
+            parts.append(("  \u25cbBRAIN OFF", "dim"))
 
         return Content.assemble(*parts)
 
@@ -237,6 +274,10 @@ class PrismDashboard(App):
             cache = check_plugin_cache_stale(self._work_dir)
             self._cache_linked = cache["linked"]
             self._cache_stale = cache["stale"]
+
+        self._brain_check_tick += 1
+        if self._brain_check_tick % 10 == 1:
+            self._brain_doc_count, self._brain_entity_count = _brain_status(self._work_dir)
 
         self._state = parse_state_file(self._state_file)
 
