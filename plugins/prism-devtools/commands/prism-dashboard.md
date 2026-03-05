@@ -9,7 +9,7 @@ Launch the live PRISM workflow dashboard — a Textual-based TUI that monitors w
 ## Execute
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/tools/prism-cli" --path "${PWD}" $ARGUMENTS
+python "${CLAUDE_PLUGIN_ROOT}/tools/prism-cli" --path "${PWD}" $ARGUMENTS
 ```
 
 ## Features
