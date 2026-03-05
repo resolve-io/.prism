@@ -370,7 +370,7 @@ def render_snapshot(work_dir: Path) -> str:
     lines.append("-" * 80)
     lines.append(
         f"{'#':<4} {'Step':<24} {'Agent':<6} {'Phase':<12} "
-        f"{'Duration':<10} {'DurBar':<8} {'Tokens':<8} {'TokBar':<8} {'Tok/min':<8} {'Skills':<8} {'Status'}"
+        f"{'Duration':<10} {'DurBar':<8} {'Tokens':<8} {'TokBar':<8} {'Tok/min':<8} {'Skills':<8} {'Brain':<6} {'Status'}"
     )
     for step in WORKFLOW_STEPS:
         if step.index < current_idx:
@@ -380,15 +380,17 @@ def render_snapshot(work_dir: Path) -> str:
                 t_toks = int(hist.get("t", 0))
                 s_calls = int(hist.get("s", 0))
                 tc_calls = int(hist.get("tc", 0))
+                bq = int(hist.get("bq", 0))
                 dur = _fmt_duration(d_secs)
                 tok = _fmt_tokens(t_toks)
                 tpm_val = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
                 tpm = _fmt_tokens(int(tpm_val)) if tpm_val > 0 else "-"
                 skills = f"{s_calls}/{tc_calls}" if tc_calls > 0 else "-"
+                brain = "\u25cf" if bq > 0 else "-"
                 dur_bar = _fmt_bar(d_secs, total_dur)
                 tok_bar = _fmt_bar(t_toks, total_toks)
             else:
-                dur, tok, tpm, skills = "-", "-", "-", "-"
+                dur, tok, tpm, skills, brain = "-", "-", "-", "-", "-"
                 dur_bar, tok_bar = "", ""
             status = "DONE"
         elif step.index == current_idx:
@@ -400,6 +402,7 @@ def render_snapshot(work_dir: Path) -> str:
             else:
                 tpm = "-"
             skills = "live"
+            brain = "live"
             if step.step_type == "gate":
                 dur_bar = ""
                 tok_bar = ""
@@ -413,12 +416,12 @@ def render_snapshot(work_dir: Path) -> str:
             else:
                 status = ">> RUNNING"
         else:
-            dur, tok, tpm, skills, status = "", "", "", "", "."
+            dur, tok, tpm, skills, brain, status = "", "", "", "", "", "."
             dur_bar, tok_bar = "", ""
 
         lines.append(
             f"{step.index + 1:<4} {step.id:<24} {step.agent:<6} {step.phase:<12} "
-            f"{dur:<10} {dur_bar:<8} {tok:<8} {tok_bar:<8} {tpm:<8} {skills:<8} {status}"
+            f"{dur:<10} {dur_bar:<8} {tok:<8} {tok_bar:<8} {tpm:<8} {skills:<8} {brain:<6} {status}"
         )
 
     lines.append("")

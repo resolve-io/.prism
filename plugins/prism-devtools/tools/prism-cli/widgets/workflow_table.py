@@ -106,7 +106,7 @@ class WorkflowTable(Static):
         table.zebra_stripes = True
         table.add_columns(
             "#", "Step", "Agent", "Phase",
-            "Duration", "DurBar", "Tokens", "TokBar", "Tok/min", "Skills", "Status"
+            "Duration", "DurBar", "Tokens", "TokBar", "Tok/min", "Skills", "Brain", "Status"
         )
         self._populate(None)
 
@@ -167,6 +167,7 @@ class WorkflowTable(Static):
                         t_toks = int(hist.get("t", 0))
                         s_calls = int(hist.get("s", 0))
                         tc_calls = int(hist.get("tc", 0))
+                        bq = int(hist.get("bq", 0))
                         dur_col = f"[dim]{_fmt_duration(d_secs)}[/]"
                         tok_col = f"[dim]{_fmt_tokens(t_toks)}[/]"
                         tpm = t_toks / (d_secs / 60) if d_secs > 0 and t_toks > 0 else 0
@@ -175,6 +176,7 @@ class WorkflowTable(Static):
                         bar_color = _agent_bar_color(step.agent)
                         dur_bar = _fmt_bar(d_secs, total_dur, agent_color=bar_color)
                         tok_bar = _fmt_bar(t_toks, total_toks, agent_color=bar_color)
+                        brain_col = "[dim green]\u25cf[/]" if bq > 0 else "[dim]\u00b7[/]"
                     else:
                         dur_col = "[dim]-[/]"
                         tok_col = "[dim]-[/]"
@@ -182,6 +184,7 @@ class WorkflowTable(Static):
                         skills_col = "[dim]-[/]"
                         dur_bar = ""
                         tok_bar = ""
+                        brain_col = "[dim]\u00b7[/]"
                     status = "[green]\u2713 DONE[/]"
 
                 elif step.index == current_idx:
@@ -199,6 +202,7 @@ class WorkflowTable(Static):
                         tpm_col = "[dim]-[/]"
 
                     skills_col = "[dim]live[/]"
+                    brain_col = "[dim]live[/]"
                     bar_color = _agent_bar_color(step.agent)
                     if step.step_type == "gate":
                         dur_bar = ""
@@ -220,6 +224,7 @@ class WorkflowTable(Static):
                     tok_col = ""
                     tpm_col = ""
                     skills_col = ""
+                    brain_col = ""
                     dur_bar = ""
                     tok_bar = ""
                     status = "[dim]\u00b7[/]"
@@ -228,6 +233,7 @@ class WorkflowTable(Static):
                 tok_col = ""
                 tpm_col = ""
                 skills_col = ""
+                brain_col = ""
                 dur_bar = ""
                 tok_bar = ""
                 status = "[dim]\u00b7[/]"
@@ -251,5 +257,5 @@ class WorkflowTable(Static):
 
             table.add_row(
                 idx_str, name, agent, phase_col,
-                dur_col, dur_bar, tok_col, tok_bar, tpm_col, skills_col, status
+                dur_col, dur_bar, tok_col, tok_bar, tpm_col, skills_col, brain_col, status
             )

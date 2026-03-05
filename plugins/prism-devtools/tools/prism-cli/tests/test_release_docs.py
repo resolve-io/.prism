@@ -8,7 +8,7 @@ and bumps plugin.json to 2.5.0.
 AC-1: CHANGELOG has [2.5.0] section dated 2026-03-02
 AC-2: Five Added features documented in [2.5.0]
 AC-3: Four Fixed items documented in [2.5.0]
-AC-4: plugin.json version is "3.0.7"
+AC-4: plugin.json version is "3.0.8"
 AC-5: [2.5.0] appears before [2.4.0] in CHANGELOG
 AC-6: ### Infrastructure subsection exists with pyproject.toml, .gitattributes, tests
 """
@@ -216,13 +216,13 @@ class TestAC4_PluginJsonVersion:
 
     def test_ac4_plugin_json_version_is_304(self):
         """
-        AC-4: plugin.json 'version' field is '3.0.7'
-        Requirement: Version bump from 3.0.6 → 3.0.7 for gate decision:block fix (prism-1e90)
-        Expected: json.loads(plugin.json)['version'] == '3.0.7'
+        AC-4: plugin.json 'version' field is '3.0.8'
+        Requirement: Version bump from 3.0.7 → 3.0.8 for brain activity indicator (prism-2848)
+        Expected: json.loads(plugin.json)['version'] == '3.0.8'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.0.7", (
-            f"plugin.json version is '{data.get('version')}', expected '3.0.7'"
+        assert data.get("version") == "3.0.8", (
+            f"plugin.json version is '{data.get('version')}', expected '3.0.8'"
         )
 
 
