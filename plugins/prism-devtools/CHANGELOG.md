@@ -5,6 +5,15 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.4] - 2026-03-04
+
+### Added
+
+- **Prompt variant files** — 12 persona prompt markdown files under `prompts/` for all four PRISM roles
+  - Personas: `sm`, `qa`, `dev`, `architect`
+  - Variants: `default` (balanced), `lean` (minimal tokens), `rich` (detailed with examples)
+  - Plain markdown, no YAML frontmatter — bootstrapped from existing ROLE_CARDS
+
 ## [2.5.0] - 2026-03-02
 
 ### Added
