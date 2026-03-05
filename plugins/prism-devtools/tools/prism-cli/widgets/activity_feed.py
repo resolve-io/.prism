@@ -154,6 +154,11 @@ class ActivityFeed(Static):
         self, ts: str, agent: str, name: str, inp: dict
     ) -> str:
         """Format one activity line."""
+        # Detect brain-related calls
+        is_brain = "brain" in name.lower() or (
+            name == "Skill" and "brain" in str(inp).lower()
+        )
+        label = "[bold green]🧠 BRAIN[/]" if is_brain else "[bold cyan]TOOL[/]"
         # Build truncated args string from first key=value pair
         args_parts: list[str] = []
         if isinstance(inp, dict):
@@ -165,7 +170,7 @@ class ActivityFeed(Static):
                 break  # only first arg for compact display
         args_str = args_parts[0] if args_parts else ""
         return (
-            f"{ts} [bold cyan]TOOL[/] [dim]{agent}[/] "
+            f"{ts} {label} [dim]{agent}[/] "
             f"tool=[bold]{name}[/] {args_str}"
         )
 

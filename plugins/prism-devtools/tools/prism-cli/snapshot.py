@@ -206,7 +206,11 @@ def _render_activity_feed(state: "WorkflowState", lines: list[str], max_entries:
                         args_str = ", ".join(parts)
                     else:
                         args_str = str(inp)[:40]
-                    entries.append(f"  {ts_str} TOOL {tool_name:<18} {args_str}")
+                    is_brain = "brain" in tool_name.lower() or (
+                        tool_name == "Skill" and "brain" in str(inp).lower()
+                    )
+                    label = "🧠 BRAIN" if is_brain else "TOOL    "
+                    entries.append(f"  {ts_str} {label} {tool_name:<18} {args_str}")
     except (IOError, OSError):
         lines.append("  Error reading transcript")
         lines.append("")
