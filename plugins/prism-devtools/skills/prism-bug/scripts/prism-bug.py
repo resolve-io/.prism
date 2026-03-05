@@ -88,6 +88,8 @@ def collect_transcript_excerpt(limit: int = TRANSCRIPT_TOOL_LIMIT) -> tuple[str,
     except Exception as exc:
         return f"_Error reading transcript: {exc}_", None
 
+    # Claude Code JSONL format: entries have 'role' and 'content' (array of blocks)
+    # Each block has 'type': 'text', 'tool_use', or 'tool_result'
     entries = []
     for raw in lines:
         raw = raw.strip()
@@ -97,21 +99,24 @@ def collect_transcript_excerpt(limit: int = TRANSCRIPT_TOOL_LIMIT) -> tuple[str,
             obj = json.loads(raw)
         except json.JSONDecodeError:
             continue
-        msg_type = obj.get("type", "")
-        if msg_type in ("tool_use", "tool_result", "assistant", "user"):
-            entries.append(obj)
+        role = obj.get("role", "")
+        content = obj.get("content", [])
+        if role in ("assistant", "user") and isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    entries.append((role, block))
 
     recent = entries[-limit:]
     parts = []
-    for entry in recent:
-        t = entry.get("type", "")
+    for role, block in recent:
+        t = block.get("type", "")
         if t == "tool_use":
-            name = entry.get("name", "?")
-            inp = entry.get("input", {})
+            name = block.get("name", "?")
+            inp = block.get("input", {})
             summary = json.dumps(inp)[:200]
             parts.append(f"**tool_use** `{name}` — `{summary}`")
         elif t == "tool_result":
-            content = entry.get("content", "")
+            content = block.get("content", "")
             if isinstance(content, list):
                 text = " ".join(
                     c.get("text", "") for c in content if isinstance(c, dict)
@@ -119,14 +124,9 @@ def collect_transcript_excerpt(limit: int = TRANSCRIPT_TOOL_LIMIT) -> tuple[str,
             else:
                 text = str(content)
             parts.append(f"**tool_result** — `{text[:200]}`")
-        elif t == "assistant":
-            content = entry.get("content", "")
-            if isinstance(content, str):
-                parts.append(f"**assistant** — {content[:200]}")
-        elif t == "user":
-            content = entry.get("content", "")
-            if isinstance(content, str):
-                parts.append(f"**user** — {content[:200]}")
+        elif t == "text":
+            text = block.get("text", "")
+            parts.append(f"**{role}** — {text[:200]}")
 
     if not parts:
         return "_No entries found in transcript._", transcript_path
@@ -208,6 +208,26 @@ def create_issue(title: str, body: str) -> str | None:
             "--body", body,
             "--label", "bug",
             "--label", "prism-session",
+        ])
+        if rc == 0 and url:
+            return url.strip()
+        # Retry without labels in case 'prism-session' label doesn't exist
+        print(f"gh issue create with labels failed (exit {rc}), retrying without labels...", file=sys.stderr)
+        rc, url, err = run([
+            "gh", "issue", "create",
+            "--repo", GITHUB_REPO,
+            "--title", title,
+            "--body", body,
+            "--label", "bug",
+        ])
+        if rc == 0 and url:
+            return url.strip()
+        # Final retry with no labels at all
+        rc, url, err = run([
+            "gh", "issue", "create",
+            "--repo", GITHUB_REPO,
+            "--title", title,
+            "--body", body,
         ])
         if rc == 0 and url:
             return url.strip()
