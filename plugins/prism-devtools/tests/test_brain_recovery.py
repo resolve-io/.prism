@@ -242,6 +242,95 @@ def test_ingest_completes_without_database_error(tmp_path):
     assert len(results) > 0, "search should return results after ingest"
 
 
+# ---------------------------------------------------------------------------
+# _purge_deleted tests
+# ---------------------------------------------------------------------------
+
+def test_purge_deleted_removes_missing_file(tmp_path):
+    """_purge_deleted() removes docs whose source_file no longer exists on disk."""
+    brain = _make_brain_in(tmp_path)
+
+    # Ingest a real file, then delete it
+    src = tmp_path / "gone.py"
+    src.write_text("def vanished(): pass")
+    brain._ingest_single(str(src), "def vanished(): pass", source_file=str(src), domain="py")
+
+    # Verify indexed
+    assert brain._brain.execute(
+        "SELECT COUNT(*) FROM docs WHERE source_file = ?", (str(src),)
+    ).fetchone()[0] == 1
+
+    # Delete file from disk
+    src.unlink()
+
+    purged = brain._purge_deleted()
+    assert purged == 1
+
+    assert brain._brain.execute(
+        "SELECT COUNT(*) FROM docs WHERE source_file = ?", (str(src),)
+    ).fetchone()[0] == 0
+
+
+def test_purge_deleted_removes_excluded_paths(tmp_path):
+    """_purge_deleted() removes docs whose path is now excluded."""
+    brain = _make_brain_in(tmp_path)
+
+    # Manually insert a doc for an excluded path (bypassing _should_index)
+    excluded = str(tmp_path / "node_modules" / "lib.py")
+    brain._brain.execute(
+        "INSERT INTO docs (id, source_file, content, domain, content_hash) VALUES (?, ?, ?, ?, ?)",
+        (excluded, excluded, "some content", "py", "abc123"),
+    )
+    brain._brain.commit()
+
+    # Create the file on disk so it exists (but is excluded)
+    Path(excluded).parent.mkdir(parents=True, exist_ok=True)
+    Path(excluded).write_text("some content")
+
+    purged = brain._purge_deleted()
+    assert purged == 1
+
+    assert brain._brain.execute(
+        "SELECT COUNT(*) FROM docs WHERE source_file = ?", (excluded,)
+    ).fetchone()[0] == 0
+
+
+def test_purge_deleted_keeps_existing_valid_files(tmp_path):
+    """_purge_deleted() does not remove docs for files that still exist and are indexable."""
+    brain = _make_brain_in(tmp_path)
+
+    src = tmp_path / "valid.py"
+    src.write_text("def keep(): pass")
+    brain._ingest_single(str(src), "def keep(): pass", source_file=str(src), domain="py")
+
+    purged = brain._purge_deleted()
+    assert purged == 0
+
+    assert brain._brain.execute(
+        "SELECT COUNT(*) FROM docs WHERE source_file = ?", (str(src),)
+    ).fetchone()[0] == 1
+
+
+def test_purge_deleted_called_by_ingest(tmp_path):
+    """ingest() automatically purges docs for files no longer on disk."""
+    brain = _make_brain_in(tmp_path)
+
+    # Index a file that will be deleted
+    src = tmp_path / "ephemeral.py"
+    src.write_text("def ephemeral(): pass")
+    brain._ingest_single(str(src), "def ephemeral(): pass", source_file=str(src), domain="py")
+    src.unlink()
+
+    # Index another real file — purge should happen as side effect
+    other = tmp_path / "real.py"
+    other.write_text("def real(): pass")
+    brain.ingest([str(other)])
+
+    assert brain._brain.execute(
+        "SELECT COUNT(*) FROM docs WHERE source_file = ?", (str(src),)
+    ).fetchone()[0] == 0, "ingest() should have purged deleted file entry"
+
+
 def test_incremental_reindex_does_not_corrupt(tmp_path, monkeypatch):
     """incremental_reindex() completes without corruption errors."""
     import subprocess as sp

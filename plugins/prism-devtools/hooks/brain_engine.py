@@ -369,6 +369,23 @@ class Brain:
         )
         self._brain.commit()
 
+    def _purge_deleted(self) -> int:
+        """Remove DB entries for files that no longer exist or are now excluded.
+
+        Returns count of purged documents.
+        """
+        rows = self._brain.execute(
+            "SELECT id, source_file FROM docs WHERE source_file IS NOT NULL"
+        ).fetchall()
+        to_purge: list[str] = []
+        for row in rows:
+            sf = row["source_file"]
+            if not Path(sf).exists() or not self._should_index(sf):
+                to_purge.append(sf)
+        if to_purge:
+            self._remove_entries_by_source(to_purge)
+        return len(to_purge)
+
     def _remove_entries_by_source(self, files: list[str]) -> None:
         for filepath in files:
             rows = self._brain.execute(
@@ -724,6 +741,7 @@ class Brain:
                                 count += 1
                         except (IOError, OSError):
                             pass
+        self._purge_deleted()
         self._update_last_index_timestamp()
         return count
 
@@ -731,7 +749,11 @@ class Brain:
         """Re-index only files changed since last index. Returns count reindexed."""
         try:
             changed_out = subprocess.run(
-                ["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD"],
+                ["git", "diff", "--name-only", "--diff-filter=ACMRD", "HEAD"],
+                capture_output=True, text=True,
+            ).stdout.strip()
+            deleted_out = subprocess.run(
+                ["git", "diff", "--name-only", "--diff-filter=D", "HEAD"],
                 capture_output=True, text=True,
             ).stdout.strip()
             untracked_out = subprocess.run(
@@ -739,20 +761,27 @@ class Brain:
                 capture_output=True, text=True,
             ).stdout.strip()
         except (FileNotFoundError, subprocess.SubprocessError):
-            changed_out, untracked_out = "", ""
+            changed_out, deleted_out, untracked_out = "", "", ""
 
         changed = changed_out.split("\n") if changed_out else []
+        deleted = deleted_out.split("\n") if deleted_out else []
         untracked = untracked_out.split("\n") if untracked_out else []
+
+        # Remove entries for explicitly deleted files
+        deleted_indexed = [f for f in deleted if f]
+        if deleted_indexed:
+            self._remove_entries_by_source(deleted_indexed)
 
         to_index = [
             f for f in changed + untracked
             if f and self._should_index(f) and Path(f).exists()
         ]
-        if not to_index:
-            return 0
 
-        self._remove_entries_by_source(to_index)
-        self._index_files(to_index)
+        if to_index:
+            self._remove_entries_by_source(to_index)
+            self._index_files(to_index)
+
+        self._purge_deleted()
         self._update_last_index_timestamp()
         return len(to_index)
 

@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_310(self):
+    def test_ac4_plugin_json_version_is_311(self):
         """
-        AC-4: plugin.json 'version' field is '3.1.0'
-        Requirement: Version bump from 3.0.9 → 3.1.0 for brain icon in activity feed (prism-0067)
-        Expected: json.loads(plugin.json)['version'] == '3.1.0'
+        AC-4: plugin.json 'version' field is '3.1.1'
+        Requirement: Version bump from 3.1.0 → 3.1.1 for brain purge deleted/excluded files
+        Expected: json.loads(plugin.json)['version'] == '3.1.1'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.1.0", (
-            f"plugin.json version is '{data.get('version')}', expected '3.1.0'"
+        assert data.get("version") == "3.1.1", (
+            f"plugin.json version is '{data.get('version')}', expected '3.1.1'"
         )
 
 
