@@ -172,20 +172,25 @@ def initialize_context_system() -> bool:
 
 
 def brain_bootstrap():
-    """Initialize Brain on first prism-loop run. Idempotent."""
-    brain_dir = Path(".prism/brain")
-
-    if (brain_dir / "brain.db").exists():
-        return  # Already initialized
-
+    """Run initial Brain indexing if brain is available."""
     try:
-        from brain_engine import Brain, ensure_dependencies
-        ensure_dependencies()
+        hooks_dir = PLUGIN_ROOT / "hooks"
+        if str(hooks_dir) not in sys.path:
+            sys.path.insert(0, str(hooks_dir))
+        from brain_engine import Brain
         brain = Brain()
-        brain.init()  # Full ingest
-    except Exception as e:
-        # Brain is optional — loop works without it
-        print(f"Brain init skipped: {e}", file=sys.stderr)
+        sources = []
+        docs_dir = Path.cwd() / "docs"
+        if docs_dir.exists():
+            sources.append(str(docs_dir))
+        core_steps = PLUGIN_ROOT / "hooks" / "core-steps"
+        if core_steps.exists():
+            sources.append(str(core_steps))
+        if sources:
+            count = brain.ingest(sources)
+            print(f"Brain: indexed {count} documents")
+    except (ImportError, Exception) as exc:
+        print(f"Brain: bootstrap skipped ({exc})", file=sys.stderr)
 
 
 def detect_git_branch() -> str:

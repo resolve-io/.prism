@@ -1,4 +1,4 @@
-PLAN VERIFICATION: Check Story Completeness
+PLAN VERIFICATION: Check Story Coverage Against Requirements
 
 ## Understanding the System (DO THIS FIRST)
 1. Your prompt includes a ## System Context section with relevant
