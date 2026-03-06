@@ -73,7 +73,7 @@ Historical implementation journey and results for the sub-agent system.
 
 **Implemented:**
 - 6 active hooks (story context, validation, tracking)
-- Obsidian memory system with Smart Connections
+- Brain engine for learning persistence
 - Token optimization (30-50% reduction per skill)
 
 **Results:**
