@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_314(self):
+    def test_ac4_plugin_json_version_is_315(self):
         """
-        AC-4: plugin.json 'version' field is '3.1.4'
-        Requirement: Version bump from 3.1.3 → 3.1.4 for snapshot TIMING section and conductor fixes
-        Expected: json.loads(plugin.json)['version'] == '3.1.4'
+        AC-4: plugin.json 'version' field is '3.1.5'
+        Requirement: Version bump from 3.1.4 → 3.1.5 for epsilon-greedy conductor and brain relevance filtering
+        Expected: json.loads(plugin.json)['version'] == '3.1.5'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.1.4", (
-            f"plugin.json version is '{data.get('version')}', expected '3.1.4'"
+        assert data.get("version") == "3.1.5", (
+            f"plugin.json version is '{data.get('version')}', expected '3.1.5'"
         )
 
 
@@ -254,9 +254,9 @@ class TestAC5_VersionOrdering:
         text = _changelog_text()
         first_version = re.search(r"## \[(\d+\.\d+\.\d+)\]", text)
         assert first_version, "No version headings found in CHANGELOG"
-        assert first_version.group(1) == "2.5.0", (
+        assert first_version.group(1) == "2.6.4", (
             f"First version in CHANGELOG is '{first_version.group(1)}', "
-            f"expected '2.5.0' (should be latest)"
+            f"expected '2.6.4' (should be latest)"
         )
 
 
