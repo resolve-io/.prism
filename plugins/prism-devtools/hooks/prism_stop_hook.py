@@ -38,7 +38,7 @@ WORKFLOW_STEPS = [
     ("red_gate", None, None, "gate", 3, None),
     ("implement_tasks", "dev", "develop-story", "agent", None, "green"),
     ("verify_green_state", "qa", "verify-green-state", "agent", None, "green_full"),
-    ("green_gate", None, None, "gate", None, None),
+    ("green_gate", None, None, "gate", 5, None),
 ]
 
 
