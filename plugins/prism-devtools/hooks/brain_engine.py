@@ -723,6 +723,64 @@ class Brain:
     # Ingest
     # ------------------------------------------------------------------
 
+    def _ingest_mulch_expertise(self) -> int:
+        """Ingest .mulch/expertise/*.jsonl files into Brain with domain='expertise'.
+
+        Each JSONL record is indexed as a separate document. Content is built from
+        description, content, and resolution fields (whichever are present).
+        The domain name from the filename stem is embedded in the content.
+
+        Returns count of newly indexed records.
+        """
+        expertise_dir = Path(".mulch") / "expertise"
+        if not expertise_dir.exists():
+            return 0
+
+        count = 0
+        for jsonl_file in sorted(expertise_dir.glob("*.jsonl")):
+            domain_name = jsonl_file.stem  # e.g. "brain", "cli", "hooks"
+            try:
+                lines = jsonl_file.read_text(encoding="utf-8", errors="replace").splitlines()
+            except (IOError, OSError):
+                continue
+            for raw in lines:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    record = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+
+                rec_id = record.get("id") or ""
+                if not rec_id:
+                    continue
+
+                doc_id = f"expertise:{domain_name}:{rec_id}"
+                parts: list[str] = [f"[expertise:{domain_name}]"]
+                if record.get("name"):
+                    parts.append(f"name: {record['name']}")
+                if record.get("type"):
+                    parts.append(f"type: {record['type']}")
+                if record.get("description"):
+                    parts.append(record["description"])
+                if record.get("content"):
+                    parts.append(record["content"])
+                if record.get("resolution"):
+                    parts.append(f"resolution: {record['resolution']}")
+
+                content = "\n".join(parts)
+                if self._ingest_single(
+                    doc_id,
+                    content,
+                    source_file=str(jsonl_file),
+                    domain="expertise",
+                ):
+                    count += 1
+        return count
+
     def ingest(self, sources: list[str]) -> int:
         """Full index of all provided file paths or directories. Returns doc count."""
         count = 0
@@ -746,6 +804,7 @@ class Brain:
                                 count += 1
                         except (IOError, OSError):
                             pass
+        count += self._ingest_mulch_expertise()
         self._purge_deleted()
         self._update_last_index_timestamp()
         return count

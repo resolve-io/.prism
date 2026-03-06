@@ -224,11 +224,10 @@ def test_fts5_delete_removes_entry(tmp_path):
     )
 
 
-def test_ingest_completes_without_database_error(tmp_path):
+def test_ingest_completes_without_database_error(tmp_path, monkeypatch):
     """Brain.ingest() completes without DatabaseError on a fresh db."""
-    import tempfile, os
-
     brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)  # isolate from real .mulch/expertise/
 
     # Create a temp source file to ingest
     src = tmp_path / "sample.py"
@@ -329,6 +328,116 @@ def test_purge_deleted_called_by_ingest(tmp_path):
     assert brain._brain.execute(
         "SELECT COUNT(*) FROM docs WHERE source_file = ?", (str(src),)
     ).fetchone()[0] == 0, "ingest() should have purged deleted file entry"
+
+
+# ---------------------------------------------------------------------------
+# Mulch expertise ingestion tests
+# ---------------------------------------------------------------------------
+
+def test_ingest_mulch_expertise_indexes_records(tmp_path, monkeypatch):
+    """_ingest_mulch_expertise() indexes JSONL records with domain='expertise'."""
+    expertise_dir = tmp_path / ".mulch" / "expertise"
+    expertise_dir.mkdir(parents=True)
+    (expertise_dir / "brain.jsonl").write_text(
+        '{"id":"mx-abc1","type":"pattern","name":"test-pattern","description":"Brain implements hybrid search."}\n'
+        '{"id":"mx-abc2","type":"failure","description":"Brain was empty.","resolution":"Always call ingest()."}\n',
+        encoding="utf-8",
+    )
+
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    count = brain._ingest_mulch_expertise()
+    assert count == 2
+
+    # Verify domain and doc_id
+    rows = brain._brain.execute(
+        "SELECT id, domain FROM docs WHERE domain = 'expertise'"
+    ).fetchall()
+    ids = {r["id"] for r in rows}
+    assert "expertise:brain:mx-abc1" in ids
+    assert "expertise:brain:mx-abc2" in ids
+    assert all(r["domain"] == "expertise" for r in rows)
+
+
+def test_ingest_mulch_expertise_content_includes_resolution(tmp_path, monkeypatch):
+    """Resolution field is embedded in the indexed content."""
+    expertise_dir = tmp_path / ".mulch" / "expertise"
+    expertise_dir.mkdir(parents=True)
+    (expertise_dir / "hooks.jsonl").write_text(
+        '{"id":"mx-xyz","type":"failure","description":"Hook failed.","resolution":"Add error handling."}\n',
+        encoding="utf-8",
+    )
+
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    brain._ingest_mulch_expertise()
+
+    row = brain._brain.execute(
+        "SELECT content FROM docs WHERE id = 'expertise:hooks:mx-xyz'"
+    ).fetchone()
+    assert row is not None
+    assert "resolution: Add error handling." in row["content"]
+    assert "[expertise:hooks]" in row["content"]
+
+
+def test_ingest_mulch_expertise_skips_missing_dir(tmp_path, monkeypatch):
+    """_ingest_mulch_expertise() returns 0 when .mulch/expertise doesn't exist."""
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    count = brain._ingest_mulch_expertise()
+    assert count == 0
+
+
+def test_ingest_mulch_expertise_skips_records_without_id(tmp_path, monkeypatch):
+    """Records missing 'id' field are silently skipped."""
+    expertise_dir = tmp_path / ".mulch" / "expertise"
+    expertise_dir.mkdir(parents=True)
+    (expertise_dir / "cli.jsonl").write_text(
+        '{"type":"pattern","description":"No id here."}\n'
+        '{"id":"mx-good","description":"Has id."}\n',
+        encoding="utf-8",
+    )
+
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    count = brain._ingest_mulch_expertise()
+    assert count == 1
+
+
+def test_ingest_calls_mulch_expertise(tmp_path, monkeypatch):
+    """ingest() includes expertise records in its return count."""
+    expertise_dir = tmp_path / ".mulch" / "expertise"
+    expertise_dir.mkdir(parents=True)
+    (expertise_dir / "conductor.jsonl").write_text(
+        '{"id":"mx-c1","description":"Conductor uses epsilon-greedy."}\n',
+        encoding="utf-8",
+    )
+
+    src = tmp_path / "sample.py"
+    src.write_text("def foo(): pass")
+
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    count = brain.ingest([str(src)])
+    # 1 source file + 1 expertise record
+    assert count == 2
+
+
+def test_ingest_mulch_expertise_dedup(tmp_path, monkeypatch):
+    """Re-ingesting unchanged expertise records does not increment count."""
+    expertise_dir = tmp_path / ".mulch" / "expertise"
+    expertise_dir.mkdir(parents=True)
+    (expertise_dir / "brain.jsonl").write_text(
+        '{"id":"mx-dup","description":"Same content every time."}\n',
+        encoding="utf-8",
+    )
+
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    first = brain._ingest_mulch_expertise()
+    second = brain._ingest_mulch_expertise()
+    assert first == 1
+    assert second == 0  # content hash unchanged, skip
 
 
 def test_incremental_reindex_does_not_corrupt(tmp_path, monkeypatch):
