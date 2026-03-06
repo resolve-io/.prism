@@ -288,7 +288,11 @@ class Brain:
                 content TEXT NOT NULL,
                 domain TEXT,
                 content_hash TEXT,
-                indexed_at TEXT DEFAULT (datetime('now'))
+                indexed_at TEXT DEFAULT (datetime('now')),
+                entity_name TEXT,
+                entity_kind TEXT,
+                line_start INTEGER,
+                line_end INTEGER
             );
             CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(
                 id UNINDEXED,
@@ -316,6 +320,27 @@ class Brain:
                 value TEXT
             );
         """)
+        # Migrate existing DBs: add chunk metadata columns if missing
+        _meta_cols = [
+            ("entity_name", "TEXT"),
+            ("entity_kind", "TEXT"),
+            ("line_start", "INTEGER"),
+            ("line_end", "INTEGER"),
+        ]
+        existing_cols = {
+            row[1]
+            for row in self._brain.execute("PRAGMA table_info(docs)").fetchall()
+        }
+        for _col, _col_type in _meta_cols:
+            if _col not in existing_cols:
+                try:
+                    self._brain.execute(
+                        f"ALTER TABLE docs ADD COLUMN {_col} {_col_type}"
+                    )
+                    self._brain.commit()
+                except sqlite3.OperationalError:
+                    pass
+
         if self.vector_enabled:
             try:
                 self._brain.execute(
@@ -463,12 +488,327 @@ class Brain:
                 self._brain.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
         self._brain.commit()
 
+    # ------------------------------------------------------------------
+    # Chunking helpers
+    # ------------------------------------------------------------------
+
+    def _chunk_source_file(self, filepath: str, content: str) -> list[dict]:
+        """Split a source file into semantic chunks.
+
+        Returns a list of chunk dicts with keys:
+          doc_id, content, entity_name, entity_kind, line_start, line_end
+
+        Code files (.py/.ts/.tsx/.js/.jsx/.cs): split by function/class/module.
+        Other files: single whole-file chunk with entity_kind='module'.
+        """
+        suffix = Path(filepath).suffix.lower()
+        lines = content.splitlines()
+        n = len(lines) or 1
+
+        if suffix not in _TS_LANG_MAP:
+            # Non-code file: single whole-file chunk
+            return [{
+                "doc_id": filepath,
+                "content": content,
+                "entity_name": "__module__",
+                "entity_kind": "module",
+                "line_start": 1,
+                "line_end": n,
+            }]
+
+        lang_name = _TS_LANG_MAP[suffix]
+        parser = _get_treesitter_parser(lang_name)
+
+        if parser is not None and suffix == ".py":
+            chunks = self._chunk_python_treesitter(filepath, content, parser, lines)
+        else:
+            chunks = self._chunk_regex_fallback(filepath, content, lines, suffix)
+
+        return chunks
+
+    def _chunk_python_treesitter(
+        self, filepath: str, content: str, parser: object, lines: list[str]
+    ) -> list[dict]:
+        """Chunk a Python file using tree-sitter AST."""
+        raw = content.encode("utf-8", errors="replace")
+        tree = parser.parse(raw)  # type: ignore[attr-defined]
+        root = tree.root_node
+
+        chunks: list[dict] = []
+        covered: set[int] = set()  # 0-indexed line numbers
+
+        for child in root.children:  # type: ignore[attr-defined]
+            # Handle decorated definitions (decorators + def/class)
+            if child.type == "decorated_definition":
+                inner = next(
+                    (c for c in child.children  # type: ignore[attr-defined]
+                     if c.type in ("function_definition", "class_definition")),
+                    None,
+                )
+                if inner is None:
+                    continue
+                def_node = inner
+                outer_node = child
+            elif child.type in ("function_definition", "class_definition"):
+                def_node = child
+                outer_node = child
+            else:
+                continue
+
+            kind = "function" if def_node.type == "function_definition" else "class"
+            name_node = next(
+                (c for c in def_node.children if c.type == "identifier"),  # type: ignore[attr-defined]
+                None,
+            )
+            if name_node is None:
+                continue
+            name = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+
+            start = outer_node.start_point[0]  # type: ignore[attr-defined]
+            end = outer_node.end_point[0]      # type: ignore[attr-defined]
+
+            chunk_lines = lines[start:end + 1]
+            chunk_content = "\n".join(chunk_lines)
+
+            # Prepend docstring summary for richer embeddings
+            summary = self._extract_python_docstring(def_node)
+            if summary:
+                chunk_content = f"{summary}\n\n{chunk_content}"
+
+            for i in range(start, end + 1):
+                covered.add(i)
+
+            chunks.append({
+                "doc_id": f"{filepath}::{name}",
+                "content": chunk_content,
+                "entity_name": name,
+                "entity_kind": kind,
+                "line_start": start + 1,
+                "line_end": end + 1,
+            })
+
+        # Module-level chunk: non-empty lines not covered by any definition
+        module_lines = [
+            lines[i] for i in range(len(lines))
+            if i not in covered and lines[i].strip()
+        ]
+        if module_lines:
+            # Check for a module-level docstring
+            module_summary = self._summarize_chunk(
+                "\n".join(lines[:10]), "module"
+            )
+            module_content = "\n".join(module_lines)
+            if module_summary and not module_content.startswith(module_summary):
+                module_content = f"{module_summary}\n\n{module_content}"
+            chunks.append({
+                "doc_id": f"{filepath}::__module__",
+                "content": module_content,
+                "entity_name": "__module__",
+                "entity_kind": "module",
+                "line_start": 1,
+                "line_end": len(lines) or 1,
+            })
+
+        if not chunks:
+            return [{
+                "doc_id": filepath,
+                "content": content,
+                "entity_name": "__module__",
+                "entity_kind": "module",
+                "line_start": 1,
+                "line_end": len(lines) or 1,
+            }]
+
+        return chunks
+
+    @staticmethod
+    def _extract_python_docstring(func_or_class_node: object) -> str:
+        """Extract docstring text from a Python function/class AST node."""
+        body = next(
+            (c for c in func_or_class_node.children if c.type == "block"),  # type: ignore[attr-defined]
+            None,
+        )
+        if body is None:
+            return ""
+        for child in body.children:  # type: ignore[attr-defined]
+            if child.type == "expression_statement":
+                str_node = next(
+                    (c for c in child.children if c.type == "string"),  # type: ignore[attr-defined]
+                    None,
+                )
+                if str_node is not None:
+                    raw = str_node.text.decode("utf-8", errors="replace").strip()  # type: ignore[attr-defined]
+                    for q in ('"""', "'''"):
+                        if raw.startswith(q) and len(raw) > len(q) * 2:
+                            return raw[len(q):raw.rfind(q)].strip()
+                    if len(raw) > 2 and raw[0] in ('"', "'") and raw[-1] == raw[0]:
+                        return raw[1:-1]
+                break
+            elif child.type not in ("comment", "newline", "indent", "\n"):
+                break
+        return ""
+
+    @staticmethod
+    def _summarize_chunk(chunk_content: str, entity_kind: str) -> str:
+        """Extract a summary from chunk content for improved embedding quality.
+
+        Looks for the first triple-quoted docstring or leading comment block
+        after the entity definition line.  Returns summary text or empty string.
+        """
+        lines = chunk_content.splitlines()
+        i = 0
+        # Skip leading decorator / def / class / shebang lines
+        while i < len(lines):
+            stripped = lines[i].strip()
+            if stripped.startswith(("@", "def ", "async def ", "class ", "#!")):
+                i += 1
+                continue
+            break
+
+        while i < len(lines):
+            stripped = lines[i].strip()
+            if not stripped:
+                i += 1
+                continue
+            # Triple-quoted docstring
+            for q in ('"""', "'''"):
+                if stripped.startswith(q):
+                    rest = stripped[len(q):]
+                    end_idx = rest.find(q)
+                    if end_idx >= 0:
+                        # Single-line docstring
+                        return rest[:end_idx].strip()
+                    # Multi-line: keep scanning
+                    doc_parts = [rest]
+                    i += 1
+                    while i < len(lines):
+                        l = lines[i]
+                        s = l.strip()
+                        end_idx = s.find(q)
+                        if end_idx >= 0:
+                            doc_parts.append(s[:end_idx])
+                            return "\n".join(doc_parts).strip()
+                        doc_parts.append(l)
+                        i += 1
+                    return "\n".join(doc_parts).strip()
+            # Leading comment block
+            if stripped.startswith("#"):
+                comment_lines = []
+                while i < len(lines) and lines[i].strip().startswith("#"):
+                    comment_lines.append(lines[i].strip().lstrip("#").strip())
+                    i += 1
+                return "\n".join(comment_lines)
+            break  # non-docstring content
+        return ""
+
+    def _chunk_regex_fallback(
+        self, filepath: str, content: str, lines: list[str], suffix: str
+    ) -> list[dict]:
+        """Chunk a source file using regex patterns (fallback without tree-sitter)."""
+        if suffix == ".py":
+            patterns = [
+                (re.compile(r"^(?:async\s+)?def\s+(\w+)"), "function"),
+                (re.compile(r"^class\s+(\w+)"), "class"),
+            ]
+        elif suffix in (".ts", ".tsx", ".js", ".jsx"):
+            patterns = [
+                (re.compile(r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)"), "function"),
+                (re.compile(r"^(?:export\s+)?class\s+(\w+)"), "class"),
+            ]
+        elif suffix == ".cs":
+            patterns = [
+                (re.compile(r"^\s*(?:public|private|protected|internal|static).*\s+(\w+)\s*\("), "function"),
+                (re.compile(r"^\s*(?:public|private|protected|internal)?\s*class\s+(\w+)"), "class"),
+            ]
+        else:
+            patterns = []
+
+        if not patterns:
+            return [{
+                "doc_id": filepath,
+                "content": content,
+                "entity_name": "__module__",
+                "entity_kind": "module",
+                "line_start": 1,
+                "line_end": len(lines) or 1,
+            }]
+
+        # Find all top-level definition start lines
+        definitions: list[tuple[int, str, str]] = []  # (0-indexed line, name, kind)
+        for i, line in enumerate(lines):
+            for pattern, kind in patterns:
+                m = pattern.match(line)
+                if m:
+                    definitions.append((i, m.group(1), kind))
+                    break
+
+        if not definitions:
+            return [{
+                "doc_id": filepath,
+                "content": content,
+                "entity_name": "__module__",
+                "entity_kind": "module",
+                "line_start": 1,
+                "line_end": len(lines) or 1,
+            }]
+
+        chunks: list[dict] = []
+        covered: set[int] = set()
+
+        for idx, (start, name, kind) in enumerate(definitions):
+            end = (
+                definitions[idx + 1][0] - 1
+                if idx + 1 < len(definitions)
+                else len(lines) - 1
+            )
+            chunk_lines = lines[start:end + 1]
+            chunk_content = "\n".join(chunk_lines)
+            summary = self._summarize_chunk(chunk_content, kind)
+            if summary and not chunk_content.startswith(summary):
+                chunk_content = f"{summary}\n\n{chunk_content}"
+            for i in range(start, end + 1):
+                covered.add(i)
+            chunks.append({
+                "doc_id": f"{filepath}::{name}",
+                "content": chunk_content,
+                "entity_name": name,
+                "entity_kind": kind,
+                "line_start": start + 1,
+                "line_end": end + 1,
+            })
+
+        module_lines = [
+            lines[i] for i in range(len(lines))
+            if i not in covered and lines[i].strip()
+        ]
+        if module_lines:
+            module_content = "\n".join(module_lines)
+            chunks.append({
+                "doc_id": f"{filepath}::__module__",
+                "content": module_content,
+                "entity_name": "__module__",
+                "entity_kind": "module",
+                "line_start": 1,
+                "line_end": len(lines) or 1,
+            })
+
+        return chunks
+
     def _index_files(self, files: list[str]) -> None:
         for filepath in files:
             try:
                 content = Path(filepath).read_text(encoding="utf-8", errors="replace")
-                self._ingest_single(filepath, content, source_file=filepath,
-                                    domain=Path(filepath).suffix.lstrip("."))
+                domain = Path(filepath).suffix.lstrip(".")
+                chunks = self._chunk_source_file(filepath, content)
+                for chunk in chunks:
+                    self._ingest_single(
+                        chunk["doc_id"], chunk["content"],
+                        source_file=filepath, domain=domain,
+                        entity_name=chunk["entity_name"],
+                        entity_kind=chunk["entity_kind"],
+                        line_start=chunk["line_start"],
+                        line_end=chunk["line_end"],
+                    )
             except (IOError, OSError):
                 pass
 
@@ -478,6 +818,10 @@ class Brain:
         content: str,
         source_file: Optional[str] = None,
         domain: Optional[str] = None,
+        entity_name: Optional[str] = None,
+        entity_kind: Optional[str] = None,
+        line_start: Optional[int] = None,
+        line_end: Optional[int] = None,
     ) -> bool:
         """Ingest one document. Returns True if actually indexed (not skipped)."""
         chash = self._content_hash(content)
@@ -489,9 +833,11 @@ class Brain:
 
         self._brain.execute(
             "INSERT OR REPLACE INTO docs "
-            "(id, source_file, content, domain, content_hash) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (doc_id, source_file, content, domain, chash),
+            "(id, source_file, content, domain, content_hash, "
+            " entity_name, entity_kind, line_start, line_end) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (doc_id, source_file, content, domain, chash,
+             entity_name, entity_kind, line_start, line_end),
         )
         if self.vector_enabled:
             vec = self._embed(content)
@@ -1057,7 +1403,9 @@ class Brain:
         ids = [item["doc_id"] for item in top]
         placeholders = ",".join("?" * len(ids))
         rows = self._brain.execute(
-            f"SELECT id, content, domain FROM docs WHERE id IN ({placeholders})", ids
+            f"SELECT id, content, domain, entity_name, entity_kind, line_start, line_end "
+            f"FROM docs WHERE id IN ({placeholders})",
+            ids,
         ).fetchall()
         content_map = {r["id"]: r for r in rows}
 
@@ -1069,6 +1417,10 @@ class Brain:
                     "doc_id": item["doc_id"],
                     "content": row["content"],
                     "domain": row["domain"],
+                    "entity_name": row["entity_name"],
+                    "entity_kind": row["entity_kind"],
+                    "line_start": row["line_start"],
+                    "line_end": row["line_end"],
                     "rrf_score": item.get("rrf_score", 0.0),
                 })
         return results
@@ -1223,18 +1575,36 @@ class Brain:
                 continue
             if p.is_file() and self._should_index(source):
                 content = p.read_text(encoding="utf-8", errors="replace")
-                if self._ingest_single(source, content, source_file=source,
-                                       domain=p.suffix.lstrip(".")):
-                    count += 1
+                domain = p.suffix.lstrip(".")
+                chunks = self._chunk_source_file(source, content)
+                for chunk in chunks:
+                    if self._ingest_single(
+                        chunk["doc_id"], chunk["content"],
+                        source_file=source, domain=domain,
+                        entity_name=chunk["entity_name"],
+                        entity_kind=chunk["entity_kind"],
+                        line_start=chunk["line_start"],
+                        line_end=chunk["line_end"],
+                    ):
+                        count += 1
             elif p.is_dir():
                 for child in p.rglob("*"):
                     if child.is_file() and self._should_index(str(child)):
                         try:
                             content = child.read_text(encoding="utf-8", errors="replace")
                             rel = str(child)
-                            if self._ingest_single(rel, content, source_file=rel,
-                                                   domain=child.suffix.lstrip(".")):
-                                count += 1
+                            domain = child.suffix.lstrip(".")
+                            chunks = self._chunk_source_file(rel, content)
+                            for chunk in chunks:
+                                if self._ingest_single(
+                                    chunk["doc_id"], chunk["content"],
+                                    source_file=rel, domain=domain,
+                                    entity_name=chunk["entity_name"],
+                                    entity_kind=chunk["entity_kind"],
+                                    line_start=chunk["line_start"],
+                                    line_end=chunk["line_end"],
+                                ):
+                                    count += 1
                         except (IOError, OSError):
                             pass
         count += self._ingest_mulch_expertise()

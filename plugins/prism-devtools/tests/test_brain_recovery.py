@@ -234,7 +234,9 @@ def test_ingest_completes_without_database_error(tmp_path, monkeypatch):
     src.write_text("def hello(): pass\n# prism sample file")
 
     count = brain.ingest([str(src)])
-    assert count == 1, "ingest() should index 1 document"
+    # With chunking, a Python file with 1 function + module-level code produces
+    # >= 1 chunk (exact count depends on tree-sitter availability)
+    assert count >= 1, "ingest() should index at least one chunk"
 
     # Verify it's searchable
     results = brain.search("hello", limit=5)
@@ -542,3 +544,159 @@ def test_vector_search_domain_filter_respects_limit(tmp_path, monkeypatch):
 
     results = brain._vector_search("query", domain="py", limit=3)
     assert len(results) <= 3, "domain-filtered results must not exceed limit"
+
+
+# ---------------------------------------------------------------------------
+# _chunk_source_file / _summarize_chunk tests
+# ---------------------------------------------------------------------------
+
+def test_chunk_source_file_python_produces_function_chunk(tmp_path):
+    """_chunk_source_file returns a chunk for each Python function found."""
+    brain = _make_brain_in(tmp_path)
+    src = tmp_path / "mymod.py"
+    content = "def add(a, b):\n    return a + b\n\ndef subtract(a, b):\n    return a - b\n"
+    chunks = brain._chunk_source_file(str(src), content)
+    names = [c["entity_name"] for c in chunks]
+    assert "add" in names, "should produce a chunk for 'add'"
+    assert "subtract" in names, "should produce a chunk for 'subtract'"
+
+
+def test_chunk_source_file_python_chunk_doc_id_format(tmp_path):
+    """doc_id for function chunks is filepath::entity_name."""
+    brain = _make_brain_in(tmp_path)
+    src = tmp_path / "mod.py"
+    content = "def greet(name):\n    pass\n"
+    chunks = brain._chunk_source_file(str(src), content)
+    func_chunks = [c for c in chunks if c["entity_name"] == "greet"]
+    assert func_chunks, "should have a chunk for 'greet'"
+    assert func_chunks[0]["doc_id"] == f"{src}::greet"
+
+
+def test_chunk_source_file_python_entity_kind(tmp_path):
+    """entity_kind is 'function' for functions and 'class' for classes."""
+    brain = _make_brain_in(tmp_path)
+    src = tmp_path / "mod.py"
+    content = "class Foo:\n    pass\n\ndef bar():\n    pass\n"
+    chunks = brain._chunk_source_file(str(src), content)
+    by_name = {c["entity_name"]: c for c in chunks}
+    assert by_name.get("Foo", {}).get("entity_kind") == "class"
+    assert by_name.get("bar", {}).get("entity_kind") == "function"
+
+
+def test_chunk_source_file_python_line_numbers(tmp_path):
+    """line_start and line_end are set for each chunk."""
+    brain = _make_brain_in(tmp_path)
+    src = tmp_path / "mod.py"
+    content = "def foo():\n    pass\n"
+    chunks = brain._chunk_source_file(str(src), content)
+    func_chunks = [c for c in chunks if c["entity_name"] == "foo"]
+    assert func_chunks, "should have a chunk for 'foo'"
+    assert func_chunks[0]["line_start"] >= 1
+    assert func_chunks[0]["line_end"] >= func_chunks[0]["line_start"]
+
+
+def test_chunk_source_file_non_code_returns_single_chunk(tmp_path):
+    """Non-code files produce a single whole-file chunk with entity_kind='module'."""
+    brain = _make_brain_in(tmp_path)
+    src = tmp_path / "README.md"
+    content = "# Hello\n\nThis is a readme.\n"
+    chunks = brain._chunk_source_file(str(src), content)
+    assert len(chunks) == 1
+    assert chunks[0]["entity_kind"] == "module"
+    assert chunks[0]["doc_id"] == str(src)
+    assert chunks[0]["content"] == content
+
+
+def test_chunk_source_file_empty_python_returns_single_chunk(tmp_path):
+    """Empty Python file produces one chunk."""
+    brain = _make_brain_in(tmp_path)
+    src = tmp_path / "empty.py"
+    chunks = brain._chunk_source_file(str(src), "")
+    assert len(chunks) == 1
+
+
+def test_chunk_source_file_regex_fallback(tmp_path):
+    """_chunk_regex_fallback produces chunks for Python functions."""
+    brain = _make_brain_in(tmp_path)
+    src = tmp_path / "mod.py"
+    content = "def alpha():\n    pass\n\ndef beta():\n    pass\n"
+    lines = content.splitlines()
+    chunks = brain._chunk_regex_fallback(str(src), content, lines, ".py")
+    names = [c["entity_name"] for c in chunks]
+    assert "alpha" in names
+    assert "beta" in names
+
+
+def test_summarize_chunk_extracts_docstring():
+    """_summarize_chunk returns triple-quoted docstring text."""
+    content = 'def foo():\n    """This is the docstring."""\n    pass\n'
+    summary = Brain._summarize_chunk(content, "function")
+    assert "docstring" in summary
+
+
+def test_summarize_chunk_multiline_docstring():
+    """_summarize_chunk handles multiline docstrings."""
+    content = 'def foo():\n    """First line.\n\n    Second line.\n    """\n    pass\n'
+    summary = Brain._summarize_chunk(content, "function")
+    assert "First line" in summary
+
+
+def test_summarize_chunk_returns_empty_for_no_docstring():
+    """_summarize_chunk returns empty string when no docstring is present."""
+    content = "def foo():\n    x = 1\n    return x\n"
+    summary = Brain._summarize_chunk(content, "function")
+    assert summary == ""
+
+
+def test_chunk_round_trip_ingest_search(tmp_path, monkeypatch):
+    """Chunked Python file is searchable after ingest with entity metadata."""
+    import subprocess as sp
+
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    src = tmp_path / "mylib.py"
+    src.write_text(
+        "def compute_frobnicate(x):\n"
+        "    \"\"\"Frobnicate a value.\"\"\"\n"
+        "    return x * 2\n"
+    )
+
+    count = brain.ingest([str(src)])
+    assert count >= 1
+
+    results = brain.search("frobnicate", limit=5)
+    assert len(results) > 0, "chunked function should be searchable"
+
+    # Check that chunk metadata is present in results
+    first = results[0]
+    assert "entity_name" in first
+    assert "entity_kind" in first
+    assert "line_start" in first
+    assert "line_end" in first
+
+
+def test_chunk_multiple_chunks_per_file_purge(tmp_path, monkeypatch):
+    """_purge_deleted removes all chunks for a deleted file."""
+    brain = _make_brain_in(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    src = tmp_path / "multi.py"
+    src.write_text("def alpha():\n    pass\n\ndef beta():\n    pass\n")
+    brain.ingest([str(src)])
+
+    # Verify multiple chunks indexed
+    row_count = brain._brain.execute(
+        "SELECT COUNT(*) FROM docs WHERE source_file = ?", (str(src),)
+    ).fetchone()[0]
+    assert row_count >= 1
+
+    # Delete the file and purge
+    src.unlink()
+    purged = brain._purge_deleted()
+    assert purged >= 1
+
+    remaining = brain._brain.execute(
+        "SELECT COUNT(*) FROM docs WHERE source_file = ?", (str(src),)
+    ).fetchone()[0]
+    assert remaining == 0, "all chunks for deleted file should be purged"
