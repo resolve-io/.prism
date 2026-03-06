@@ -13,11 +13,13 @@ deps are unavailable.
 
 from __future__ import annotations
 
+import ctypes
 import json
 import re
 import sqlite3
 import subprocess
 import sys
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -35,6 +37,64 @@ class BrainCorruptError(Exception):
 # ---------------------------------------------------------------------------
 _MODEL = None
 _SQLITE_VEC_LOADED = False
+
+# ---------------------------------------------------------------------------
+# Tree-sitter language loader
+# ---------------------------------------------------------------------------
+_TS_PARSER_CACHE: dict[str, object] = {}
+_TS_LANGS_LIB: Optional[ctypes.CDLL] = None
+_TS_AVAILABLE = False
+
+
+def _init_treesitter_lib() -> None:
+    """Load the bundled tree-sitter-languages .so and mark availability."""
+    global _TS_LANGS_LIB, _TS_AVAILABLE
+    if _TS_AVAILABLE:
+        return
+    try:
+        import tree_sitter_languages as _tsl
+        lib_path = Path(_tsl.__path__[0]) / "languages.so"
+        if not lib_path.exists():
+            return
+        _TS_LANGS_LIB = ctypes.cdll.LoadLibrary(str(lib_path))
+        _TS_AVAILABLE = True
+    except Exception:
+        pass
+
+
+def _get_treesitter_parser(lang_name: str) -> Optional[object]:
+    """Return a cached tree_sitter.Parser for the given language, or None."""
+    if lang_name in _TS_PARSER_CACHE:
+        return _TS_PARSER_CACHE[lang_name]
+    _init_treesitter_lib()
+    if not _TS_AVAILABLE or _TS_LANGS_LIB is None:
+        return None
+    try:
+        import tree_sitter
+        fn_name = f"tree_sitter_{lang_name}"
+        fn = getattr(_TS_LANGS_LIB, fn_name, None)
+        if fn is None:
+            return None
+        fn.restype = ctypes.c_void_p
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            lang = tree_sitter.Language(fn())
+        parser = tree_sitter.Parser(lang)
+        _TS_PARSER_CACHE[lang_name] = parser
+        return parser
+    except Exception:
+        return None
+
+
+# Map file suffix -> tree-sitter language name (as in languages.so symbol)
+_TS_LANG_MAP: dict[str, str] = {
+    ".py": "python",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".cs": "c_sharp",
+}
 
 
 def _try_enable_vector(db: sqlite3.Connection) -> bool:
@@ -456,21 +516,366 @@ class Brain:
         return True
 
     def _index_graph(self, filepath: str, content: str) -> None:
-        """Extract entities from source and store in graph.db."""
-        entities = self._extract_entities(filepath, content)
+        """Extract entities and relationships from source and store in graph.db."""
+        suffix = Path(filepath).suffix.lower()
+        lang_name = _TS_LANG_MAP.get(suffix)
+        parser = _get_treesitter_parser(lang_name) if lang_name else None
+
+        if parser is not None:
+            entities, relationships = self._extract_entities_treesitter(
+                filepath, content, parser, suffix
+            )
+        else:
+            entities = self._extract_entities(filepath, content)
+            relationships = []
+
         for name, kind, line in entities:
             self._graph.execute(
                 "INSERT OR IGNORE INTO entities (name, kind, file, line) "
                 "VALUES (?, ?, ?, ?)",
                 (name, kind, filepath, line),
             )
+
+        # Ensure all relationship endpoint entities exist before inserting
+        for src_name, tgt_name, relation in relationships:
+            for ename in (src_name, tgt_name):
+                self._graph.execute(
+                    "INSERT OR IGNORE INTO entities (name, kind, file, line) "
+                    "VALUES (?, ?, ?, ?)",
+                    (ename, "unknown", filepath, 0),
+                )
+            row_src = self._graph.execute(
+                "SELECT id FROM entities WHERE name = ? AND file = ? LIMIT 1",
+                (src_name, filepath),
+            ).fetchone()
+            row_tgt = self._graph.execute(
+                "SELECT id FROM entities WHERE name = ? LIMIT 1", (tgt_name,)
+            ).fetchone()
+            if row_src and row_tgt:
+                self._graph.execute(
+                    "INSERT OR IGNORE INTO relationships (source_id, target_id, relation) "
+                    "VALUES (?, ?, ?)",
+                    (row_src["id"], row_tgt["id"], relation),
+                )
+
         self._graph.commit()
+
+    @staticmethod
+    def _extract_entities_treesitter(
+        filepath: str, content: str, parser: object, suffix: str
+    ) -> tuple[list[tuple[str, str, int]], list[tuple[str, str, str]]]:
+        """Extract entities and relationships via tree-sitter AST.
+
+        Returns:
+            (entities, relationships) where:
+              entities: list of (name, kind, line_number)
+              relationships: list of (source_name, target_name, relation)
+                relation in {'calls', 'imports', 'extends'}
+        """
+        entities: list[tuple[str, str, int]] = []
+        relationships: list[tuple[str, str, str]] = []
+
+        raw = content.encode("utf-8", errors="replace")
+        tree = parser.parse(raw)  # type: ignore[attr-defined]
+        root = tree.root_node
+        file_stem = Path(filepath).stem
+
+        if suffix == ".py":
+            Brain._ts_extract_python(root, file_stem, entities, relationships)
+        elif suffix in (".ts", ".tsx", ".js", ".jsx"):
+            Brain._ts_extract_js_ts(root, file_stem, entities, relationships)
+        elif suffix == ".cs":
+            Brain._ts_extract_csharp(root, file_stem, entities, relationships)
+
+        # File as module entity (always)
+        if file_stem:
+            entities.append((file_stem, "file", 0))
+
+        return entities, relationships
+
+    @staticmethod
+    def _ts_collect_calls(
+        node: object,
+        container_name: str,
+        relationships: list[tuple[str, str, str]],
+        call_node_types: tuple[str, ...],
+        call_name_extractor,  # callable(call_node) -> str | None
+    ) -> None:
+        """Walk node subtree collecting call relationships."""
+        stack = [node]
+        while stack:
+            n = stack.pop()
+            if n.type in call_node_types:  # type: ignore[attr-defined]
+                callee = call_name_extractor(n)
+                if callee:
+                    relationships.append((container_name, callee, "calls"))
+            stack.extend(reversed(n.children))  # type: ignore[attr-defined]
+
+    @staticmethod
+    def _ts_extract_python(
+        root: object,
+        file_stem: str,
+        entities: list[tuple[str, str, int]],
+        relationships: list[tuple[str, str, str]],
+    ) -> None:
+        """Extract Python entities and relationships from AST root."""
+
+        def _py_call_name(node: object) -> Optional[str]:
+            func = next(
+                (c for c in node.children if c.type in ("identifier", "attribute")),  # type: ignore[attr-defined]
+                None,
+            )
+            if func is None:
+                return None
+            if func.type == "identifier":
+                return func.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+            # attribute: foo.bar -> take last identifier
+            parts = [c for c in func.children if c.type == "identifier"]  # type: ignore[attr-defined]
+            return parts[-1].text.decode("utf-8", errors="replace") if parts else None  # type: ignore[attr-defined]
+
+        def _walk_top(node: object) -> None:
+            for child in node.children:  # type: ignore[attr-defined]
+                t = child.type
+                if t == "import_statement":
+                    # import os, sys
+                    for name_node in child.children:  # type: ignore[attr-defined]
+                        if name_node.type in ("dotted_name", "identifier"):
+                            mod = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                            relationships.append((file_stem, mod, "imports"))
+                elif t == "import_from_statement":
+                    # from pathlib import Path
+                    mod_node = next(
+                        (c for c in child.children if c.type in ("dotted_name", "relative_import", "identifier")),  # type: ignore[attr-defined]
+                        None,
+                    )
+                    if mod_node:
+                        mod = mod_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                        relationships.append((file_stem, mod, "imports"))
+                elif t == "class_definition":
+                    name_node = next(
+                        (c for c in child.children if c.type == "identifier"), None  # type: ignore[attr-defined]
+                    )
+                    if name_node:
+                        cls_name = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                        line = name_node.start_point[0] + 1  # type: ignore[attr-defined]
+                        entities.append((cls_name, "class", line))
+                        # Extends: argument_list children that are identifiers
+                        arg_list = next(
+                            (c for c in child.children if c.type == "argument_list"), None  # type: ignore[attr-defined]
+                        )
+                        if arg_list:
+                            for base in arg_list.children:  # type: ignore[attr-defined]
+                                if base.type == "identifier":
+                                    base_name = base.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                                    relationships.append((cls_name, base_name, "extends"))
+                        # Methods inside class body
+                        body = next(
+                            (c for c in child.children if c.type == "block"), None  # type: ignore[attr-defined]
+                        )
+                        if body:
+                            _walk_class_body(body, cls_name)
+                elif t == "function_definition" or t == "decorated_definition":
+                    _handle_func(child, file_stem)
+                elif t == "block":
+                    _walk_top(child)
+
+        def _handle_func(node: object, container: str) -> None:
+            fn_node = node if node.type == "function_definition" else next(  # type: ignore[attr-defined]
+                (c for c in node.children if c.type == "function_definition"), None  # type: ignore[attr-defined]
+            )
+            if fn_node is None:
+                return
+            name_node = next(
+                (c for c in fn_node.children if c.type == "identifier"), None  # type: ignore[attr-defined]
+            )
+            if name_node:
+                fn_name = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                line = name_node.start_point[0] + 1  # type: ignore[attr-defined]
+                entities.append((fn_name, "function", line))
+                body = next((c for c in fn_node.children if c.type == "block"), None)  # type: ignore[attr-defined]
+                if body:
+                    Brain._ts_collect_calls(body, fn_name, relationships, ("call",), _py_call_name)
+
+        def _walk_class_body(body: object, cls_name: str) -> None:
+            for member in body.children:  # type: ignore[attr-defined]
+                if member.type in ("function_definition", "decorated_definition"):
+                    _handle_func(member, cls_name)
+
+        _walk_top(root)
+
+    @staticmethod
+    def _ts_extract_js_ts(
+        root: object,
+        file_stem: str,
+        entities: list[tuple[str, str, int]],
+        relationships: list[tuple[str, str, str]],
+    ) -> None:
+        """Extract JS/TS entities and relationships from AST root."""
+
+        def _js_call_name(node: object) -> Optional[str]:
+            func = next(
+                (c for c in node.children if c.type in ("identifier", "member_expression")),  # type: ignore[attr-defined]
+                None,
+            )
+            if func is None:
+                return None
+            if func.type == "identifier":
+                return func.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+            # member_expression: obj.method -> last identifier
+            parts = [c for c in func.children if c.type in ("identifier", "property_identifier")]  # type: ignore[attr-defined]
+            return parts[-1].text.decode("utf-8", errors="replace") if parts else None  # type: ignore[attr-defined]
+
+        def _walk(node: object) -> None:
+            for child in node.children:  # type: ignore[attr-defined]
+                t = child.type
+                if t == "import_statement":
+                    src_node = next(
+                        (c for c in child.children if c.type == "string"), None  # type: ignore[attr-defined]
+                    )
+                    if src_node:
+                        raw_mod = src_node.text.decode("utf-8", errors="replace").strip("'\"")  # type: ignore[attr-defined]
+                        mod = Path(raw_mod).stem if raw_mod.startswith(".") else raw_mod
+                        relationships.append((file_stem, mod, "imports"))
+                elif t in ("class_declaration", "class"):
+                    _handle_class(child)
+                elif t == "export_statement":
+                    # export class / export function
+                    inner = next(
+                        (c for c in child.children if c.type in ("class_declaration", "function_declaration")),  # type: ignore[attr-defined]
+                        None,
+                    )
+                    if inner:
+                        if inner.type == "class_declaration":
+                            _handle_class(inner)
+                        else:
+                            _handle_func(inner, file_stem)
+                elif t == "function_declaration":
+                    _handle_func(child, file_stem)
+                elif t in ("lexical_declaration", "variable_declaration"):
+                    _walk(child)
+                elif t == "variable_declarator":
+                    # const Foo = class { ... } or const fn = () => { ... }
+                    inner = next(
+                        (c for c in child.children if c.type in ("class", "arrow_function", "function")),  # type: ignore[attr-defined]
+                        None,
+                    )
+                    if inner:
+                        name_node = next((c for c in child.children if c.type == "identifier"), None)  # type: ignore[attr-defined]
+                        if name_node:
+                            nm = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                            if inner.type == "class":
+                                entities.append((nm, "class", name_node.start_point[0] + 1))  # type: ignore[attr-defined]
+                            else:
+                                entities.append((nm, "function", name_node.start_point[0] + 1))  # type: ignore[attr-defined]
+
+        def _handle_class(node: object) -> None:
+            name_node = next(
+                (c for c in node.children if c.type in ("identifier", "type_identifier")), None  # type: ignore[attr-defined]
+            )
+            if not name_node:
+                return
+            cls_name = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+            entities.append((cls_name, "class", name_node.start_point[0] + 1))  # type: ignore[attr-defined]
+            heritage = next((c for c in node.children if c.type == "class_heritage"), None)  # type: ignore[attr-defined]
+            if heritage:
+                extends = next((c for c in heritage.children if c.type == "extends_clause"), None)  # type: ignore[attr-defined]
+                if extends:
+                    base = next(
+                        (c for c in extends.children if c.type in ("identifier", "type_identifier")), None  # type: ignore[attr-defined]
+                    )
+                    if base:
+                        relationships.append((cls_name, base.text.decode("utf-8", errors="replace"), "extends"))  # type: ignore[attr-defined]
+            body = next((c for c in node.children if c.type == "class_body"), None)  # type: ignore[attr-defined]
+            if body:
+                for member in body.children:  # type: ignore[attr-defined]
+                    if member.type == "method_definition":
+                        mname_node = next(
+                            (c for c in member.children if c.type in ("identifier", "property_identifier")), None  # type: ignore[attr-defined]
+                        )
+                        if mname_node:
+                            mname = mname_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                            entities.append((mname, "method", mname_node.start_point[0] + 1))  # type: ignore[attr-defined]
+                            mbody = next((c for c in member.children if c.type == "statement_block"), None)  # type: ignore[attr-defined]
+                            if mbody:
+                                Brain._ts_collect_calls(mbody, mname, relationships, ("call_expression",), _js_call_name)
+
+        def _handle_func(node: object, container: str) -> None:
+            name_node = next((c for c in node.children if c.type == "identifier"), None)  # type: ignore[attr-defined]
+            if name_node:
+                fn_name = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                entities.append((fn_name, "function", name_node.start_point[0] + 1))  # type: ignore[attr-defined]
+                body = next((c for c in node.children if c.type == "statement_block"), None)  # type: ignore[attr-defined]
+                if body:
+                    Brain._ts_collect_calls(body, fn_name, relationships, ("call_expression",), _js_call_name)
+
+        _walk(root)
+
+    @staticmethod
+    def _ts_extract_csharp(
+        root: object,
+        file_stem: str,
+        entities: list[tuple[str, str, int]],
+        relationships: list[tuple[str, str, str]],
+    ) -> None:
+        """Extract C# entities and relationships from AST root."""
+
+        def _cs_call_name(node: object) -> Optional[str]:
+            func = next(
+                (c for c in node.children if c.type in ("identifier", "member_access_expression")),  # type: ignore[attr-defined]
+                None,
+            )
+            if func is None:
+                return None
+            if func.type == "identifier":
+                return func.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+            parts = [c for c in func.children if c.type == "identifier"]  # type: ignore[attr-defined]
+            return parts[-1].text.decode("utf-8", errors="replace") if parts else None  # type: ignore[attr-defined]
+
+        def _walk(node: object) -> None:
+            for child in node.children:  # type: ignore[attr-defined]
+                t = child.type
+                if t == "using_directive":
+                    name_node = next(
+                        (c for c in child.children if c.type in ("identifier", "qualified_name")), None  # type: ignore[attr-defined]
+                    )
+                    if name_node:
+                        mod = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                        relationships.append((file_stem, mod, "imports"))
+                elif t in ("namespace_declaration", "declaration_list", "compilation_unit"):
+                    _walk(child)
+                elif t == "class_declaration":
+                    _handle_class(child)
+
+        def _handle_class(node: object) -> None:
+            name_node = next((c for c in node.children if c.type == "identifier"), None)  # type: ignore[attr-defined]
+            if not name_node:
+                return
+            cls_name = name_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+            entities.append((cls_name, "class", name_node.start_point[0] + 1))  # type: ignore[attr-defined]
+            base_list = next((c for c in node.children if c.type == "base_list"), None)  # type: ignore[attr-defined]
+            if base_list:
+                for base in base_list.children:  # type: ignore[attr-defined]
+                    if base.type == "identifier":
+                        relationships.append((cls_name, base.text.decode("utf-8", errors="replace"), "extends"))  # type: ignore[attr-defined]
+            body = next((c for c in node.children if c.type == "declaration_list"), None)  # type: ignore[attr-defined]
+            if body:
+                for member in body.children:  # type: ignore[attr-defined]
+                    if member.type == "method_declaration":
+                        mname_node = next((c for c in member.children if c.type == "identifier"), None)  # type: ignore[attr-defined]
+                        if mname_node:
+                            mname = mname_node.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+                            entities.append((mname, "method", mname_node.start_point[0] + 1))  # type: ignore[attr-defined]
+                            mbody = next((c for c in member.children if c.type == "block"), None)  # type: ignore[attr-defined]
+                            if mbody:
+                                Brain._ts_collect_calls(mbody, mname, relationships, ("invocation_expression",), _cs_call_name)
+
+        _walk(root)
 
     @staticmethod
     def _extract_entities(
         filepath: str, content: str
     ) -> list[tuple[str, str, int]]:
-        """Extract (name, kind, line) from source content via regex."""
+        """Extract (name, kind, line) from source content via regex (fallback)."""
         results: list[tuple[str, str, int]] = []
         for i, line in enumerate(content.splitlines(), start=1):
             # Python class
