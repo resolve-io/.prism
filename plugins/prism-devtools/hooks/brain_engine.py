@@ -665,7 +665,7 @@ class Brain:
             self.last_result_count = 0
             return ""
 
-        results = [r for r in results if r.get("rrf_score", 0.0) >= 0.1]
+        results = [r for r in results if r.get("rrf_score", 0.0) >= 0.02]
         if not results:
             self.last_result_count = 0
             return ""
