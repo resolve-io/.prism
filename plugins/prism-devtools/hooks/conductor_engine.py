@@ -11,9 +11,11 @@ Gracefully degrades when Brain or its dependencies are unavailable.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import random
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -22,6 +24,10 @@ from typing import Optional
 EPSILON_START = 0.3
 EPSILON_MIN = 0.05
 EPSILON_DECAY = 0.05
+
+# Phase 7.3: variant retirement thresholds
+RETIRE_AVG_SCORE_THRESHOLD = 0.3
+RETIRE_MIN_RUNS = 5
 
 
 class Conductor:
@@ -46,23 +52,137 @@ class Conductor:
             from brain_engine import Brain
             self._brain = Brain()
             self._brain_available = True
+            self._sync_canopy_variants()
         except Exception as exc:
             print(
                 f"Conductor: Brain unavailable ({exc}), running without context",
                 file=sys.stderr,
             )
 
+    def _sync_canopy_variants(self) -> int:
+        """Sync .canopy/prompts.jsonl variants into Brain prompt_variants (Phase 7.2).
+
+        Reads .canopy/prompts.jsonl relative to git root and upserts each record
+        into scores.db prompt_variants with source='canopy'. Returns count synced.
+        """
+        if not self._brain_available or self._brain is None:
+            return 0
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                return 0
+            prompts_file = Path(result.stdout.strip()) / ".canopy" / "prompts.jsonl"
+            if not prompts_file.exists():
+                return 0
+            count = 0
+            for line in prompts_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                prompt_id = record.get("prompt_id")
+                persona = record.get("persona")
+                content = record.get("content", "")
+                if not prompt_id or not persona or not content:
+                    continue
+                self._brain._scores.execute(
+                    "INSERT OR REPLACE INTO prompt_variants "
+                    "(prompt_id, persona, content, source) VALUES (?, ?, ?, 'canopy')",
+                    (prompt_id, persona, content),
+                )
+                count += 1
+            if count:
+                self._brain._scores.commit()
+            return count
+        except Exception as exc:
+            print(f"Conductor: _sync_canopy_variants failed ({exc})", file=sys.stderr)
+            return 0
+
+    def _is_retired(self, prompt_id: str) -> bool:
+        """Check if a prompt variant is in the retired_variants table."""
+        if not self._brain_available or self._brain is None:
+            return False
+        try:
+            row = self._brain._scores.execute(
+                "SELECT 1 FROM retired_variants WHERE prompt_id = ?",
+                (prompt_id,),
+            ).fetchone()
+            return row is not None
+        except Exception:
+            return False
+
+    def _check_retirement(self, prompt_id: str, persona: str, step_id: str) -> bool:
+        """Retire a variant if avg_score < threshold and total_runs >= min (Phase 7.3).
+
+        Returns True if the variant was newly retired.
+        """
+        if not self._brain_available or self._brain is None:
+            return False
+        try:
+            agg = self._brain._scores.execute(
+                "SELECT avg_score, total_runs FROM score_aggregates "
+                "WHERE prompt_id = ? AND persona = ? AND step_id = ?",
+                (prompt_id, persona, step_id),
+            ).fetchone()
+            if agg is None:
+                return False
+            if (
+                agg["avg_score"] < RETIRE_AVG_SCORE_THRESHOLD
+                and agg["total_runs"] >= RETIRE_MIN_RUNS
+            ):
+                reason = (
+                    f"avg_score={agg['avg_score']:.3f} < {RETIRE_AVG_SCORE_THRESHOLD} "
+                    f"after {agg['total_runs']} runs"
+                )
+                self._brain._scores.execute(
+                    "INSERT OR REPLACE INTO retired_variants "
+                    "(prompt_id, persona, retired_at, reason) "
+                    "VALUES (?, ?, datetime('now'), ?)",
+                    (prompt_id, persona, reason),
+                )
+                self._brain._scores.commit()
+                print(
+                    f"Conductor: retired variant {prompt_id!r} ({reason})",
+                    file=sys.stderr,
+                )
+                return True
+        except Exception as exc:
+            print(f"Conductor: _check_retirement failed ({exc})", file=sys.stderr)
+        return False
+
     def _epsilon(self, total_runs: int) -> float:
         """Compute current epsilon for epsilon-greedy exploration."""
         return max(EPSILON_MIN, EPSILON_START * math.exp(-EPSILON_DECAY * total_runs))
 
     def _random_variant(self, persona: str) -> str:
-        """Pick a random prompt variant for the given persona."""
+        """Pick a random non-retired prompt variant for the given persona."""
         prompts_dir = Path(__file__).parent.parent / "prompts" / persona
         try:
             variants = list(prompts_dir.glob("*.md"))
             if variants:
-                return f"{persona}/{random.choice(variants).stem}"
+                if self._brain_available and self._brain is not None:
+                    try:
+                        retired = {
+                            row[0]
+                            for row in self._brain._scores.execute(
+                                "SELECT prompt_id FROM retired_variants WHERE persona = ?",
+                                (persona,),
+                            ).fetchall()
+                        }
+                        variants = [
+                            v for v in variants
+                            if f"{persona}/{v.stem}" not in retired
+                        ]
+                    except Exception:
+                        pass
+                if variants:
+                    return f"{persona}/{random.choice(variants).stem}"
         except Exception:
             pass
         return f"{persona}/default"
@@ -78,6 +198,9 @@ class Conductor:
                 prompt_id = self._random_variant(persona)
             else:
                 prompt_id = self._brain.best_prompt(persona, step_id)
+                # If the best prompt is retired, fall back to a random non-retired variant
+                if self._is_retired(prompt_id):
+                    prompt_id = self._random_variant(persona)
             variant_name = prompt_id.split("/", 1)[1] if "/" in prompt_id else "default"
             content = self._brain.get_prompt(persona, variant_name)
             return (prompt_id, content)
@@ -162,6 +285,7 @@ class Conductor:
         actual_prompt_id = self._load_prompt_id() or self.last_prompt_id or prompt_id
         try:
             self._brain.record_outcome(actual_prompt_id, persona, step_id, metrics)
+            self._check_retirement(actual_prompt_id, persona, step_id)
         except Exception as exc:
             print(f"Conductor: record_outcome failed ({exc})", file=sys.stderr)
 
