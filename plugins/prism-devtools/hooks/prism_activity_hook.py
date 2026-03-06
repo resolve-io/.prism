@@ -47,18 +47,46 @@ def _brief_context(tool_name: str, tool_input: dict) -> str:
     return ""
 
 
+def _record_skill_invocation(session_id: str, tool_input: dict) -> None:
+    """Record a Skill invocation to scores.db. Best-effort, never raises."""
+    try:
+        skill_name = (
+            tool_input.get("name")
+            or tool_input.get("skill_name")
+            or tool_input.get("skillName")
+            or ""
+        )
+        if not session_id:
+            return
+        from brain_engine import Brain
+        Brain().record_skill_usage(session_id=session_id, skill_name=str(skill_name))
+    except Exception:
+        pass
+
+
 def main():
     try:
         input_data = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         sys.exit(0)
 
+    tool_name = input_data.get("tool_name", "")
+    session_id = input_data.get("session_id", "")
+
+    tool_input = input_data.get("tool_input", {})
+    if isinstance(tool_input, str):
+        try:
+            tool_input = json.loads(tool_input)
+        except (json.JSONDecodeError, ValueError):
+            tool_input = {}
+
+    # Phase 6.3: Track Skill invocations for all sessions
+    if tool_name == "Skill":
+        _record_skill_invocation(session_id, tool_input)
+
     # Fast path: no state file means no active workflow
     if not STATE_FILE.exists():
         sys.exit(0)
-
-    tool_name = input_data.get("tool_name", "")
-    session_id = input_data.get("session_id", "")
 
     try:
         content = STATE_FILE.read_text(encoding="utf-8")
@@ -77,13 +105,6 @@ def main():
             sys.exit(0)
 
     # Build compact thought description
-    tool_input = input_data.get("tool_input", {})
-    if isinstance(tool_input, str):
-        try:
-            tool_input = json.loads(tool_input)
-        except (json.JSONDecodeError, ValueError):
-            tool_input = {}
-
     context = _brief_context(tool_name, tool_input)
     thought = f"{tool_name}: {context}" if context else ""
 

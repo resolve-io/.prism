@@ -15,6 +15,7 @@ import io
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Optional
 
 # Fix Windows console encoding for Unicode support
 if sys.stdout.encoding != 'utf-8':
@@ -571,6 +572,118 @@ def get_usage_from_transcript(transcript_path: str, step_line_start: int = 0) ->
     }
 
 
+def get_session_metrics_from_transcript(transcript_path: str) -> dict:
+    """Parse transcript for session-level metrics: files_read, files_modified, skills_invoked, duration_s.
+
+    Counts tool_use blocks to tally Read/Glob/Grep (files_read),
+    Edit/Write (files_modified), and Skill calls (skills_invoked).
+    Duration is estimated from first and last timestamps in the transcript.
+    """
+    READ_TOOLS = {"Read", "Glob", "Grep"}
+    WRITE_TOOLS = {"Edit", "Write"}
+    files_read = 0
+    files_modified = 0
+    skills_invoked = 0
+    total_tokens = 0
+    first_ts: Optional[datetime] = None
+    last_ts: Optional[datetime] = None
+
+    empty = {
+        "files_read": 0, "files_modified": 0, "skills_invoked": 0,
+        "duration_s": 0, "tokens_used": 0,
+    }
+
+    if not transcript_path:
+        return empty
+
+    try:
+        tp = Path(transcript_path).expanduser()
+        if not tp.exists():
+            return empty
+
+        with open(tp, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                # Accumulate tokens
+                usage = entry.get("usage")
+                if not usage and isinstance(entry.get("message"), dict):
+                    usage = entry["message"].get("usage")
+                if usage and isinstance(usage, dict):
+                    total_tokens += usage.get("input_tokens", 0)
+                    total_tokens += usage.get("cache_creation_input_tokens", 0)
+                    total_tokens += usage.get("cache_read_input_tokens", 0)
+                    total_tokens += usage.get("output_tokens", 0)
+
+                # Track timestamps for duration
+                ts_str = entry.get("timestamp") or entry.get("ts")
+                if ts_str and isinstance(ts_str, str):
+                    try:
+                        ts_dt = datetime.fromisoformat(ts_str.rstrip("Z"))
+                        if first_ts is None:
+                            first_ts = ts_dt
+                        last_ts = ts_dt
+                    except ValueError:
+                        pass
+
+                # Count tool_use blocks
+                msg = entry.get("message", entry)
+                content = msg.get("content", []) if isinstance(msg, dict) else []
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "tool_use":
+                            name = block.get("name", "")
+                            if name in READ_TOOLS:
+                                files_read += 1
+                            elif name in WRITE_TOOLS:
+                                files_modified += 1
+                            elif name == "Skill":
+                                skills_invoked += 1
+
+    except (IOError, OSError):
+        pass
+
+    duration_s = 0
+    if first_ts and last_ts:
+        duration_s = max(0, int((last_ts - first_ts).total_seconds()))
+
+    return {
+        "files_read": files_read,
+        "files_modified": files_modified,
+        "skills_invoked": skills_invoked,
+        "duration_s": duration_s,
+        "tokens_used": total_tokens,
+    }
+
+
+def _record_session_outcome(input_data: dict) -> None:
+    """Record session-level metrics to scores.db. Best-effort, never raises."""
+    try:
+        session_id = input_data.get("session_id", "")
+        if not session_id:
+            return
+        transcript_path = input_data.get("transcript_path", "")
+        metrics = get_session_metrics_from_transcript(transcript_path)
+        from brain_engine import Brain
+        brain = Brain()
+        brain.record_session_outcome(
+            session_id=session_id,
+            duration_s=metrics["duration_s"],
+            tokens_used=metrics["tokens_used"],
+            files_read=metrics["files_read"],
+            files_modified=metrics["files_modified"],
+            skills_invoked=metrics["skills_invoked"],
+        )
+    except Exception:
+        pass  # Never interrupt Claude's stop behavior
+
+
 def parse_frontmatter(content: str) -> dict:
     """Parse YAML frontmatter from state file."""
     result = {
@@ -821,6 +934,9 @@ def main():
 
     # Get session_id from Claude Code's hook JSON input (official API)
     current_session_id = get_session_id_from_input(input_data)
+
+    # Phase 6.1: Record session outcome for ALL sessions (best-effort, non-blocking)
+    _record_session_outcome(input_data)
 
     if not STATE_FILE.exists():
         sys.exit(0)

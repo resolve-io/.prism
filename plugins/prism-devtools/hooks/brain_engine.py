@@ -389,6 +389,21 @@ class Brain:
                 retired_at TEXT DEFAULT (datetime('now')),
                 reason TEXT
             );
+            CREATE TABLE IF NOT EXISTS session_outcomes (
+                session_id TEXT PRIMARY KEY,
+                duration_s INTEGER DEFAULT 0,
+                tokens_used INTEGER DEFAULT 0,
+                files_read INTEGER DEFAULT 0,
+                files_modified INTEGER DEFAULT 0,
+                skills_invoked INTEGER DEFAULT 0,
+                timestamp TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS skill_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                skill_name TEXT NOT NULL,
+                timestamp TEXT DEFAULT (datetime('now'))
+            );
         """)
 
     # ------------------------------------------------------------------
@@ -1455,6 +1470,38 @@ class Brain:
         if metric_name == "retry_rate":
             return max(0.0, 1.0 - (value / 3.0))
         return value
+
+    def record_session_outcome(
+        self,
+        session_id: str,
+        duration_s: int,
+        tokens_used: int,
+        files_read: int,
+        files_modified: int,
+        skills_invoked: int,
+    ) -> None:
+        """Upsert session-level outcome metrics into session_outcomes table."""
+        self._scores.execute(
+            "INSERT OR REPLACE INTO session_outcomes "
+            "(session_id, duration_s, tokens_used, files_read, files_modified, skills_invoked, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+            (session_id, duration_s, tokens_used, files_read, files_modified, skills_invoked),
+        )
+        self._scores.commit()
+
+    def record_skill_usage(
+        self,
+        session_id: str,
+        skill_name: str,
+        timestamp: str = "",
+    ) -> None:
+        """Record a skill invocation into skill_usage table."""
+        ts = timestamp or datetime.now(timezone.utc).isoformat()
+        self._scores.execute(
+            "INSERT INTO skill_usage (session_id, skill_name, timestamp) VALUES (?, ?, ?)",
+            (session_id, skill_name, ts),
+        )
+        self._scores.commit()
 
 
 # ---------------------------------------------------------------------------
