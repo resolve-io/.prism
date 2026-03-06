@@ -1115,6 +1115,57 @@ def _cmd_status(brain: "Brain") -> int:
     return 0
 
 
+def _cmd_graph(brain: "Brain", entity: str) -> int:
+    results = brain.graph_query(entity)
+    if not results:
+        print(f"No relationships found for entity '{entity}'")
+        return 0
+    for r in results:
+        name = r.get("name", "?")
+        kind = r.get("kind", "?")
+        file_ = r.get("file", "?")
+        relation = r.get("relation", "?")
+        print(f"  --[{relation}]--> {name} ({kind})  {file_}")
+    return 0
+
+
+def _cmd_explain(brain: "Brain", filepath: str) -> int:
+    rows = brain._brain.execute(
+        "SELECT id, domain, content FROM docs WHERE source_file = ? OR id LIKE ? ORDER BY id",
+        (filepath, f"%{filepath}%"),
+    ).fetchall()
+    if not rows:
+        print(f"No indexed chunks found for '{filepath}'")
+        return 0
+    print(f"Brain knowledge for: {filepath}")
+    print(f"  {len(rows)} chunk(s) indexed")
+    for row in rows:
+        snippet = row["content"][:200].replace("\n", " ")
+        domain = row["domain"] or "—"
+        print(f"\n  [chunk] {row['id']}  domain={domain}")
+        print(f"    {snippet}")
+    entities = brain._graph.execute(
+        "SELECT name, kind FROM entities WHERE file = ? LIMIT 20", (filepath,)
+    ).fetchall()
+    if entities:
+        print(f"\n  Graph entities ({len(entities)}):")
+        for e in entities:
+            print(f"    {e['name']} ({e['kind']})")
+    return 0
+
+
+def _cmd_rebuild(brain: "Brain") -> int:
+    brain._purge_deleted()
+    sources = _cli_source_dirs()
+    count = brain.ingest(sources)
+    if brain.vector_enabled:
+        mode = "Full \u2014 BM25+Vector+GraphRAG"
+    else:
+        mode = "BM25+GraphRAG"
+    print(f"Brain: rebuilt index — {count} documents from {len(sources)} source(s) (mode: {mode})")
+    return 0
+
+
 def _print_usage() -> None:
     print("Usage: python3 brain_engine.py <command> [args]")
     print("")
@@ -1123,6 +1174,9 @@ def _print_usage() -> None:
     print("  ingest            Re-index all sources (same as init)")
     print("  search <query>    Search indexed knowledge")
     print("  status            Show index health and statistics")
+    print("  graph <entity>    Show entity relationships in the graph")
+    print("  explain <file>    Show what Brain knows about a file")
+    print("  rebuild           Full purge + reindex")
 
 
 if __name__ == "__main__":
@@ -1169,6 +1223,20 @@ if __name__ == "__main__":
         rc = _cmd_search(b, " ".join(args[1:]))
     elif cmd == "status":
         rc = _cmd_status(b)
+    elif cmd == "graph":
+        if len(args) < 2:
+            print("Error: graph requires an entity argument", file=sys.stderr)
+            _print_usage()
+            sys.exit(1)
+        rc = _cmd_graph(b, " ".join(args[1:]))
+    elif cmd == "explain":
+        if len(args) < 2:
+            print("Error: explain requires a file argument", file=sys.stderr)
+            _print_usage()
+            sys.exit(1)
+        rc = _cmd_explain(b, args[1])
+    elif cmd == "rebuild":
+        rc = _cmd_rebuild(b)
     else:
         print(f"Error: unknown command '{cmd}'", file=sys.stderr)
         _print_usage()

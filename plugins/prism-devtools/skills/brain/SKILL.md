@@ -45,6 +45,30 @@ new source types.
 python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" ingest
 ```
 
+### /brain graph <entity>
+Show all relationships for an entity in the knowledge graph.
+Useful for tracing call chains, inheritance, and file dependencies.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" graph "<entity>"
+```
+
+### /brain explain <file>
+Show everything Brain has indexed for a specific file:
+chunk count, content snippets, domain, and graph entities.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" explain "<file>"
+```
+
+### /brain rebuild
+Full purge of deleted files + complete reindex of all sources.
+Use when the index is stale or after large-scale file moves.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" rebuild
+```
+
 ## Architecture
 
 See [Brain Architecture](./reference/brain-architecture.md) for:
