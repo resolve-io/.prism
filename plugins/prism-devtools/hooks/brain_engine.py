@@ -1214,6 +1214,70 @@ class Brain:
                     count += 1
         return count
 
+    def _ingest_overstory_logs(self) -> int:
+        """Ingest .overstory/logs/**/*.ndjson into Brain with domain='sessions'.
+
+        Each NDJSON file is indexed as one document. Content is built from
+        event fields (timestamp, event, agentName, data). Uses source_file=None
+        to avoid _purge_deleted() conflicts (.overstory is an excluded path segment).
+
+        Returns count of newly indexed records.
+        """
+        logs_dir = Path(".overstory") / "logs"
+        if not logs_dir.exists():
+            return 0
+
+        count = 0
+        for ndjson_file in sorted(logs_dir.rglob("*.ndjson")):
+            try:
+                lines = ndjson_file.read_text(encoding="utf-8", errors="replace").splitlines()
+            except (IOError, OSError):
+                continue
+
+            events = []
+            for raw in lines:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    event = json.loads(raw)
+                    if isinstance(event, dict):
+                        events.append(event)
+                except json.JSONDecodeError:
+                    continue
+
+            if not events:
+                continue
+
+            # Build searchable content from event fields
+            rel = str(ndjson_file)
+            parts: list[str] = [f"[sessions] {ndjson_file.parent.name} {ndjson_file.stem}"]
+            for event in events:
+                ts = event.get("timestamp", "")[:19]
+                ev = event.get("event", "")
+                agent = event.get("agentName", "")
+                data = event.get("data") or {}
+                msg = ""
+                if isinstance(data, dict):
+                    msg = (
+                        data.get("message")
+                        or data.get("toolName")
+                        or data.get("text")
+                        or ""
+                    )
+                line_parts = [x for x in [ts, ev, agent, str(msg)[:80]] if x]
+                if line_parts:
+                    parts.append(" ".join(line_parts))
+
+            doc_id = f"sessions:{rel}"
+            content = "\n".join(parts)
+            # source_file=None: .overstory is excluded from _should_index(), so
+            # passing the real path would cause _purge_deleted() to remove this entry.
+            if self._ingest_single(doc_id, content, source_file=None, domain="sessions"):
+                count += 1
+
+        return count
+
     def ingest(self, sources: list[str]) -> int:
         """Full index of all provided file paths or directories. Returns doc count."""
         count = 0
@@ -1238,6 +1302,7 @@ class Brain:
                         except (IOError, OSError):
                             pass
         count += self._ingest_mulch_expertise()
+        count += self._ingest_overstory_logs()
         self._purge_deleted()
         self._update_last_index_timestamp()
         return count
@@ -1571,6 +1636,61 @@ def _cmd_rebuild(brain: "Brain") -> int:
     return 0
 
 
+def _cmd_analytics(brain: "Brain") -> int:
+    outcomes_file = Path(brain._scores_db_path).parent / "outcomes.jsonl"
+    if not outcomes_file.exists():
+        print("No outcomes recorded yet.")
+        return 0
+
+    records: list[dict] = []
+    try:
+        for raw in outcomes_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                records.append(json.loads(raw))
+            except json.JSONDecodeError:
+                continue
+    except (IOError, OSError):
+        print("Error reading outcomes.jsonl", file=sys.stderr)
+        return 1
+
+    if not records:
+        print("No outcomes recorded yet.")
+        return 0
+
+    print(f"Brain Analytics — {len(records)} total outcome(s)\n")
+
+    # Group by persona/step
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for r in records:
+        key = (r.get("persona") or "?", r.get("step_id") or "?")
+        groups.setdefault(key, []).append(r)
+
+    print(f"{'Persona/Step':<42} {'Runs':>5} {'Avg':>7} {'Best':>7} {'Worst':>7}")
+    print("-" * 72)
+    for (persona, step), outcomes in sorted(groups.items()):
+        scores = [float(o["score"]) for o in outcomes if "score" in o]
+        if scores:
+            avg = sum(scores) / len(scores)
+            print(
+                f"{persona + '/' + step:<42} {len(outcomes):>5}"
+                f" {avg:>7.3f} {max(scores):>7.3f} {min(scores):>7.3f}"
+            )
+
+    # Recent trend (last 10)
+    recent = sorted(records, key=lambda r: r.get("timestamp") or "", reverse=True)[:10]
+    print(f"\nRecent outcomes (last {len(recent)}):")
+    for r in recent:
+        ts = (r.get("timestamp") or "?")[:19]
+        pid = r.get("prompt_id") or "?"
+        score = float(r.get("score") or 0.0)
+        print(f"  {ts}  {pid:<40}  score={score:.3f}")
+
+    return 0
+
+
 def _print_usage() -> None:
     print("Usage: python3 brain_engine.py <command> [args]")
     print("")
@@ -1582,6 +1702,7 @@ def _print_usage() -> None:
     print("  graph <entity>    Show entity relationships in the graph")
     print("  explain <file>    Show what Brain knows about a file")
     print("  rebuild           Full purge + reindex")
+    print("  analytics         Show outcome trends from outcomes.jsonl")
 
 
 if __name__ == "__main__":
@@ -1642,6 +1763,8 @@ if __name__ == "__main__":
         rc = _cmd_explain(b, args[1])
     elif cmd == "rebuild":
         rc = _cmd_rebuild(b)
+    elif cmd == "analytics":
+        rc = _cmd_analytics(b)
     else:
         print(f"Error: unknown command '{cmd}'", file=sys.stderr)
         _print_usage()

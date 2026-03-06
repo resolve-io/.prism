@@ -69,6 +69,14 @@ Use when the index is stale or after large-scale file moves.
 python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" rebuild
 ```
 
+### /brain analytics
+Show outcome trends from outcomes.jsonl: total runs, per-persona/step
+breakdown with avg/best/worst scores, and the 10 most recent outcomes.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" analytics
+```
+
 ## Architecture
 
 See [Brain Architecture](./reference/brain-architecture.md) for:
