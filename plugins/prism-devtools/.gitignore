@@ -59,14 +59,6 @@ coverage/
 # Claude Code temporary files
 .claude-temp/
 
-# PRISM Context Memory (runtime files only, not vault)
-.prism-memory.db
-.prism-memory-log.txt
-.prism-memory-api-log.txt
-.prism-memory.db-shm
-.prism-memory.db-wal
-.prism-knowledge/
-
 # Project-specific skills (not part of PRISM core)
 skills/orca-*/
 

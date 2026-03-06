@@ -163,9 +163,6 @@ jira:
   token: ${JIRA_API_TOKEN}
   defaultProject: PLAT
   issueKeyPattern: "[A-Z]+-\\d+"
-memory:
-  enabled: false  # Deprecated — PRISM-Memory is no longer active
-
 brain:
   enabled: true
   db_dir: .prism/brain
@@ -221,32 +218,3 @@ documentation:
     - .rb
     - .php
     - .md
-
-# Smart Connections Integration (Obsidian AI semantic search)
-smart_connections:
-  enabled: true
-  vault_path: ../docs/memory          # Main knowledge vault
-  additional_vaults:                   # Additional vaults to index
-    - path: ./.prism
-      name: PRISM System
-      include_patterns:
-        - "**/*.md"
-      exclude_patterns:
-        - "**/node_modules/**"
-        - "**/.git/**"
-        - "**/.claude-temp/**"
-
-  # Semantic optimization settings
-  semantic_tags:
-    enabled: true
-    auto_generate: false              # Manual tagging preferred for quality
-
-  # Frontmatter template for new documents
-  frontmatter_template:
-    tags: []                          # Semantic tags
-    aliases: []                       # Alternative names
-    related: []                       # Related document links
-    type: null                        # Document type (task|checklist|skill|doc)
-    domain: null                      # Domain area
-    complexity: null                  # simple|moderate|complex
-    status: draft                     # draft|active|deprecated
