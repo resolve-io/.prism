@@ -537,15 +537,29 @@ class Brain:
         try:
             import struct
             blob = struct.pack(f"{len(vec)}f", *vec)
+            # sqlite-vec vec0 doesn't support WHERE on non-vec columns,
+            # so over-fetch by 3x when domain filtering is needed, then
+            # post-filter by joining doc_id back to the docs table.
+            fetch_limit = limit * 3 if domain else limit
             rows = self._brain.execute(
                 "SELECT doc_id, distance FROM docs_vec "
                 "WHERE embedding MATCH ? AND k = ?",
-                (blob, limit),
+                (blob, fetch_limit),
             ).fetchall()
-            return [
+            results = [
                 {"doc_id": r["doc_id"], "score": 1.0 / (1.0 + r["distance"])}
                 for r in rows
             ]
+            if domain and results:
+                doc_ids = [r["doc_id"] for r in results]
+                placeholders = ",".join("?" * len(doc_ids))
+                domain_rows = self._brain.execute(
+                    f"SELECT id FROM docs WHERE id IN ({placeholders}) AND domain = ?",
+                    (*doc_ids, domain),
+                ).fetchall()
+                allowed = {r["id"] for r in domain_rows}
+                results = [r for r in results if r["doc_id"] in allowed][:limit]
+            return results
         except Exception:
             return []
 

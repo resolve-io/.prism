@@ -349,3 +349,122 @@ def test_incremental_reindex_does_not_corrupt(tmp_path, monkeypatch):
     # Should not raise
     count = brain.incremental_reindex()
     assert count == 0  # no files changed per git mock
+
+
+# ---------------------------------------------------------------------------
+# _vector_search domain filter tests
+# ---------------------------------------------------------------------------
+
+class _FakeRow:
+    """Minimal sqlite3.Row-like object for mocking docs_vec results."""
+    def __init__(self, **kwargs):
+        self._d = kwargs
+
+    def __getitem__(self, key):
+        return self._d[key]
+
+
+class _ExecInterceptor:
+    """Wraps a sqlite3.Connection, intercepting docs_vec execute() calls.
+
+    sqlite3.Connection.execute is read-only so we must replace the entire
+    _brain attribute with this wrapper rather than patching in place.
+    """
+
+    def __init__(self, real_conn, vec_rows):
+        self._real = real_conn
+        self._vec_rows = vec_rows
+
+    def execute(self, sql, params=None):
+        if "docs_vec" in sql:
+            class _Cursor:
+                def __init__(self, rows):
+                    self._rows = rows
+
+                def fetchall(self):
+                    return self._rows
+
+            return _Cursor(self._vec_rows)
+        if params is not None:
+            return self._real.execute(sql, params)
+        return self._real.execute(sql)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def test_vector_search_returns_empty_when_disabled(tmp_path):
+    """_vector_search() returns [] immediately when vector_enabled is False."""
+    brain = _make_brain_in(tmp_path)
+    brain.vector_enabled = False  # force disabled regardless of installed deps
+    results = brain._vector_search("any query", domain="py", limit=5)
+    assert results == []
+
+
+def test_vector_search_domain_filter_excludes_wrong_domain(tmp_path, monkeypatch):
+    """_vector_search() post-filters results to only include docs matching domain."""
+    brain = _make_brain_in(tmp_path)
+
+    # Insert docs with different domains so the join can filter
+    for doc_id, domain in [("a.py", "py"), ("b.md", "md"), ("c.py", "py")]:
+        brain._brain.execute(
+            "INSERT INTO docs (id, source_file, content, domain, content_hash) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (doc_id, doc_id, f"content for {doc_id}", domain, doc_id),
+        )
+    brain._brain.commit()
+
+    brain.vector_enabled = True
+    monkeypatch.setattr(brain, "_embed", lambda q: [0.0] * 384)
+    brain._brain = _ExecInterceptor(brain._brain, [
+        _FakeRow(doc_id="a.py", distance=0.1),
+        _FakeRow(doc_id="b.md", distance=0.2),
+        _FakeRow(doc_id="c.py", distance=0.3),
+    ])
+
+    results = brain._vector_search("python code", domain="py", limit=5)
+
+    result_ids = [r["doc_id"] for r in results]
+    assert "a.py" in result_ids, "a.py (domain=py) should be included"
+    assert "c.py" in result_ids, "c.py (domain=py) should be included"
+    assert "b.md" not in result_ids, "b.md (domain=md) should be excluded when filtering domain=py"
+
+
+def test_vector_search_no_domain_returns_unfiltered(tmp_path, monkeypatch):
+    """_vector_search() without domain returns all vec results without filtering."""
+    brain = _make_brain_in(tmp_path)
+    brain.vector_enabled = True
+    monkeypatch.setattr(brain, "_embed", lambda q: [0.0] * 384)
+    brain._brain = _ExecInterceptor(brain._brain, [
+        _FakeRow(doc_id="x.py", distance=0.1),
+        _FakeRow(doc_id="y.md", distance=0.2),
+    ])
+
+    results = brain._vector_search("anything", domain=None, limit=5)
+
+    result_ids = [r["doc_id"] for r in results]
+    assert "x.py" in result_ids
+    assert "y.md" in result_ids
+
+
+def test_vector_search_domain_filter_respects_limit(tmp_path, monkeypatch):
+    """_vector_search() domain filter caps results at limit after filtering."""
+    brain = _make_brain_in(tmp_path)
+
+    for i in range(6):
+        brain._brain.execute(
+            "INSERT INTO docs (id, source_file, content, domain, content_hash) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (f"f{i}.py", f"f{i}.py", f"content {i}", "py", f"h{i}"),
+        )
+    brain._brain.commit()
+
+    brain.vector_enabled = True
+    monkeypatch.setattr(brain, "_embed", lambda q: [0.0] * 384)
+    brain._brain = _ExecInterceptor(brain._brain, [
+        _FakeRow(doc_id=f"f{i}.py", distance=float(i) * 0.1)
+        for i in range(6)
+    ])
+
+    results = brain._vector_search("query", domain="py", limit=3)
+    assert len(results) <= 3, "domain-filtered results must not exceed limit"
