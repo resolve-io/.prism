@@ -259,6 +259,7 @@ def main():
         print("Final steps:")
         print("  1. Commit your changes")
         print("  2. Mark the story as Done")
+        print("  3. Save any learnings to .claude/memory/MEMORY.md")
 
         history = _read_step_history()
         metrics = _compute_metrics(history)

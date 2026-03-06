@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_317(self):
+    def test_ac4_plugin_json_version_is_318(self):
         """
-        AC-4: plugin.json 'version' field is '3.1.7'
-        Requirement: Version bump from 3.1.6 → 3.1.7 for MEMORY_PERSIST_INSTRUCTION revert and CWD STATE_FILE fix
-        Expected: json.loads(plugin.json)['version'] == '3.1.7'
+        AC-4: plugin.json 'version' field is '3.1.8'
+        Requirement: Version bump from 3.1.7 → 3.1.8 for re-adding MEMORY_PERSIST_INSTRUCTION
+        Expected: json.loads(plugin.json)['version'] == '3.1.8'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.1.7", (
-            f"plugin.json version is '{data.get('version')}', expected '3.1.7'"
+        assert data.get("version") == "3.1.8", (
+            f"plugin.json version is '{data.get('version')}', expected '3.1.8'"
         )
 
 

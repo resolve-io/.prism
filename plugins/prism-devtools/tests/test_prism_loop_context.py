@@ -25,6 +25,7 @@ from prism_loop_context import (
     WORKFLOW_INDEX,
     STEP_PHASE_MAP,
     STOP_DIRECTIVE,
+    MEMORY_PERSIST_INSTRUCTION,
     build_agent_instruction,
     detect_project_conventions,
     find_project_root,
@@ -196,6 +197,47 @@ def test_stop_directive_fallback_step():
         "docs/stories/test.md", "", MOCK_RUNNER
     )
     assert STOP_DIRECTIVE in instruction, "STOP_DIRECTIVE missing from fallback instruction"
+
+
+# --- REQ-4c: MEMORY_PERSIST_INSTRUCTION in all steps ---
+
+def test_memory_persist_instruction_in_all_steps():
+    """Every step output must contain MEMORY_PERSIST_INSTRUCTION."""
+    for step_id, agent, action in AGENT_STEPS:
+        instruction = build_agent_instruction(
+            step_id, agent, action,
+            "docs/stories/test-story.md", "", MOCK_RUNNER
+        )
+        assert MEMORY_PERSIST_INSTRUCTION in instruction, (
+            f"MEMORY_PERSIST_INSTRUCTION missing from {step_id}"
+        )
+
+
+def test_memory_persist_instruction_before_stop_directive():
+    """MEMORY_PERSIST_INSTRUCTION must appear before STOP_DIRECTIVE in every step."""
+    for step_id, agent, action in AGENT_STEPS:
+        instruction = build_agent_instruction(
+            step_id, agent, action,
+            "docs/stories/test-story.md", "", MOCK_RUNNER
+        )
+        mem_idx = instruction.find(MEMORY_PERSIST_INSTRUCTION)
+        stop_idx = instruction.find(STOP_DIRECTIVE)
+        assert mem_idx != -1, f"MEMORY_PERSIST_INSTRUCTION missing from {step_id}"
+        assert stop_idx != -1, f"STOP_DIRECTIVE missing from {step_id}"
+        assert mem_idx < stop_idx, (
+            f"MEMORY_PERSIST_INSTRUCTION must appear before STOP_DIRECTIVE in {step_id}"
+        )
+
+
+def test_memory_persist_instruction_in_fallback_step():
+    """MEMORY_PERSIST_INSTRUCTION must appear in fallback instructions for unknown steps."""
+    instruction = build_agent_instruction(
+        "unknown_step", "dev", "some-action",
+        "docs/stories/test.md", "", MOCK_RUNNER
+    )
+    assert MEMORY_PERSIST_INSTRUCTION in instruction, (
+        "MEMORY_PERSIST_INSTRUCTION missing from fallback instruction"
+    )
 
 
 # --- REQ-5: Project conventions injected ---

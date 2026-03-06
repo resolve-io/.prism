@@ -60,6 +60,11 @@ Process: Read failing test -> implement minimal code -> run tests -> iterate""",
 RETRIEVAL_INSTRUCTION = """IMPORTANT: Prefer reading actual project files over pre-trained assumptions.
 Always Glob/Grep for project conventions before writing code or tests."""
 
+# --- Memory Persist Instruction ---
+MEMORY_PERSIST_INSTRUCTION = """MEMORY: Before stopping, if you discovered something useful about this project
+(a convention, pattern, pitfall, or architectural insight), append 1-3 bullet points
+to .claude/memory/MEMORY.md at the project root. Format: "- [domain] observation". Skip if nothing new."""
+
 # --- Stop Directive ---
 STOP_DIRECTIVE = """STOP DIRECTIVE: When your task for this step is complete, STOP immediately.
 Do NOT edit state files, run workflow scripts, or attempt to advance the workflow manually.
@@ -390,6 +395,7 @@ def _build_fallback_instruction(step_id: str, agent: str, story_file: str,
     skill_text = _format_discovered_skills(discovered_skills)
     if skill_text:
         parts.extend(["", skill_text])
+    parts.extend(["", MEMORY_PERSIST_INSTRUCTION])
     parts.extend(["", STOP_DIRECTIVE])
     return "\n".join(parts)
 
@@ -467,6 +473,9 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
     # Brain context (Understanding the System) — injected before stop directive
     if brain_context:
         parts.extend(["", brain_context])
+
+    # Memory persist instruction — before stop directive
+    parts.extend(["", MEMORY_PERSIST_INSTRUCTION])
 
     # Stop directive — always last so it's fresh when agent finishes
     parts.extend(["", STOP_DIRECTIVE])
