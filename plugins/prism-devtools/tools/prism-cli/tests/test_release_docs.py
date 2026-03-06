@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_321(self):
+    def test_ac4_plugin_json_version_is_322(self):
         """
-        AC-4: plugin.json 'version' field is '3.2.1'
-        Requirement: Version bump from 3.2.0 → 3.2.1 for session-start hook + auto-memory redirect
-        Expected: json.loads(plugin.json)['version'] == '3.2.1'
+        AC-4: plugin.json 'version' field is '3.2.2'
+        Requirement: Version bump from 3.2.1 → 3.2.2 for prism-harness Python CLI package
+        Expected: json.loads(plugin.json)['version'] == '3.2.2'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.2.1", (
-            f"plugin.json version is '{data.get('version')}', expected '3.2.1'"
+        assert data.get("version") == "3.2.2", (
+            f"plugin.json version is '{data.get('version')}', expected '3.2.2'"
         )
 
 

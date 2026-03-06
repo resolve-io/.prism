@@ -1,7 +1,7 @@
 """prism-harness CLI — orchestrate end-to-end plugin tests.
 
 Subcommands:
-  run    — execute test suite (or a filtered subset)
+  run    — execute test suite (or a filtered subset); --dry-run lists without running
   parse  — re-analyze an existing results directory
   report — show the last results
   list   — list available tests
@@ -99,7 +99,28 @@ def _cmd_run(args: argparse.Namespace) -> int:
     plugin_dir = _resolve_plugin_dir(harness_dir, getattr(args, "plugin_dir", None))
     prism_test_dir = _resolve_prism_test_dir(harness_dir, getattr(args, "prism_test_dir", None))
     test_filter: str = getattr(args, "filter", None) or ""
+    dry_run: bool = getattr(args, "dry_run", False)
     use_color = sys.stdout.isatty()
+
+    # --- Dry-run mode: list matching tests and their prompts, then exit ---
+    if dry_run:
+        modules = _load_test_modules()
+        matched = [
+            m for m in modules
+            if not test_filter or test_filter in getattr(m, "NAME", "")
+        ]
+        print(f"\nDry run — {len(matched)} test(s) would run:\n")
+        for mod in matched:
+            name = getattr(mod, "NAME", mod.__name__.split(".")[-1])
+            doc = (mod.__doc__ or "").strip()
+            print(f"  {name}")
+            # Print the TC lines from the docstring as the "prompts"
+            for line in doc.splitlines():
+                line = line.strip()
+                if line.startswith("TC-"):
+                    print(f"    {line}")
+        print()
+        return 0
 
     # --- Pre-flight checks ---
     ok = True
@@ -287,6 +308,11 @@ def main() -> None:
         "--plugin-dir",
         metavar="DIR",
         help="Path to prism-devtools plugin root (overrides PLUGIN_DIR env var)",
+    )
+    run_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List which tests would run and their assertions without invoking claude",
     )
 
     # parse
