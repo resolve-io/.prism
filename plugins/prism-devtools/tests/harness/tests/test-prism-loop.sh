@@ -13,6 +13,7 @@ source "${HARNESS_DIR}/lib/scaffold.sh"
 
 run_tests() {
   log_section "test-prism-loop"
+  init_test_results "test-prism-loop"
 
   scaffold_brownfield
 
@@ -91,6 +92,7 @@ PYEOF
     log_skip "TC-5: state file absent — skipping frontmatter check"
   fi
 
+  finalize_test_results "test-prism-loop"
   scaffold_teardown
 }
 

@@ -49,6 +49,7 @@ PYEOF
 
 run_tests() {
   log_section "test-skill-discovery"
+  init_test_results "test-skill-discovery"
 
   # Skill fixtures live in .claude/skills/ at prism-test root
   scaffold_brownfield
@@ -58,6 +59,7 @@ run_tests() {
   if [[ ! -d "$skills_dir" ]]; then
     log_warn "Skills dir not found at $skills_dir — skipping discovery tests"
     log_skip "TC-1 through TC-5: prism-test .claude/skills/ not present"
+    finalize_test_results "test-skill-discovery"
     scaffold_teardown
     return
   fi
@@ -93,6 +95,7 @@ run_tests() {
   assert_json_has "*" "multiply" \
     "TC-5b: stream-json contains multiply-related output"
 
+  finalize_test_results "test-skill-discovery"
   scaffold_teardown
 }
 

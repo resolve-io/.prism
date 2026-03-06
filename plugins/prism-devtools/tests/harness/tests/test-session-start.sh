@@ -13,6 +13,7 @@ source "${HARNESS_DIR}/lib/scaffold.sh"
 
 run_tests() {
   log_section "test-session-start"
+  init_test_results "test-session-start"
 
   scaffold_brownfield
 
@@ -48,6 +49,7 @@ run_tests() {
   assert_json_has "*" "Brain" \
     "TC-5: stream-json system message mentions Brain"
 
+  finalize_test_results "test-session-start"
   scaffold_teardown
 }
 

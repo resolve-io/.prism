@@ -56,6 +56,14 @@ source "${HARNESS_DIR}/lib/common.sh"
 source "${HARNESS_DIR}/lib/scaffold.sh"
 
 # ---------------------------------------------------------------------------
+# Results directory
+# ---------------------------------------------------------------------------
+RESULTS_DIR="${HARNESS_DIR}/results"
+export RESULTS_DIR
+rm -rf "$RESULTS_DIR"
+mkdir -p "$RESULTS_DIR"
+
+# ---------------------------------------------------------------------------
 # Pre-flight checks
 # ---------------------------------------------------------------------------
 _preflight_ok=1
@@ -175,5 +183,15 @@ fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+
+# Write harness-report.json
+python3 - "$RESULTS_DIR" "$TOTAL_PASS" "$TOTAL_FAIL" "$TOTAL_SKIP" <<'PYEOF'
+import json, sys, os
+out_dir, total_pass, total_fail, total_skip = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+os.makedirs(out_dir, exist_ok=True)
+report = {"total_pass": total_pass, "total_fail": total_fail, "total_skip": total_skip}
+with open(os.path.join(out_dir, "harness-report.json"), "w") as f:
+    json.dump(report, f, indent=2)
+PYEOF
 
 (( TOTAL_FAIL == 0 ))

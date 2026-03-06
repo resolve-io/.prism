@@ -80,8 +80,11 @@ run_claude() {
     env -u CLAUDECODE claude -p "$prompt" \
       --plugin-dir "$PLUGIN_DIR" \
       --output-format stream-json \
-      --max-turns 3 \
       --dangerously-skip-permissions \
+      --no-session-persistence \
+      --model sonnet \
+      --max-budget-usd 0.50 \
+      --max-turns 3 \
       2>/dev/null
   ) > "$tmpout" || exit_code=$?
 
@@ -239,5 +242,85 @@ print(count)
     log_pass "$desc ($count events)"
   else
     log_fail "$desc (0 parseable JSON events)"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Results output helpers (optional; used when RESULTS_DIR is set by harness)
+# ---------------------------------------------------------------------------
+RESULTS_DIR="${RESULTS_DIR:-}"
+
+# init_test_results <test_name>
+# Creates output directory for a test if RESULTS_DIR is set.
+init_test_results() {
+  local test_name="$1"
+  if [[ -n "${RESULTS_DIR:-}" ]]; then
+    mkdir -p "${RESULTS_DIR}/${test_name}"
+  fi
+}
+
+# finalize_test_results <test_name>
+# Copies LAST_OUTPUT to results dir and writes summary.json + transcript.md.
+finalize_test_results() {
+  local test_name="$1"
+  if [[ -z "${RESULTS_DIR:-}" ]]; then
+    return
+  fi
+
+  local out_dir="${RESULTS_DIR}/${test_name}"
+  mkdir -p "$out_dir"
+
+  # Copy raw stream-json output
+  if [[ -n "${LAST_OUTPUT:-}" && -f "$LAST_OUTPUT" ]]; then
+    cp "$LAST_OUTPUT" "${out_dir}/raw.jsonl"
+  fi
+
+  # Write summary.json
+  python3 - "$out_dir" "$test_name" "${HARNESS_PASS}" "${HARNESS_FAIL}" <<'PYEOF'
+import json, sys, os
+out_dir, test_name, passed, total_fail = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+assertions = passed + total_fail
+summary = {
+    "test_name": test_name,
+    "passed": passed,
+    "failed": total_fail,
+    "assertions": assertions,
+}
+with open(os.path.join(out_dir, "summary.json"), "w") as f:
+    json.dump(summary, f, indent=2)
+PYEOF
+
+  # Write transcript.md extracting text and tool calls from raw.jsonl
+  if [[ -f "${out_dir}/raw.jsonl" ]]; then
+    python3 - "${out_dir}/raw.jsonl" "${out_dir}/transcript.md" <<'PYEOF'
+import json, sys
+in_path, out_path = sys.argv[1], sys.argv[2]
+lines_out = ["# Session Transcript\n"]
+
+with open(in_path) as fh:
+    for raw in fh:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        typ = obj.get("type", "")
+        if typ == "assistant":
+            for block in (obj.get("message", {}).get("content") or []):
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        lines_out.append(f"\n**Assistant:** {block['text']}\n")
+                    elif block.get("type") == "tool_use":
+                        lines_out.append(f"\n**Tool:** `{block.get('name')}` input={json.dumps(block.get('input',''))[:200]}\n")
+        elif typ == "system":
+            content = obj.get("message", {}).get("content", "")
+            if content:
+                lines_out.append(f"\n**System:** {str(content)[:200]}\n")
+
+with open(out_path, "w") as f:
+    f.writelines(lines_out)
+PYEOF
   fi
 }

@@ -41,6 +41,7 @@ scaffold_reset() {
     cd "$PRISM_TEST_DIR"
     git clean -fd --exclude=.claude -q 2>/dev/null || true
   )
+  rm -rf "$PRISM_TEST_DIR/.prism"
 
   log_info "Scaffold reset: prism-test baseline restored"
 }

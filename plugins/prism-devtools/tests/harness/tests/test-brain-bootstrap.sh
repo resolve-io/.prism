@@ -12,6 +12,7 @@ source "${HARNESS_DIR}/lib/scaffold.sh"
 
 run_tests() {
   log_section "test-brain-bootstrap"
+  init_test_results "test-brain-bootstrap"
 
   scaffold_brownfield
 
@@ -48,6 +49,7 @@ run_tests() {
   # TC-4: stream-json output is non-empty (session ran)
   assert_json_not_empty "TC-4: claude session produced stream-json output"
 
+  finalize_test_results "test-brain-bootstrap"
   scaffold_teardown
 }
 
