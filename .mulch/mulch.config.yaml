@@ -12,6 +12,7 @@ domains:
   - prompts
   - conductor
   - brain
+  - harness
 governance:
   max_entries: 100
   warn_entries: 150
