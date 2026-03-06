@@ -371,7 +371,8 @@ def _build_fallback_instruction(step_id: str, agent: str, story_file: str,
 
 def build_agent_instruction(step_id: str, agent: str, action: str,
                             story_file: str, prompt: str = "",
-                            runner: dict = None, brain_context: str = "") -> str:
+                            runner: dict = None, brain_context: str = "",
+                            prompt_variant_text: str = "") -> str:
     """
     Build self-contained instruction for a workflow step.
 
@@ -382,6 +383,8 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
     brain_context: optional block from Brain.system_context() injected before
     the stop directive. Pass via Conductor.build_agent_instruction() to enrich
     instructions with project knowledge base results.
+    prompt_variant_text: optional persona prompt variant content from Brain PSP
+    selection. Injected after role card to provide variant-specific guidance.
     """
     if runner is None:
         runner = {}
@@ -406,6 +409,10 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
 
     # --- Compose instruction ---
     parts = [title, "", ROLE_CARDS[agent_id], ""]
+
+    # Prompt variant guidance (PSP-selected role enhancement)
+    if prompt_variant_text:
+        parts.extend([prompt_variant_text, ""])
 
     # Dynamic context: story file + conventions
     context = []

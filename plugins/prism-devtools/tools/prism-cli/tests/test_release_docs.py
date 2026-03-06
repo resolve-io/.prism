@@ -217,7 +217,7 @@ class TestAC4_PluginJsonVersion:
     def test_ac4_plugin_json_version_is_313(self):
         """
         AC-4: plugin.json 'version' field is '3.1.3'
-        Requirement: Version bump from 3.1.2 → 3.1.3 for stale pytest cache green test count fix
+        Requirement: Version bump from 3.1.2 → 3.1.3 for conductor epsilon-greedy prompt selection
         Expected: json.loads(plugin.json)['version'] == '3.1.3'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))

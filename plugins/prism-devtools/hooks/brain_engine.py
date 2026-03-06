@@ -665,6 +665,11 @@ class Brain:
             self.last_result_count = 0
             return ""
 
+        results = [r for r in results if r.get("rrf_score", 0.0) >= 0.1]
+        if not results:
+            self.last_result_count = 0
+            return ""
+
         self.last_result_count = len(results)
         parts = ["<brain_context>"]
         for i, r in enumerate(results, 1):
