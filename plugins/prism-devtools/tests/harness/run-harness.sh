@@ -33,7 +33,7 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -z "${PRISM_TEST_DIR:-}" ]]; then
   # Canonical layout: prism/ and prism-test/ are siblings under the same parent
-  REPO_ROOT="$(cd "${HARNESS_DIR}/../../../../.." && pwd)"
+  REPO_ROOT="$(cd "${HARNESS_DIR}/../../../.." && pwd)"
   PARENT="$(dirname "$REPO_ROOT")"
   CANDIDATE="${PARENT}/prism-test"
 

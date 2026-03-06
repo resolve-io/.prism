@@ -77,10 +77,11 @@ run_claude() {
   local exit_code=0
   (
     cd "$work_dir"
-    claude -p "$prompt" \
+    env -u CLAUDECODE claude -p "$prompt" \
       --plugin-dir "$PLUGIN_DIR" \
       --output-format stream-json \
       --max-turns 3 \
+      --dangerously-skip-permissions \
       2>/dev/null
   ) > "$tmpout" || exit_code=$?
 
