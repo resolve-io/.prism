@@ -609,7 +609,21 @@ class Brain:
     def search(
         self, query: str, domain: Optional[str] = None, limit: int = 5
     ) -> list[dict]:
-        """3-index hybrid search with RRF fusion."""
+        """3-index hybrid search with RRF fusion.
+
+        Auto-bootstraps on first call when the index is empty, and runs
+        incremental_reindex() on subsequent calls to stay current.
+        """
+        doc_count = self._brain.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
+        if doc_count == 0:
+            print(
+                "Brain: no documents indexed — bootstrapping from project sources...",
+                file=sys.stderr,
+            )
+            self.ingest(_cli_source_dirs())
+        else:
+            self.incremental_reindex()
+
         inner = limit * 2
         bm25 = self._fts5_search(query, domain, inner)
         vec = self._vector_search(query, domain, inner) if self.vector_enabled else []

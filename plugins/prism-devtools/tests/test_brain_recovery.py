@@ -331,6 +331,81 @@ def test_purge_deleted_called_by_ingest(tmp_path):
     ).fetchone()[0] == 0, "ingest() should have purged deleted file entry"
 
 
+# ---------------------------------------------------------------------------
+# Auto-bootstrap tests
+# ---------------------------------------------------------------------------
+
+def test_search_auto_bootstraps_when_empty(tmp_path, monkeypatch, capsys):
+    """search() triggers ingest() when docs table is empty and logs a message."""
+    import subprocess as sp
+
+    brain = _make_brain_in(tmp_path)
+
+    # Patch subprocess so incremental_reindex git calls return empty (no files)
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.stdout = ""
+        return result
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    monkeypatch.chdir(tmp_path)
+
+    # Patch _cli_source_dirs to return a real directory with a known file
+    src = tmp_path / "sample.py"
+    src.write_text("def bootstrap_marker(): pass\n")
+    monkeypatch.setattr(
+        "brain_engine._cli_source_dirs", lambda: [str(tmp_path)]
+    )
+
+    # Verify empty before search
+    assert brain._brain.execute("SELECT COUNT(*) FROM docs").fetchone()[0] == 0
+
+    results = brain.search("bootstrap_marker", limit=5)
+
+    # Should have indexed the file during bootstrap
+    doc_count_after = brain._brain.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
+    assert doc_count_after > 0, "search() should have auto-bootstrapped the index"
+
+    # Should log the bootstrap message to stderr
+    captured = capsys.readouterr()
+    assert "bootstrapping" in captured.err
+
+
+def test_search_calls_incremental_reindex_when_non_empty(tmp_path, monkeypatch):
+    """search() calls incremental_reindex() when docs table is non-empty."""
+    import subprocess as sp
+
+    brain = _make_brain_in(tmp_path)
+
+    # Pre-populate with a doc so we're not empty
+    src = tmp_path / "existing.py"
+    src.write_text("def existing_func(): pass\n")
+    brain._ingest_single(str(src), "def existing_func(): pass\n",
+                         source_file=str(src), domain="py")
+
+    reindex_called = {"n": 0}
+    original_reindex = brain.incremental_reindex
+
+    def fake_reindex():
+        reindex_called["n"] += 1
+        return original_reindex()
+
+    monkeypatch.setattr(brain, "incremental_reindex", fake_reindex)
+
+    # Patch subprocess so git calls return empty output
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.stdout = ""
+        return result
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    monkeypatch.chdir(tmp_path)
+
+    brain.search("existing_func", limit=5)
+
+    assert reindex_called["n"] == 1, "search() should call incremental_reindex() when non-empty"
+
+
 def test_incremental_reindex_does_not_corrupt(tmp_path, monkeypatch):
     """incremental_reindex() completes without corruption errors."""
     import subprocess as sp
