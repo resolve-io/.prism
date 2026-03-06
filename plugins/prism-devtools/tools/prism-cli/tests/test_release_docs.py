@@ -214,15 +214,15 @@ class TestAC4_PluginJsonVersion:
         """
         assert PLUGIN_JSON.exists(), f"plugin.json not found at {PLUGIN_JSON}"
 
-    def test_ac4_plugin_json_version_is_315(self):
+    def test_ac4_plugin_json_version_is_316(self):
         """
-        AC-4: plugin.json 'version' field is '3.1.5'
-        Requirement: Version bump from 3.1.4 → 3.1.5 for epsilon-greedy conductor and brain relevance filtering
-        Expected: json.loads(plugin.json)['version'] == '3.1.5'
+        AC-4: plugin.json 'version' field is '3.1.6'
+        Requirement: Version bump from 3.1.5 → 3.1.6 for Brain RRF threshold fix
+        Expected: json.loads(plugin.json)['version'] == '3.1.6'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.1.5", (
-            f"plugin.json version is '{data.get('version')}', expected '3.1.5'"
+        assert data.get("version") == "3.1.6", (
+            f"plugin.json version is '{data.get('version')}', expected '3.1.6'"
         )
 
 
