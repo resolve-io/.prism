@@ -4,9 +4,9 @@ STORY DRAFTING: Create Next Story
 1. Your prompt includes a ## System Context section with relevant
    architecture, similar past stories, and known constraints. Read it carefully.
 2. For deeper understanding: /brain search "topic you need"
-   - Domain knowledge: /brain search "user authentication architecture"
-   - Past story patterns: /brain search "story template acceptance criteria"
-   - Technical constraints: /brain search "database migration conventions"
+   - Requirements: /brain search "requirements for user authentication"
+   - Architecture context: /brain search "architecture decisions for data model"
+   - Design decisions: /brain search "design decisions and technical constraints"
 3. THEN Glob for epic and architecture docs as fallback
 
 ## Skills

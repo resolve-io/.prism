@@ -5,9 +5,9 @@ TDD GREEN PHASE: Make Failing Tests Pass
    architecture, code patterns, and past solutions. Read it carefully.
 2. Read the failing test output to understand what needs implementing
 3. For deeper understanding: /brain search "topic you need"
-   - Search for implementation patterns: /brain search "repository pattern"
-   - Search for related code: /brain search "how does payment processing work"
-   - Search for structure: /brain search "what imports OrderService"
+   - Code patterns: /brain search "code patterns for repositories"
+   - Module structure: /brain search "module structure conventions"
+   - Error handling: /brain search "error handling patterns"
 4. THEN Glob/Grep for implementation files to modify
 
 ## Skills

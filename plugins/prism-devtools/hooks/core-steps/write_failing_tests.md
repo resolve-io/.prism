@@ -4,9 +4,9 @@ TDD RED PHASE: Write Failing Tests
 1. Your prompt includes a ## System Context section with relevant
    architecture, patterns, and code. Read it carefully.
 2. For deeper understanding: /brain search "topic you need"
-   - Search for testing patterns: /brain search "test conventions"
-   - Search for related code: /brain search "authentication service"
-   - Search for dependencies: /brain search "what calls UserService"
+   - Test naming: /brain search "test naming conventions"
+   - Testing frameworks: /brain search "testing framework patterns"
+   - Test structure: /brain search "unit test conventions for module X"
 3. THEN Glob for existing test files: *.test.*, *.spec.*, *_test.*, test_*.*
 4. Read existing tests to understand patterns
 

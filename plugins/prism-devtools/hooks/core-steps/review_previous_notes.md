@@ -4,9 +4,9 @@ PLANNING REVIEW: Review Context Before Drafting
 1. Your prompt includes a ## System Context section with relevant
    architecture, past story learnings, and project patterns. Read it carefully.
 2. For deeper understanding: /brain search "topic you need"
-   - Past decisions: /brain search "authentication design decisions"
-   - Relevant patterns: /brain search "error handling conventions"
-   - Technical debt: /brain search "known issues login flow"
+   - Past decisions: /brain search "architecture decision records"
+   - Requirements context: /brain search "requirements for feature X"
+   - Design decisions: /brain search "design decisions for module Y"
 3. THEN Glob/Grep for any additional context not surfaced by Brain
 
 ## Skills

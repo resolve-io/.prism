@@ -1023,3 +1023,64 @@ def test_four_skill_types_instruction_lists_valid_skills(tmp_path, monkeypatch):
     )
     assert "valid-prism-skill" in instruction
     assert "valid-no-prism" in instruction
+
+
+# --- Spec conformance: verify_plan adversarial framing ---
+
+def test_verify_plan_adversarial_framing():
+    """verify_plan.md must use devil's advocate framing (spec conformance).
+
+    Spec: Sam plays devil's advocate — last chance before context wipe,
+    QA sees only the Story, challenge the draft rather than rubber-stamp.
+    """
+    core_steps_dir = HOOKS_DIR / "core-steps"
+    content = (core_steps_dir / "verify_plan.md").read_text(encoding="utf-8")
+    assert "devil's advocate" in content.lower(), (
+        "verify_plan.md missing devil's advocate framing — "
+        "spec requires Sam to challenge the draft, not just build a coverage table"
+    )
+    assert "last chance" in content.lower(), (
+        "verify_plan.md must explain this is the last chance before context wipe"
+    )
+    assert "QA only sees the Story" in content or "QA" in content, (
+        "verify_plan.md must explain that QA agents only see the Story"
+    )
+
+
+# --- Spec conformance: role-scoped Brain examples ---
+
+_ROLE_BRAIN_DOMAINS = {
+    "sm": ["requirements", "architecture", "decisions"],
+    "qa": ["test", "convention", "framework"],
+    "dev": ["code patterns", "module structure", "error handling"],
+}
+
+_STEP_ROLE = {
+    step_id: agent
+    for step_id, agent, _ in [
+        ("review_previous_notes", "sm", None),
+        ("draft_story", "sm", None),
+        ("verify_plan", "sm", None),
+        ("write_failing_tests", "qa", None),
+        ("implement_tasks", "dev", None),
+        ("verify_green_state", "qa", None),
+    ]
+}
+
+
+def test_core_steps_have_role_scoped_brain_examples():
+    """Each core-step must have Brain search examples scoped to its role's domain.
+
+    Spec: SM=requirements/architecture/decisions, QA=test conventions/naming/frameworks,
+    DEV=code patterns/module structure/error handling.
+    """
+    core_steps_dir = HOOKS_DIR / "core-steps"
+    for step_id, role in _STEP_ROLE.items():
+        content = (core_steps_dir / f"{step_id}.md").read_text(encoding="utf-8").lower()
+        expected_domains = _ROLE_BRAIN_DOMAINS[role]
+        matched = [d for d in expected_domains if d in content]
+        assert len(matched) >= 2, (
+            f"{step_id}.md ({role} role) has too few role-scoped Brain domains. "
+            f"Expected at least 2 of {expected_domains}, found: {matched}. "
+            f"Brain examples must be scoped to {role.upper()} domain."
+        )
