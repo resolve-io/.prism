@@ -54,8 +54,9 @@ def run_claude(
         "--max-turns", str(max_turns),
     ]
 
-    # Strip CLAUDECODE to prevent nested session errors
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    # Strip CLAUDECODE and CLAUDE_CODE_ENTRYPOINT to prevent nested session errors
+    _STRIP_VARS = {"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"}
+    env = {k: v for k, v in os.environ.items() if k not in _STRIP_VARS}
 
     with open(out_path, "w") as fh:
         result = subprocess.run(
@@ -63,7 +64,7 @@ def run_claude(
             cwd=str(work_dir),
             env=env,
             stdout=fh,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
         )
 
     return out_path, result.returncode
