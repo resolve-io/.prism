@@ -32,6 +32,7 @@ _TEST_MODULE_NAMES = [
     "prism_harness.tests.test_session_start",
     "prism_harness.tests.test_brain_bootstrap",
     "prism_harness.tests.test_skill_discovery",
+    "prism_harness.tests.test_skill_invocation",
     "prism_harness.tests.test_prism_loop",
 ]
 
@@ -391,6 +392,40 @@ def _cmd_validate(args: argparse.Namespace) -> int:
                 break
         else:
             ctx._pass("TC-4b: missing-name not present in fixture")
+    total_pass += ctx.passed
+    total_fail += ctx.failed
+    total_skip += ctx.skipped
+    print()
+
+    # --- skill-invocation fixture ---
+    fixture = fixtures_dir / "skill-invocation.jsonl"
+    ctx = AssertionContext(use_color=use_color)
+    ctx.log_section("skill-invocation")
+    if not fixture.is_file():
+        ctx._skip("fixture file not found: skill-invocation.jsonl")
+    else:
+        events = parse_jsonl(fixture)
+        ctx.last_output = fixture
+        ctx.assert_json_not_empty("TC-1: fixture is non-empty")
+        tool_calls = extract_tool_calls(events)
+        skill_calls = [tc for tc in tool_calls if tc.get("name") == "Skill"]
+        if skill_calls:
+            ctx._pass(f"TC-2: fixture contains Skill tool_use ({len(skill_calls)} call(s))")
+        else:
+            ctx._fail("TC-2: expected Skill tool_use in fixture", f"tools found: {[tc.get('name') for tc in tool_calls]}")
+        if skill_calls:
+            first_input = str(skill_calls[0].get("input", "")).lower()
+            if "calculator" in first_input or "multiply" in first_input:
+                ctx._pass("TC-3: Skill input references calculator or multiply")
+            else:
+                ctx._fail("TC-3: Skill input does not reference calculator/multiply", f"input={skill_calls[0].get('input')!r}")
+        else:
+            ctx._skip("TC-3: skipped (no Skill calls in fixture)")
+        turns = count_turns(events)
+        if turns >= 1:
+            ctx._pass(f"TC-count: at least 1 assistant turn ({turns})")
+        else:
+            ctx._fail("TC-count: expected >= 1 assistant turn", f"got {turns}")
     total_pass += ctx.passed
     total_fail += ctx.failed
     total_skip += ctx.skipped
