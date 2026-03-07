@@ -10,6 +10,9 @@ TDD RED PHASE: Write Failing Tests
 3. THEN Glob for existing test files: *.test.*, *.spec.*, *_test.*, test_*.*
 4. Read existing tests to understand patterns
 
+## Skills
+Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+
 Trace Convention (REQUIRED - workflow blocks without this):
   Map each test to its AC. If any AC lacks a mapped test, workflow blocks
   with 'SILENT DROP DETECTED'.

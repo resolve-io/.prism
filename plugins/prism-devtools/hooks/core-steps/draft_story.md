@@ -9,6 +9,9 @@ STORY DRAFTING: Create Next Story
    - Technical constraints: /brain search "database migration conventions"
 3. THEN Glob for epic and architecture docs as fallback
 
+## Skills
+Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+
 Steps:
 1. Glob for epic and architecture docs: docs/*.md, docs/epics/*.md
 2. Read requirements and technical constraints

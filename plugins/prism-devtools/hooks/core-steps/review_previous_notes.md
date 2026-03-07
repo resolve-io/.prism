@@ -9,6 +9,9 @@ PLANNING REVIEW: Review Context Before Drafting
    - Technical debt: /brain search "known issues login flow"
 3. THEN Glob/Grep for any additional context not surfaced by Brain
 
+## Skills
+Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+
 Steps:
 1. Glob for previous stories: docs/stories/*.md
 2. Read completed stories for context and lessons learned

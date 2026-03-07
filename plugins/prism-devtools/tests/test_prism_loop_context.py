@@ -313,6 +313,39 @@ def test_skills_injection_uses_directive_language(tmp_path, monkeypatch):
         )
 
 
+def test_core_steps_have_skills_directive():
+    """Every core-step file must contain a skills directive (spec conformance).
+
+    AC: agents always see a directive to check/use skills — not just rely on
+    the injected block that was previously buried at the end of instructions.
+    """
+    core_steps_dir = HOOKS_DIR / "core-steps"
+    for step_id in STEP_PHASE_MAP:
+        step_file = core_steps_dir / f"{step_id}.md"
+        content = step_file.read_text(encoding="utf-8")
+        assert "Skill" in content, (
+            f"{step_id}.md has no skills directive — agents may ignore skills. "
+            f"Add a ## Skills section directing agents to use the Skill tool."
+        )
+
+
+def test_skills_section_header_in_assembled_instruction(tmp_path, monkeypatch):
+    """Assembled instruction shows '## Available Skills' header when skills present."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
+
+    for step_id, agent, action in AGENT_STEPS:
+        instruction = build_agent_instruction(
+            step_id, agent, action,
+            "docs/stories/test-story.md", "", MOCK_RUNNER
+        )
+        assert "## Available Skills" in instruction, (
+            f"'## Available Skills' header missing from {step_id} when skills present — "
+            f"skills block not visible enough in assembled instruction"
+        )
+
+
 # --- Trace convention ---
 
 def test_trace_convention_in_red_step():

@@ -8,6 +8,9 @@ PLAN VERIFICATION: Check Story Coverage Against Requirements
    - Past similar work: /brain search "authentication story learnings"
 3. THEN read the story file and verify coverage
 
+## Skills
+Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+
 Steps:
 1. Read the original prompt/requirements from workflow context below
 2. Read the story file just drafted

@@ -10,6 +10,9 @@ TDD GREEN PHASE: Make Failing Tests Pass
    - Search for structure: /brain search "what imports OrderService"
 4. THEN Glob/Grep for implementation files to modify
 
+## Skills
+Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+
 Steps:
 1. Read failing test output to understand what needs implementing
 2. Glob/Grep for implementation files to modify

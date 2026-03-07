@@ -8,6 +8,9 @@ TDD GREEN STATE VERIFICATION: Confirm Implementation Complete
    - Build requirements: /brain search "CI pipeline requirements"
 3. THEN proceed with verification steps
 
+## Skills
+Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+
 Steps:
 1. Run all tests (unit, integration, e2e)
 2. Verify all tests PASS
