@@ -25,6 +25,7 @@ from prism_stop_hook import (
     _format_trace_matrix,
     get_gate_message,
     validate_step,
+    detect_test_runner,
 )
 
 
@@ -301,3 +302,46 @@ def test_green_full_passes_when_all_clean(tmp_path, monkeypatch):
 
     assert result["valid"]
     assert "security" in result["message"].lower() or "trace" in result["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# detect_test_runner() dotnet path tests
+# ---------------------------------------------------------------------------
+
+def test_detect_test_runner_dotnet_uses_sln_in_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "MyApp.sln").write_text("")
+    subdir = tmp_path / "src"
+    subdir.mkdir()
+    (subdir / "MyApp.csproj").write_text("")
+    result = detect_test_runner()
+    assert result["type"] == "dotnet"
+    assert "MyApp.sln" in result["command"]
+    assert result["command"].startswith("dotnet test ")
+
+
+def test_detect_test_runner_dotnet_finds_sln_in_parent(tmp_path, monkeypatch):
+    (tmp_path / "Solution.sln").write_text("")
+    subdir = tmp_path / "src" / "proj"
+    subdir.mkdir(parents=True)
+    (subdir / "Proj.csproj").write_text("")
+    monkeypatch.chdir(subdir)
+    result = detect_test_runner()
+    assert result["type"] == "dotnet"
+    assert "Solution.sln" in result["command"]
+
+
+def test_detect_test_runner_dotnet_falls_back_to_csproj(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "App.csproj").write_text("")
+    result = detect_test_runner()
+    assert result["type"] == "dotnet"
+    assert "App.csproj" in result["command"]
+    assert result["command"].startswith("dotnet test ")
+
+
+def test_detect_project_conventions_no_runner(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = detect_test_runner()
+    assert result["type"] == "unknown"
+    assert result["command"] is None

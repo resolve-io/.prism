@@ -66,7 +66,20 @@ def detect_test_runner() -> dict:
     # Check for .NET project
     csproj_files = list(cwd.glob("**/*.csproj"))
     if csproj_files:
-        return {"type": "dotnet", "command": "dotnet test", "lint": "dotnet format --verify-no-changes"}
+        # Find nearest .sln file by searching cwd and parent directories
+        sln_path = None
+        search_dir = cwd
+        while True:
+            sln_files = list(search_dir.glob("*.sln"))
+            if sln_files:
+                sln_path = sln_files[0]
+                break
+            parent = search_dir.parent
+            if parent == search_dir:  # reached filesystem root
+                break
+            search_dir = parent
+        test_target = str(sln_path) if sln_path else str(csproj_files[0])
+        return {"type": "dotnet", "command": f"dotnet test {test_target}", "lint": "dotnet format --verify-no-changes"}
 
     # Check for Go project
     if (cwd / "go.mod").exists():
