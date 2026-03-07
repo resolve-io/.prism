@@ -482,6 +482,100 @@ def detect_git_branch() -> str:
     return ""
 
 
+def _get_changed_files() -> list:
+    """Get list of files changed in working tree (staged + unstaged). Best-effort."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+            cwd=Path.cwd()
+        )
+        if result.returncode != 0:
+            return []
+        files = []
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if stripped and len(stripped) > 3:
+                files.append(stripped[3:].strip())
+        return files
+    except Exception:
+        return []
+
+
+def _auto_observe_stage(step_id: str, agent: str, state: dict,
+                        validation_type: Optional[str] = None,
+                        step_dur_secs: int = 0,
+                        step_toks_used: int = 0) -> None:
+    """Auto-run mulch record for key observations after step completion.
+
+    Implements the Observe->Classify->Stage pipeline for every successful step
+    transition, capturing: files changed, test state, duration, token usage.
+    Best-effort — never raises or interrupts workflow.
+    """
+    try:
+        changed_files = _get_changed_files()
+
+        # Map agent to mulch domain
+        agent_domain_map = {"sm": "platform", "qa": "harness", "dev": "cli"}
+        domain = agent_domain_map.get(agent or "", "cli")
+
+        # Summarize changed files
+        if changed_files:
+            file_names = [Path(f).name for f in changed_files[:3]]
+            files_summary = f"{len(changed_files)} file(s) changed ({', '.join(file_names)}"
+            if len(changed_files) > 3:
+                files_summary += f" +{len(changed_files) - 3} more"
+            files_summary += ")"
+        else:
+            files_summary = "no files changed"
+
+        # Test state from validation type
+        test_state = ""
+        if validation_type in ("red", "red_with_trace"):
+            test_state = "tests red (failing as expected)"
+        elif validation_type == "green":
+            test_state = "tests green (passing)"
+        elif validation_type == "green_full":
+            test_state = "tests + lint green"
+        elif validation_type in ("story_complete", "plan_coverage"):
+            test_state = f"{validation_type} verified"
+
+        # Story context
+        story_name = Path(state.get("story_file", "")).name if state.get("story_file") else ""
+
+        # Performance summary
+        perf_parts = []
+        if step_dur_secs:
+            perf_parts.append(f"{step_dur_secs}s")
+        if step_toks_used:
+            perf_parts.append(f"{step_toks_used} tok")
+        perf_summary = ", ".join(perf_parts)
+
+        # Compose observation description
+        parts = [f"Step {step_id} ({agent}) completed: {files_summary}"]
+        if test_state:
+            parts.append(test_state)
+        if story_name:
+            parts.append(f"story: {story_name}")
+        if perf_summary:
+            parts.append(f"perf: {perf_summary}")
+        description = "; ".join(parts)
+
+        subprocess.run(
+            [
+                "mulch", "record", domain,
+                "--type", "pattern",
+                "--description", description,
+                "--classification", "observational",
+                "--outcome-status", "success",
+            ],
+            capture_output=True, text=True, timeout=30,
+            cwd=Path.cwd()
+        )
+    except Exception:
+        pass  # Never interrupt Claude's stop behavior
+
+
 def get_session_id_from_input(input_data: dict) -> str:
     """
     Get session_id from Claude Code's hook JSON input.
@@ -1043,6 +1137,15 @@ def main():
     step_toks_used = max(0, usage["total_tokens"] - step_tok_start)
     step_skill_calls = usage.get("skill_calls", 0)
     step_tool_calls = usage.get("tool_calls", 0)
+
+    # Auto-observe: record step completion to mulch (Observe->Classify->Stage pipeline)
+    _auto_observe_stage(
+        step_id, agent, state,
+        validation_type=validation,
+        step_dur_secs=step_dur_secs,
+        step_toks_used=step_toks_used,
+    )
+
     try:
         history: list = json.loads(state.get("step_history", "[]"))
     except Exception:
