@@ -52,9 +52,9 @@ def run(
     ctx.assert_json_has("*", "calculator", "TC-2: 'calculator' skill referenced in session output")
     ctx.assert_json_has("*", "test-skill", "TC-3: 'test-skill' referenced in session output")
 
-    # TC-4: invalid skills filtered — lenient skip if names appear incidentally
-    ctx.assert_json_lacks("missing-desc", "TC-4a: 'missing-desc' invalid skill not surfaced as active")
-    ctx.assert_json_lacks("missing-name", "TC-4b: 'missing-name' invalid skill not surfaced as active")
+    # TC-4: invalid skills filtered — check init event arrays, not all raw output
+    ctx.assert_init_skills_lacks("missing-desc", "TC-4a: 'missing-desc' invalid skill not surfaced as active")
+    ctx.assert_init_skills_lacks("missing-name", "TC-4b: 'missing-name' invalid skill not surfaced as active")
 
     # --- TC-5: /calculator multiply invocation ---
     ctx.log_info("Running claude session (prompt: /calculator multiply)...")

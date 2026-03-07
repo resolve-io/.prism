@@ -55,6 +55,7 @@ def run(
         "*prism-loop add a hello world function to the project",
         test_project_dir,
         plugin_dir,
+        max_turns=5,
     )
     ctx.last_output = out2
 

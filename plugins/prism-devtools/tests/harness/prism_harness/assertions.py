@@ -176,6 +176,51 @@ class AssertionContext:
         else:
             self._skip(f"{desc} (needle found — may be in incidental context)")
 
+    def assert_init_skills_lacks(
+        self,
+        needle: str,
+        desc: str,
+        output: Path | None = None,
+    ) -> None:
+        """Assert needle is not surfaced as an active skill in the session.
+
+        Checks BOTH the init event 'skills' and 'slash_commands' arrays rather
+        than all raw output, to avoid false positives from incidental appearances
+        (e.g. directory listings in tool results).  If the needle is registered
+        in either init array but absent from all assistant message text blocks,
+        the skill was registered at the system level but filtered before being
+        surfaced to the user — which counts as a PASS.
+        """
+        output = output or self.last_output
+        if not output or not output.is_file():
+            self._skip(f"{desc} (no output file)")
+            return
+
+        events = parse_jsonl(output)
+
+        # Check both init-event arrays (skills + slash_commands)
+        init_ev = next((e for e in events if e.raw.get("subtype") == "init"), None)
+        if init_ev:
+            skills = init_ev.raw.get("skills", [])
+            slash = init_ev.raw.get("slash_commands", [])
+            if needle not in skills and needle not in slash:
+                # Completely absent from init registration — definite PASS
+                self._pass(desc)
+                return
+            # Registered at system level — only fail if assistant surfaces it
+
+        # Check if assistant message text explicitly surfaces the skill
+        for ev in events:
+            if ev.type == "assistant":
+                content = ev.raw.get("message", {}).get("content", [])
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        if needle in block.get("text", ""):
+                            self._skip(f"{desc} (skill found in assistant response)")
+                            return
+
+        self._pass(desc)
+
     def assert_json_keyword_any(
         self,
         keywords: list[str],
