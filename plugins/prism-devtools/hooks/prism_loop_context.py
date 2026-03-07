@@ -11,6 +11,7 @@ Used by: prism_stop_hook.py, prism_approve.py, prism_reject.py, setup_prism_loop
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 def find_project_root() -> Path:
@@ -282,22 +283,29 @@ def discover_prism_skills(story_file: str = "") -> list:
         try:
             resolved = skills_dir.resolve()
             if resolved in seen:
+                print(f"[skill-discovery] skip (already scanned): {resolved}", file=sys.stderr)
                 continue
             seen.add(resolved)
             if not resolved.is_dir():
+                print(f"[skill-discovery] skip (not a dir): {resolved}", file=sys.stderr)
                 continue
+            print(f"[skill-discovery] scanning: {resolved}", file=sys.stderr)
             for skill_file in resolved.glob("*/SKILL.md"):
                 try:
                     content = skill_file.read_text(encoding="utf-8")
                     meta = _parse_skill_frontmatter(content)
                     if meta:
+                        print(f"[skill-discovery] found: {meta['name']} ({skill_file})", file=sys.stderr)
                         results.append(meta)
+                    else:
+                        print(f"[skill-discovery] skip (invalid frontmatter): {skill_file}", file=sys.stderr)
                 except (IOError, OSError):
                     continue
         except (IOError, OSError):
             continue
 
     results.sort(key=lambda s: s["priority"])
+    print(f"[skill-discovery] total: {len(results)} skill(s) found", file=sys.stderr)
     return results
 
 
@@ -307,7 +315,7 @@ def _format_discovered_skills(skills: list) -> str:
         return ""
     lines = [
         "## Available Skills",
-        "The following skills are available. Invoke any skill using the Skill tool if there is even a 1% chance it is relevant to your current task — when in doubt, invoke it:",
+        "MANDATORY: You MUST invoke relevant skills using the Skill tool before completing your task. For each skill below, if there is any chance it applies to your current step, invoke it — do not skip this check:",
     ]
     for s in skills:
         desc = f" - {s['description']}" if s["description"] else ""
