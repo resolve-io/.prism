@@ -13,6 +13,7 @@ domains:
   - conductor
   - brain
   - harness
+  - core-steps
 governance:
   max_entries: 100
   warn_entries: 150
