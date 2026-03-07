@@ -18,6 +18,27 @@ _SENTINEL_DIR = Path(".prism/brain")
 _SENTINEL_FILE = _SENTINEL_DIR / ".last-consolidated-story"
 
 
+def _get_plugin_root() -> Path:
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if plugin_root:
+        return Path(plugin_root)
+    return Path(__file__).parent
+
+
+def _find_project_root() -> Path:
+    """Anchor to git root; fall back to cwd."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        pass
+    return Path.cwd()
+
+
 def _resolve_state_file() -> Path:
     """Anchor to git root, matching prism_loop_context.resolve_state_file()."""
     try:
@@ -119,11 +140,43 @@ def _mulch_record(domain: str, description: str, evidence_commit: str = "") -> N
         pass
 
 
+def _run_promote() -> None:
+    """Promote staged expertise records on every session end.
+
+    1. mulch sync — commit any staged .mulch/ expertise records to git.
+    2. Brain.incremental_reindex() — ingest updated expertise into the vector DB.
+    """
+    # Step 1: commit staged expertise records so Brain can pick them up
+    try:
+        subprocess.run(["mulch", "sync"], capture_output=True, text=True, timeout=30)
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        pass
+
+    # Step 2: ingest updated records into Brain
+    project_root = _find_project_root()
+    hooks_dir = str(_get_plugin_root())
+    try:
+        orig_cwd = os.getcwd()
+        os.chdir(project_root)
+        try:
+            if hooks_dir not in sys.path:
+                sys.path.insert(0, hooks_dir)
+            from brain_engine import Brain  # noqa: PLC0415
+            Brain().incremental_reindex()
+        finally:
+            os.chdir(orig_cwd)
+    except Exception:
+        pass
+
+
 def main():
     try:
         json.load(sys.stdin)  # Consume stdin; we don't need hook event data
     except (json.JSONDecodeError, ValueError):
         pass
+
+    # Promote staged expertise records on every session end (not just story completions)
+    _run_promote()
 
     state_file = _resolve_state_file()
     if not state_file.exists():
