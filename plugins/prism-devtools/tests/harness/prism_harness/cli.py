@@ -1,10 +1,11 @@
 """prism-harness CLI — orchestrate end-to-end plugin tests.
 
 Subcommands:
-  run    — execute test suite (or a filtered subset); --dry-run lists without running
-  parse  — re-analyze an existing results directory
-  report — show the last results
-  list   — list available tests
+  run      — execute test suite (or a filtered subset); --dry-run lists without running
+  parse    — re-analyze an existing results directory (or fixture files with --fixtures)
+  report   — show the last results
+  list     — list available tests
+  validate — run self-tests against fixture JSONL files (no claude invocation required)
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from pathlib import Path
 from types import ModuleType
 
 from .assertions import AssertionContext, _c, _C_BOLD, _C_CYAN, _C_GREEN, _C_RED, _C_YELLOW, _C_RESET
+from .parser import parse_jsonl, extract_tool_calls, count_turns
 from .reporter import write_harness_report, parse_results_dir, show_report
 from .scaffold import Scaffold
 
@@ -223,7 +225,38 @@ def _cmd_run(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def _cmd_parse(args: argparse.Namespace) -> int:
-    results_dir = Path(args.results_dir).resolve()
+    use_fixtures: bool = getattr(args, "fixtures", False)
+    harness_dir = Path(__file__).parent.parent
+
+    if use_fixtures:
+        fixtures_dir = harness_dir / "fixtures"
+        if not fixtures_dir.is_dir():
+            print(f"ERROR: fixtures directory not found: {fixtures_dir}")
+            return 1
+
+        jsonl_files = sorted(fixtures_dir.glob("*.jsonl"))
+        if not jsonl_files:
+            print(f"  (no .jsonl files found in {fixtures_dir})")
+            return 0
+
+        print(f"\nParsing fixture files in {fixtures_dir}:")
+        for fixture_path in jsonl_files:
+            events = parse_jsonl(fixture_path)
+            tool_calls = extract_tool_calls(events)
+            turns = count_turns(events)
+            print(f"\n  {fixture_path.stem}:")
+            print(f"    events: {len(events)}")
+            print(f"    turns:  {turns}")
+            print(f"    tools:  {len(tool_calls)}")
+        print()
+        return 0
+
+    results_dir_arg = getattr(args, "results_dir", None)
+    if not results_dir_arg:
+        print("ERROR: results_dir is required unless --fixtures is specified")
+        return 1
+
+    results_dir = Path(results_dir_arg).resolve()
     if not results_dir.is_dir():
         print(f"ERROR: results directory not found: {results_dir}")
         return 1
@@ -253,6 +286,155 @@ def _cmd_parse(args: argparse.Namespace) -> int:
 
     print()
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: validate
+# ---------------------------------------------------------------------------
+
+def _cmd_validate(args: argparse.Namespace) -> int:
+    """Run self-tests against fixture JSONL files without invoking claude."""
+    harness_dir = Path(__file__).parent.parent
+    fixtures_dir = harness_dir / "fixtures"
+    use_color = sys.stdout.isatty()
+
+    if not fixtures_dir.is_dir():
+        print(f"ERROR: fixtures directory not found: {fixtures_dir}")
+        print("  Create fixture JSONL files in harness/fixtures/ first.")
+        return 1
+
+    sep = "━" * 56
+    print()
+    print(_c(_C_BOLD, "prism-harness fixture self-validation", use_color))
+    print(sep)
+    print(f"  Fixtures: {fixtures_dir}")
+    print(sep)
+    print()
+
+    total_pass = 0
+    total_fail = 0
+    total_skip = 0
+
+    # --- session-start fixture ---
+    fixture = fixtures_dir / "session-start.jsonl"
+    ctx = AssertionContext(use_color=use_color)
+    ctx.log_section("session-start")
+    if not fixture.is_file():
+        ctx._skip("fixture file not found: session-start.jsonl")
+    else:
+        events = parse_jsonl(fixture)
+        ctx.last_output = fixture
+        ctx.assert_json_not_empty("TC-1: fixture is non-empty")
+        ctx.assert_json_event_type("system", "TC-2: fixture contains system event")
+        ctx.assert_json_has("*", "Brain", "TC-5: system message mentions Brain")
+        turns = count_turns(events)
+        if turns >= 1:
+            ctx._pass(f"TC-count: at least 1 assistant turn ({turns})")
+        else:
+            ctx._fail("TC-count: expected >= 1 assistant turn", f"got {turns}")
+    total_pass += ctx.passed
+    total_fail += ctx.failed
+    total_skip += ctx.skipped
+    print()
+
+    # --- brain-bootstrap fixture ---
+    fixture = fixtures_dir / "brain-bootstrap.jsonl"
+    ctx = AssertionContext(use_color=use_color)
+    ctx.log_section("brain-bootstrap")
+    if not fixture.is_file():
+        ctx._skip("fixture file not found: brain-bootstrap.jsonl")
+    else:
+        events = parse_jsonl(fixture)
+        ctx.last_output = fixture
+        ctx.assert_json_not_empty("TC-4: fixture is non-empty")
+        tool_calls = extract_tool_calls(events)
+        if tool_calls:
+            ctx._pass(f"TC-tools: fixture has tool calls ({len(tool_calls)})")
+            first_tool = tool_calls[0].get("name", "")
+            if first_tool == "Bash":
+                ctx._pass("TC-tool-name: first tool call is Bash")
+            else:
+                ctx._fail("TC-tool-name: expected first tool to be Bash", f"got {first_tool!r}")
+        else:
+            ctx._fail("TC-tools: expected at least 1 tool call")
+        turns = count_turns(events)
+        if turns >= 1:
+            ctx._pass(f"TC-count: at least 1 assistant turn ({turns})")
+        else:
+            ctx._fail("TC-count: expected >= 1 assistant turn", f"got {turns}")
+    total_pass += ctx.passed
+    total_fail += ctx.failed
+    total_skip += ctx.skipped
+    print()
+
+    # --- skill-discovery fixture ---
+    fixture = fixtures_dir / "skill-discovery.jsonl"
+    ctx = AssertionContext(use_color=use_color)
+    ctx.log_section("skill-discovery")
+    if not fixture.is_file():
+        ctx._skip("fixture file not found: skill-discovery.jsonl")
+    else:
+        ctx.last_output = fixture
+        ctx.assert_json_not_empty("TC-1: fixture is non-empty")
+        ctx.assert_json_has("*", "calculator", "TC-2: fixture mentions calculator skill")
+        ctx.assert_json_has("*", "test-skill", "TC-3: fixture mentions test-skill")
+        # TC-4: invalid skill names must not appear as active
+        for line in fixture.read_text().splitlines():
+            if "missing-desc" in line:
+                ctx._fail("TC-4a: missing-desc appears in fixture output")
+                break
+        else:
+            ctx._pass("TC-4a: missing-desc not present in fixture")
+        for line in fixture.read_text().splitlines():
+            if "missing-name" in line:
+                ctx._fail("TC-4b: missing-name appears in fixture output")
+                break
+        else:
+            ctx._pass("TC-4b: missing-name not present in fixture")
+    total_pass += ctx.passed
+    total_fail += ctx.failed
+    total_skip += ctx.skipped
+    print()
+
+    # --- prism-loop fixture ---
+    fixture = fixtures_dir / "prism-loop.jsonl"
+    ctx = AssertionContext(use_color=use_color)
+    ctx.log_section("prism-loop")
+    if not fixture.is_file():
+        ctx._skip("fixture file not found: prism-loop.jsonl")
+    else:
+        _WORKFLOW_KEYWORDS = ["story", "planning", "SM", "workflow", "PRISM", "TDD"]
+        events = parse_jsonl(fixture)
+        ctx.last_output = fixture
+        ctx.assert_json_not_empty("TC-1: fixture is non-empty")
+        ctx.assert_json_has("*", "prism-loop", "TC-2: fixture mentions prism-loop")
+        ctx.assert_json_keyword_any(_WORKFLOW_KEYWORDS, "TC-3b: fixture contains workflow keywords")
+        tool_calls = extract_tool_calls(events)
+        if tool_calls:
+            ctx._pass(f"TC-tools: fixture has tool calls ({len(tool_calls)})")
+        else:
+            ctx._fail("TC-tools: expected at least 1 tool call")
+        turns = count_turns(events)
+        if turns >= 2:
+            ctx._pass(f"TC-count: at least 2 assistant turns ({turns})")
+        else:
+            ctx._fail("TC-count: expected >= 2 assistant turns", f"got {turns}")
+    total_pass += ctx.passed
+    total_fail += ctx.failed
+    total_skip += ctx.skipped
+    print()
+
+    # --- Summary ---
+    print(sep)
+    print(
+        f"  {_c(_C_GREEN, 'PASS', use_color)} {total_pass}   "
+        f"{_c(_C_RED, 'FAIL', use_color)} {total_fail}   "
+        f"{_c(_C_YELLOW, 'SKIP', use_color)} {total_skip}"
+    )
+    print(sep)
+    print()
+
+    return 0 if total_fail == 0 else 1
 
 
 # ---------------------------------------------------------------------------
@@ -316,8 +498,17 @@ def main() -> None:
     )
 
     # parse
-    parse_p = subparsers.add_parser("parse", help="Re-analyze an existing results directory")
-    parse_p.add_argument("results_dir", help="Path to a results directory")
+    parse_p = subparsers.add_parser("parse", help="Re-analyze a results directory or fixture files")
+    parse_p.add_argument(
+        "results_dir",
+        nargs="?",
+        help="Path to a results directory (omit when using --fixtures)",
+    )
+    parse_p.add_argument(
+        "--fixtures",
+        action="store_true",
+        help="Parse fixture JSONL files instead of a results directory",
+    )
 
     # report
     report_p = subparsers.add_parser("report", help="Show last test results")
@@ -330,6 +521,9 @@ def main() -> None:
     # list
     subparsers.add_parser("list", help="List available tests")
 
+    # validate
+    subparsers.add_parser("validate", help="Run self-tests against fixture JSONL files")
+
     args = parser.parse_args()
 
     if args.command == "run":
@@ -340,6 +534,8 @@ def main() -> None:
         sys.exit(_cmd_report(args))
     elif args.command == "list":
         sys.exit(_cmd_list(args))
+    elif args.command == "validate":
+        sys.exit(_cmd_validate(args))
     else:
         parser.print_help()
         sys.exit(0)

@@ -1,0 +1,6 @@
+{"type":"system","message":{"content":"PRISM workflow initialized. prism-loop skill active. SM agent ready for story planning and TDD workflow management."}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The prism-loop skill orchestrates the PRISM TDD workflow. It manages your story through planning, TDD RED (write failing tests), TDD GREEN (implement), and review phases. The SM (Scrum Master) agent guides each step.\n\nTo start a workflow: *prism-loop <story description>"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Initializing prism-loop workflow for your story..."},{"type":"tool_use","id":"toolu_02","name":"Write","input":{"file_path":".claude/prism-loop.local.md","content":"---\nactive: true\nphase: Planning\nstep: 1\nstory: add a hello world function\n---\n# PRISM Workflow State\n"}}]}}
+{"type":"tool_result","tool_use_id":"toolu_02","content":"File written: .claude/prism-loop.local.md"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Workflow initialized. The prism-loop state file has been created. The SM agent is now in Planning phase for your story."}]}}
+{"type":"result","subtype":"success","result":"prism-loop initialized.","session_id":"sess-fixture-prism-loop","cost_usd":0.004,"duration_ms":2300,"num_turns":3}
