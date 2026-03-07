@@ -34,6 +34,7 @@ _TEST_MODULE_NAMES = [
     "prism_harness.tests.test_skill_discovery",
     "prism_harness.tests.test_skill_invocation",
     "prism_harness.tests.test_prism_loop",
+    "prism_harness.tests.test_yaml_scalar",
 ]
 
 
@@ -454,6 +455,31 @@ def _cmd_validate(args: argparse.Namespace) -> int:
             ctx._pass(f"TC-count: at least 2 assistant turns ({turns})")
         else:
             ctx._fail("TC-count: expected >= 2 assistant turns", f"got {turns}")
+    total_pass += ctx.passed
+    total_fail += ctx.failed
+    total_skip += ctx.skipped
+    print()
+
+    # --- yaml-scalar fixture ---
+    fixture = fixtures_dir / "yaml-scalar.jsonl"
+    ctx = AssertionContext(use_color=use_color)
+    ctx.log_section("yaml-scalar")
+    if not fixture.is_file():
+        ctx._skip("fixture file not found: yaml-scalar.jsonl")
+    else:
+        ctx.last_output = fixture
+        ctx.assert_json_not_empty("TC-1: fixture is non-empty")
+        ctx.assert_json_has(
+            "*", "longer description", "TC-2: fixture contains full resolved description text"
+        )
+        ctx.assert_json_has(
+            "*", "block-scalar-skill", "TC-3: fixture references block-scalar-skill"
+        )
+        content = fixture.read_text(encoding="utf-8")
+        if ' - >' in content or '"description": ">"' in content:
+            ctx._fail("TC-4: bare '>' found as skill description in fixture")
+        else:
+            ctx._pass("TC-4: bare '>' not present as skill description")
     total_pass += ctx.passed
     total_fail += ctx.failed
     total_skip += ctx.skipped

@@ -214,13 +214,33 @@ def _parse_skill_frontmatter(content: str) -> dict | None:
     if not name_match or not desc_match:
         return None
 
+    # Resolve description, handling YAML block scalars (> and |)
+    raw_desc = desc_match.group(1).strip()
+    if raw_desc in (">", "|", ">-", "|-", ">+", "|+"):
+        # Collect subsequent indented lines following the block scalar indicator
+        after = fm_text[desc_match.end():]
+        block_lines: list[str] = []
+        for line in after.split("\n"):
+            if not line:
+                block_lines.append("")
+            elif line[0] in (" ", "\t"):
+                block_lines.append(line.strip())
+            else:
+                break
+        # Strip trailing empty entries
+        while block_lines and not block_lines[-1]:
+            block_lines.pop()
+        description = " ".join(line for line in block_lines if line)
+    else:
+        description = raw_desc
+
     # Extract prism: nested values if present (optional)
     agent_match = re.search(r"^\s+agent:\s*(.+)$", fm_text, re.MULTILINE)
     priority_match = re.search(r"^\s+priority:\s*(\d+)", fm_text, re.MULTILINE)
 
     return {
         "name": name_match.group(1).strip(),
-        "description": desc_match.group(1).strip() if desc_match else "",
+        "description": description,
         "agent": agent_match.group(1).strip() if agent_match else None,
         "priority": int(priority_match.group(1)) if priority_match else 99,
     }

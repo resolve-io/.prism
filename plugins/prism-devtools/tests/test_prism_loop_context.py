@@ -504,6 +504,67 @@ prism:
     assert result is None
 
 
+# --- YAML block scalar tests (GH #15) ---
+
+def test_parse_skill_frontmatter_folded_block_scalar():
+    """description: > (folded) collects indented lines as plain text, not just '>'."""
+    content = "---\nname: folded-skill\ndescription: >\n  Perform an operation with multiple steps\n  that require a longer description.\n---\n"
+    result = _parse_skill_frontmatter(content)
+    assert result is not None
+    assert result["description"] != ">"
+    assert "Perform an operation" in result["description"]
+    assert "longer description" in result["description"]
+
+
+def test_parse_skill_frontmatter_literal_block_scalar():
+    """description: | (literal) collects indented lines as plain text, not just '|'."""
+    content = "---\nname: literal-skill\ndescription: |\n  Run tests in parallel\n  across multiple nodes.\n---\n"
+    result = _parse_skill_frontmatter(content)
+    assert result is not None
+    assert result["description"] != "|"
+    assert "Run tests" in result["description"]
+    assert "multiple nodes" in result["description"]
+
+
+def test_parse_skill_frontmatter_block_scalar_strip_chomping():
+    """description: >- (strip chomping) is also handled correctly."""
+    content = "---\nname: strip-skill\ndescription: >-\n  Analyze codebase structure\n  and report findings.\n---\n"
+    result = _parse_skill_frontmatter(content)
+    assert result is not None
+    assert result["description"] not in (">-", ">", "")
+    assert "Analyze codebase" in result["description"]
+
+
+def test_parse_skill_frontmatter_inline_description_unchanged():
+    """Inline description (no block scalar) still works as before."""
+    content = "---\nname: inline-skill\ndescription: A simple one-line description\n---\n"
+    result = _parse_skill_frontmatter(content)
+    assert result is not None
+    assert result["description"] == "A simple one-line description"
+
+
+def test_parse_skill_frontmatter_block_scalar_with_prism_block():
+    """Block scalar description works alongside a prism: metadata block."""
+    content = (
+        "---\n"
+        "name: full-skill\n"
+        "description: >\n"
+        "  Scan all files before story creation\n"
+        "  to ensure nothing is missed.\n"
+        "prism:\n"
+        "  agent: sm\n"
+        "  priority: 2\n"
+        "---\n"
+    )
+    result = _parse_skill_frontmatter(content)
+    assert result is not None
+    assert result["name"] == "full-skill"
+    assert result["agent"] == "sm"
+    assert result["priority"] == 2
+    assert result["description"] != ">"
+    assert "Scan all files" in result["description"]
+
+
 def _create_skill(skills_dir, name, content):
     """Helper to create a SKILL.md in the given skills directory."""
     skill_dir = skills_dir / name
