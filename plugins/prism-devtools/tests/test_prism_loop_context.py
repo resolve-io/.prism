@@ -296,7 +296,7 @@ def test_no_hardcoded_skill_references_in_core_steps():
 
 
 def test_skills_injection_uses_directive_language(tmp_path, monkeypatch):
-    """When skills are discovered, injection text lists them for the agent."""
+    """When skills are discovered, injection text uses mandatory imperative language."""
     monkeypatch.chdir(tmp_path)
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
@@ -306,11 +306,11 @@ def test_skills_injection_uses_directive_language(tmp_path, monkeypatch):
             step_id, agent, action,
             "docs/stories/test-story.md", "", MOCK_RUNNER
         )
-        assert "1% chance" in instruction, (
-            f"Skill injection text missing from {step_id} when skills present"
+        assert "MANDATORY" in instruction, (
+            f"Skill injection must use imperative MANDATORY language in {step_id}"
         )
-        assert "MANDATORY" not in instruction, (
-            f"Skill injection should not force all skills on {step_id}"
+        assert "Skill tool" in instruction, (
+            f"Skill injection must reference the Skill tool in {step_id}"
         )
 
 
@@ -730,6 +730,43 @@ prism:
     assert result[1]["priority"] == 10
     assert result[2]["name"] == "third-skill"
     assert result[2]["priority"] == 99
+
+
+def test_discover_prism_skills_diagnostic_logging(tmp_path, monkeypatch, capsys):
+    """discover_prism_skills logs discovery progress and found skill names to stderr."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
+
+    result = discover_prism_skills()
+    captured = capsys.readouterr()
+
+    assert "[skill-discovery]" in captured.err, "Missing [skill-discovery] prefix in log"
+    assert "my-discovery-skill" in captured.err, "Found skill name must appear in log"
+    assert "1 skill" in captured.err, "Total count must appear in log"
+    assert len(result) == 1
+
+
+def test_discover_prism_skills_logs_empty_result(tmp_path, monkeypatch, capsys):
+    """discover_prism_skills logs '0 skill(s) found' when nothing discovered."""
+    monkeypatch.chdir(tmp_path)
+    discover_prism_skills()
+    captured = capsys.readouterr()
+
+    assert "[skill-discovery]" in captured.err
+    assert "0 skill" in captured.err
+
+
+def test_discover_prism_skills_logs_invalid_frontmatter(tmp_path, monkeypatch, capsys):
+    """discover_prism_skills logs skipped skills with invalid frontmatter."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "missing-name", SKILL_MD_MISSING_FIELDS)
+
+    discover_prism_skills()
+    captured = capsys.readouterr()
+
+    assert "invalid frontmatter" in captured.err, "Must log skipped invalid-frontmatter skills"
 
 
 def test_instructions_unchanged_without_discovered_skills():
