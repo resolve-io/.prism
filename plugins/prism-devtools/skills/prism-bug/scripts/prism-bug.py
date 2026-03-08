@@ -229,11 +229,11 @@ def collect_brain_status() -> str:
         from brain_engine import Brain  # type: ignore[import]
         brain = Brain()
         try:
-            count = brain._conn.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
+            count = brain._brain.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
         except Exception:
             count = "unknown"
         try:
-            brain.system_context("test", role="dev", step="review_previous_notes")
+            brain.system_context(persona="dev")
             result_count = brain.last_result_count
         except Exception as exc:
             result_count = f"error: {exc}"
@@ -386,7 +386,7 @@ def collect_step_history_analysis(state_content: str) -> str:
     rows = ["| Step | Brain Queries (bq) | Skill Calls (s) |",
             "|------|--------------------|-----------------|"]
     for entry in history:
-        step = entry.get("step", "?")
+        step = entry.get("i", "?")
         bq = entry.get("bq", 0)
         s = entry.get("s", 0)
         rows.append(f"| `{step}` | {bq} | {s} |")
