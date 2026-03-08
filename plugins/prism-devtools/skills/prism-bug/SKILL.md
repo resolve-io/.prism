@@ -46,7 +46,15 @@ The description becomes the issue title prefix.
 | Source | Contents |
 |--------|---------|
 | State file | Current step, step history, active/paused status |
+| Step history analysis | Per-step `bq` (Brain queries) and `s` (skill calls) summary |
+| Brain status | Init success/failure, doc count, `system_context()` result count |
+| Conductor status | Init success/failure, `_brain_available`, `last_prompt_id` |
+| Skill discovery | Paths scanned, skills found with descriptions, total count |
+| Session-start hook | stdout/stderr from running `session-start.py` |
+| Plugin cache path | `CLAUDE_PLUGIN_ROOT` value — cache vs live source detection |
+| Test runner | Detected type, test command, lint command |
 | Transcript | Last ~50 tool calls (name + input summary, errors) |
+| Hook execution results | `hook_progress` events extracted from transcript |
 | Gate results | `artifacts/qa/gates/*.yml` if present |
 | Git context | Branch, last 5 commits, dirty files |
 | Plugin version | From `.claude-plugin/plugin.json` |
