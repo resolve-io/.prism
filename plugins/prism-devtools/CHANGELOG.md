@@ -5,6 +5,16 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2026-03-08
+
+### Added
+
+- **Session handoff artifact** — `_write_step_handoff()` writes `.prism/handoff.md` on each step completion; `review_previous_notes` uses it to skip full context re-discovery, saving millions of tokens on re-start
+
+### Fixed
+
+- Preserved `gate_passed=0` recording in `conductor.record_outcome()` on validation failure (regression prevention)
+
 ## [3.5.0] - 2026-03-07
 
 ### Added

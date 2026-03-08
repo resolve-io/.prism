@@ -247,16 +247,16 @@ class TestAC5_VersionOrdering:
 
     def test_ac5_250_is_latest_version(self):
         """
-        AC-5: [2.5.0] is the first (topmost) version entry in CHANGELOG
+        AC-5: [3.5.1] is the first (topmost) version entry in CHANGELOG
         Requirement: Latest release must be at the very top of the version list
-        Expected: First '## [X.Y.Z]' match in CHANGELOG is [2.5.0]
+        Expected: First '## [X.Y.Z]' match in CHANGELOG is [3.5.1]
         """
         text = _changelog_text()
         first_version = re.search(r"## \[(\d+\.\d+\.\d+)\]", text)
         assert first_version, "No version headings found in CHANGELOG"
-        assert first_version.group(1) == "2.6.4", (
+        assert first_version.group(1) == "3.5.1", (
             f"First version in CHANGELOG is '{first_version.group(1)}', "
-            f"expected '2.6.4' (should be latest)"
+            f"expected '3.5.1' (should be latest)"
         )
 
 
