@@ -6,6 +6,7 @@ Subcommands:
   report   — show the last results
   list     — list available tests
   validate — run self-tests against fixture JSONL files (no claude invocation required)
+  diagnose — run diagnostic analysis on a JSONL transcript
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from pathlib import Path
 from types import ModuleType
 
 from .assertions import AssertionContext, _c, _C_BOLD, _C_CYAN, _C_GREEN, _C_RED, _C_YELLOW, _C_RESET
+from .diagnostics import format_report, run_diagnostics
 from .parser import parse_jsonl, extract_tool_calls, count_turns
 from .reporter import write_harness_report, parse_results_dir, show_report
 from .scaffold import Scaffold
@@ -525,6 +527,54 @@ def _cmd_report(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: diagnose
+# ---------------------------------------------------------------------------
+
+def _cmd_diagnose(args: argparse.Namespace) -> int:
+    """Run diagnostic analysis against a JSONL transcript."""
+    import shutil
+
+    jsonl_path = Path(args.jsonl_path).resolve()
+    if not jsonl_path.is_file():
+        print(f"ERROR: JSONL file not found: {jsonl_path}")
+        return 1
+
+    use_color = sys.stdout.isatty()
+    events = parse_jsonl(jsonl_path)
+    if not events:
+        print(f"ERROR: No events parsed from {jsonl_path}")
+        return 1
+
+    results = run_diagnostics(events)
+    report = format_report(results, use_color=use_color)
+
+    sep = "━" * 56
+    print()
+    print(_c(_C_BOLD, "prism-harness diagnostic report", use_color))
+    print(sep)
+    print(f"  Source: {jsonl_path}")
+    print(f"  Events: {len(events)}")
+    print(sep)
+    print(report)
+    print(sep)
+    print()
+
+    # --save-fixture: copy JSONL to fixtures dir with given name
+    fixture_name = getattr(args, "save_fixture", None)
+    if fixture_name:
+        harness_dir = Path(__file__).parent.parent
+        fixtures_dir = harness_dir / "fixtures"
+        fixtures_dir.mkdir(parents=True, exist_ok=True)
+        dest = fixtures_dir / f"{fixture_name}.jsonl"
+        shutil.copy2(jsonl_path, dest)
+        print(f"  Fixture saved: {dest}")
+        print()
+
+    has_fail = any(r.status == "FAIL" for r in results)
+    return 1 if has_fail else 0
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -585,6 +635,16 @@ def main() -> None:
     # validate
     subparsers.add_parser("validate", help="Run self-tests against fixture JSONL files")
 
+    # diagnose
+    diag_p = subparsers.add_parser("diagnose", help="Run diagnostic analysis on a JSONL transcript")
+    diag_p.add_argument("jsonl_path", help="Path to a stream-json JSONL file")
+    diag_p.add_argument(
+        "--save-fixture",
+        metavar="NAME",
+        dest="save_fixture",
+        help="Save JSONL as a named fixture (e.g. --save-fixture subagent-bug)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "run":
@@ -597,6 +657,8 @@ def main() -> None:
         sys.exit(_cmd_list(args))
     elif args.command == "validate":
         sys.exit(_cmd_validate(args))
+    elif args.command == "diagnose":
+        sys.exit(_cmd_diagnose(args))
     else:
         parser.print_help()
         sys.exit(0)
