@@ -8,7 +8,6 @@ Part of: PRISM Core Development Lifecycle
 
 import sys
 import io
-import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,4 +89,9 @@ def main():
     sys.exit(0)
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        sys.exit(0)

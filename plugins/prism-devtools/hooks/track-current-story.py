@@ -8,11 +8,9 @@ Part of: PRISM Core Development Lifecycle
 
 import sys
 import io
-import json
 import os
 import re
 from datetime import datetime, timezone
-from pathlib import Path
 
 # Fix Windows console encoding for emoji support
 if sys.stdout.encoding != 'utf-8':
@@ -32,9 +30,6 @@ def main():
         with open('.prism-current-story.txt', 'w') as f:
             f.write(file_path)
 
-        # Extract story filename
-        story_filename = Path(file_path).stem
-
         # Log the story activation
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         with open('.prism-workflow.log', 'a') as log:
@@ -46,4 +41,9 @@ def main():
     sys.exit(0)
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        sys.exit(0)

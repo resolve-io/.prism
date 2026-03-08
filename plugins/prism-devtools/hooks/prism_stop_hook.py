@@ -22,10 +22,13 @@ if sys.stdout.encoding != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-from prism_loop_context import build_agent_instruction, detect_project_conventions, resolve_state_file, resolve_handoff_file
+try:
+    from prism_loop_context import build_agent_instruction, resolve_state_file
 
-# State file location — anchored to git root so CWD shifts don't lose the file.
-STATE_FILE = resolve_state_file()
+    # State file location — anchored to git root so CWD shifts don't lose the file.
+    STATE_FILE = resolve_state_file()
+except Exception:
+    sys.exit(0)
 
 # Workflow steps from core-development-cycle.yaml
 # Step types: "agent" = auto-execute, "gate" = pause for /prism-approve
@@ -1612,4 +1615,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        sys.exit(0)
