@@ -216,13 +216,13 @@ class TestAC4_PluginJsonVersion:
 
     def test_ac4_plugin_json_version_is_351(self):
         """
-        AC-4: plugin.json 'version' field is '3.5.1'
-        Requirement: Version bump from 3.5.0 → 3.5.1 for session handoff artifact feature
-        Expected: json.loads(plugin.json)['version'] == '3.5.1'
+        AC-4: plugin.json 'version' field is '3.5.2'
+        Requirement: Version bump from 3.5.0 → 3.5.2 for session handoff artifact feature
+        Expected: json.loads(plugin.json)['version'] == '3.5.2'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.5.1", (
-            f"plugin.json version is '{data.get('version')}', expected '3.5.1'"
+        assert data.get("version") == "3.5.2", (
+            f"plugin.json version is '{data.get('version')}', expected '3.5.2'"
         )
 
 
@@ -247,16 +247,16 @@ class TestAC5_VersionOrdering:
 
     def test_ac5_250_is_latest_version(self):
         """
-        AC-5: [3.5.1] is the first (topmost) version entry in CHANGELOG
+        AC-5: [3.5.2] is the first (topmost) version entry in CHANGELOG
         Requirement: Latest release must be at the very top of the version list
-        Expected: First '## [X.Y.Z]' match in CHANGELOG is [3.5.1]
+        Expected: First '## [X.Y.Z]' match in CHANGELOG is [3.5.2]
         """
         text = _changelog_text()
         first_version = re.search(r"## \[(\d+\.\d+\.\d+)\]", text)
         assert first_version, "No version headings found in CHANGELOG"
-        assert first_version.group(1) == "3.5.1", (
+        assert first_version.group(1) == "3.5.2", (
             f"First version in CHANGELOG is '{first_version.group(1)}', "
-            f"expected '3.5.1' (should be latest)"
+            f"expected '3.5.2' (should be latest)"
         )
 
 
