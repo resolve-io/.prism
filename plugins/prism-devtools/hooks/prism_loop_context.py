@@ -38,6 +38,28 @@ def resolve_state_file() -> Path:
     return find_project_root() / ".claude" / "prism-loop.local.md"
 
 
+def resolve_handoff_file() -> Path:
+    """Return the absolute path to the PRISM session handoff artifact, anchored to the git root."""
+    return find_project_root() / ".prism" / "handoff.md"
+
+
+def _load_handoff() -> str:
+    """Load the session handoff summary from the previous workflow, if available.
+
+    Returns handoff content (capped at 1500 chars), or empty string if not found.
+    """
+    try:
+        handoff_path = resolve_handoff_file()
+        if handoff_path.exists():
+            content = handoff_path.read_text(encoding='utf-8', errors='replace').strip()
+            if len(content) > 1500:
+                content = content[:1500] + "\n...(truncated)"
+            return content
+    except Exception:
+        pass
+    return ""
+
+
 # --- Role Cards (compressed from full persona files) ---
 ROLE_CARDS = {
     "sm": """Role: Story Planning Specialist (Sam)
@@ -494,6 +516,19 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
     if step_id in _STEPS_WITH_PROMPT and prompt:
         label = _prompt_label_for_step(step_id)
         parts.extend([f"{label}: {prompt}", ""])
+
+    # Session handoff injection for review_previous_notes
+    if step_id == "review_previous_notes":
+        handoff = _load_handoff()
+        if handoff:
+            parts.extend([
+                "## Session Handoff Available",
+                "IMPORTANT: A handoff from the previous workflow session is available below.",
+                "Use this summary INSTEAD of running full context discovery (skip steps 1-4).",
+                "",
+                handoff,
+                "",
+            ])
 
     # Core step body
     parts.append(body)

@@ -30,8 +30,10 @@ from prism_loop_context import (
     detect_project_conventions,
     find_project_root,
     resolve_state_file,
+    resolve_handoff_file,
     parse_state,
     _parse_skill_frontmatter,
+    _load_handoff,
     discover_prism_skills,
 )
 
@@ -1122,3 +1124,133 @@ def test_core_steps_have_role_scoped_brain_examples():
             f"Expected at least 2 of {expected_domains}, found: {matched}. "
             f"Brain examples must be scoped to {role.upper()} domain."
         )
+
+
+# --- Session Handoff ---
+
+import unittest.mock as _mock_handoff
+
+
+def test_resolve_handoff_file_returns_path():
+    """resolve_handoff_file returns a Path ending in .prism/handoff.md."""
+    path = resolve_handoff_file()
+    assert isinstance(path, Path)
+    assert path.name == "handoff.md"
+    assert path.parent.name == ".prism"
+
+
+def test_load_handoff_returns_empty_when_no_file(tmp_path, monkeypatch):
+    """_load_handoff returns empty string when .prism/handoff.md does not exist."""
+    fake_root = _mock_handoff.MagicMock()
+    fake_root.returncode = 0
+    fake_root.stdout = str(tmp_path) + "\n"
+    with _mock_handoff.patch("prism_loop_context.subprocess.run", return_value=fake_root):
+        result = _load_handoff()
+    assert result == ""
+
+
+def test_load_handoff_returns_content_when_file_exists(tmp_path, monkeypatch):
+    """_load_handoff returns file content when .prism/handoff.md exists."""
+    handoff_dir = tmp_path / ".prism"
+    handoff_dir.mkdir()
+    handoff_file = handoff_dir / "handoff.md"
+    handoff_file.write_text("# Handoff\nStep completed: draft_story", encoding="utf-8")
+
+    fake_root = _mock_handoff.MagicMock()
+    fake_root.returncode = 0
+    fake_root.stdout = str(tmp_path) + "\n"
+    with _mock_handoff.patch("prism_loop_context.subprocess.run", return_value=fake_root):
+        result = _load_handoff()
+    assert "draft_story" in result
+    assert "Handoff" in result
+
+
+def test_load_handoff_truncates_long_content(tmp_path):
+    """_load_handoff caps content at 1500 chars to avoid bloating instructions."""
+    handoff_dir = tmp_path / ".prism"
+    handoff_dir.mkdir()
+    handoff_file = handoff_dir / "handoff.md"
+    long_content = "x" * 2000
+    handoff_file.write_text(long_content, encoding="utf-8")
+
+    fake_root = _mock_handoff.MagicMock()
+    fake_root.returncode = 0
+    fake_root.stdout = str(tmp_path) + "\n"
+    with _mock_handoff.patch("prism_loop_context.subprocess.run", return_value=fake_root):
+        result = _load_handoff()
+    assert len(result) < 1600
+    assert "truncated" in result
+
+
+_HANDOFF_INJECTION_MARKER = "A handoff from the previous workflow session is available below."
+
+
+def test_review_previous_notes_injects_handoff_when_present(tmp_path, monkeypatch):
+    """build_agent_instruction for review_previous_notes includes handoff when available."""
+    monkeypatch.chdir(tmp_path)
+    handoff_dir = tmp_path / ".prism"
+    handoff_dir.mkdir()
+    handoff_file = handoff_dir / "handoff.md"
+    handoff_file.write_text("Step completed: draft_story\nStory: auth feature", encoding="utf-8")
+
+    fake_root = _mock_handoff.MagicMock()
+    fake_root.returncode = 0
+    fake_root.stdout = str(tmp_path) + "\n"
+    with _mock_handoff.patch("prism_loop_context.subprocess.run", return_value=fake_root):
+        instruction = build_agent_instruction(
+            "review_previous_notes", "sm", "planning-review",
+            "", "Build auth", MOCK_RUNNER,
+        )
+    assert _HANDOFF_INJECTION_MARKER in instruction, (
+        "Handoff injection header missing from review_previous_notes when handoff present"
+    )
+    assert "draft_story" in instruction, "Handoff content not injected into instruction"
+    assert "auth feature" in instruction, "Handoff content not injected into instruction"
+
+
+def test_review_previous_notes_no_handoff_injection_when_absent(tmp_path, monkeypatch):
+    """build_agent_instruction for review_previous_notes has no handoff injection when absent."""
+    monkeypatch.chdir(tmp_path)
+    fake_root = _mock_handoff.MagicMock()
+    fake_root.returncode = 0
+    fake_root.stdout = str(tmp_path) + "\n"
+    with _mock_handoff.patch("prism_loop_context.subprocess.run", return_value=fake_root):
+        instruction = build_agent_instruction(
+            "review_previous_notes", "sm", "planning-review",
+            "", "Build auth", MOCK_RUNNER,
+        )
+    assert _HANDOFF_INJECTION_MARKER not in instruction, (
+        "Handoff injection must not appear when no handoff file exists"
+    )
+
+
+def test_other_steps_do_not_inject_handoff(tmp_path, monkeypatch):
+    """Handoff injection only applies to review_previous_notes, not other steps."""
+    monkeypatch.chdir(tmp_path)
+    handoff_dir = tmp_path / ".prism"
+    handoff_dir.mkdir()
+    (handoff_dir / "handoff.md").write_text("handoff content", encoding="utf-8")
+
+    fake_root = _mock_handoff.MagicMock()
+    fake_root.returncode = 0
+    fake_root.stdout = str(tmp_path) + "\n"
+    with _mock_handoff.patch("prism_loop_context.subprocess.run", return_value=fake_root):
+        for step_id, agent, action in AGENT_STEPS:
+            if step_id == "review_previous_notes":
+                continue
+            instruction = build_agent_instruction(
+                step_id, agent, action,
+                "docs/stories/test.md", "", MOCK_RUNNER,
+            )
+            assert _HANDOFF_INJECTION_MARKER not in instruction, (
+                f"Handoff injection must not appear in {step_id}"
+            )
+
+
+def test_review_previous_notes_md_references_handoff():
+    """review_previous_notes.md must mention Session Handoff for agents to notice it."""
+    core_steps_dir = HOOKS_DIR / "core-steps"
+    content = (core_steps_dir / "review_previous_notes.md").read_text(encoding="utf-8")
+    assert "Session Handoff" in content, (
+        "review_previous_notes.md must mention 'Session Handoff' so agents know to use it"
+    )
