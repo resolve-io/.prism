@@ -312,6 +312,14 @@ class Brain:
         "testdata", "seed-data",
     }
 
+    # Subpaths allowed even when a parent segment is in _EXCLUDED_PATH_SEGMENTS.
+    # Use forward-slash notation; matched against normalised filepath (/ separators).
+    _ALLOWED_SUBPATHS: frozenset[str] = frozenset({
+        ".claude/skills",       # skill command docs
+        ".prism/brain/memory",  # Brain auto-memory files
+        ".prism/handoff.md",    # session handoff artifact
+    })
+
     _USER_EXCLUDE_FILE = ".prism/brain/exclude"
 
     # Role → preferred Brain domain list for system_context() filtering.
@@ -577,6 +585,14 @@ class Brain:
         return segments
 
     def _should_index(self, filepath: str) -> bool:
+        # Normalise separators so allow-list matching works cross-platform.
+        norm = filepath.replace("\\", "/")
+        # Allow specific subpaths within otherwise-excluded directories.
+        if any(
+            norm == sp or norm.startswith(sp + "/")
+            for sp in self._ALLOWED_SUBPATHS
+        ):
+            return Path(filepath).suffix in self._INDEXABLE_SUFFIXES
         p = Path(filepath)
         if any(part in self._effective_excludes for part in p.parts):
             return False
@@ -2134,10 +2150,22 @@ class Brain:
 # ---------------------------------------------------------------------------
 
 def _cli_source_dirs() -> list[str]:
-    """Return source directories to index, mirroring brain_bootstrap logic."""
+    """Return source directories and files to index.
+
+    Covers:
+    - Standard project dirs (docs/, src/, lib/, scripts/, plugins/, hooks/)
+    - Root-level *.md files (README.md, CLAUDE.md, AGENTS.md, etc.)
+    - .claude/skills/ — skill command documentation
+    - .prism/brain/memory/ — Brain auto-memory files
+    - .prism/handoff.md — session handoff artifact
+    - Auto-detected dirs: app/, packages/, modules/
+    - Plugin core-steps
+    """
     sources: list[str] = []
     cwd = Path.cwd()
     plugin_root = Path(__file__).resolve().parent.parent
+
+    # Standard dirs
     docs_dir = cwd / "docs"
     if docs_dir.exists():
         sources.append(str(docs_dir))
@@ -2148,6 +2176,30 @@ def _cli_source_dirs() -> list[str]:
         candidate = cwd / src_dir
         if candidate.exists() and candidate.is_dir():
             sources.append(str(candidate))
+
+    # Root-level markdown files (CLAUDE.md, README.md, AGENTS.md, etc.)
+    for md_file in sorted(cwd.glob("*.md")):
+        sources.append(str(md_file))
+
+    # .claude/skills/ — skill docs (allowed via _ALLOWED_SUBPATHS)
+    claude_skills = cwd / ".claude" / "skills"
+    if claude_skills.exists() and claude_skills.is_dir():
+        sources.append(str(claude_skills))
+
+    # .prism/ memory and handoff (allowed via _ALLOWED_SUBPATHS)
+    prism_memory = cwd / ".prism" / "brain" / "memory"
+    if prism_memory.exists() and prism_memory.is_dir():
+        sources.append(str(prism_memory))
+    prism_handoff = cwd / ".prism" / "handoff.md"
+    if prism_handoff.exists():
+        sources.append(str(prism_handoff))
+
+    # Auto-detect common project layout dirs
+    for auto_dir in ("app", "packages", "modules"):
+        candidate = cwd / auto_dir
+        if candidate.exists() and candidate.is_dir():
+            sources.append(str(candidate))
+
     if not sources:
         sources.append(str(cwd))
     return sources
