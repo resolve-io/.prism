@@ -8,6 +8,8 @@ Coverage:
 - _format_trace_matrix() / get_gate_message(red_gate): trace matrix display
 """
 
+import io
+import json
 import re
 import sys
 import subprocess
@@ -359,3 +361,107 @@ def test_detect_project_conventions_no_runner(tmp_path, monkeypatch):
     result = detect_test_runner()
     assert result["type"] == "unknown"
     assert result["command"] is None
+
+
+# ---------------------------------------------------------------------------
+# gate_passed value in conductor.record_outcome()
+# ---------------------------------------------------------------------------
+
+import prism_stop_hook as _psh
+
+_FAKE_USAGE = {
+    "total_tokens": 500,
+    "model": "claude-test",
+    "total_lines": 10,
+    "skill_calls": 1,
+    "tool_calls": 3,
+}
+
+_STATE_TEMPLATE = """\
+---
+active: true
+current_step: {step}
+current_step_index: {index}
+story_file: story.md
+paused_for_manual: false
+session_id: test-session
+started_at: 2026-01-01T00:00:00
+step_started_at: 2026-01-01T00:00:00
+step_tokens_start: 0
+---
+"""
+
+
+def _make_state_file(tmp_path, step, index):
+    state_file = tmp_path / "state.md"
+    state_file.write_text(_STATE_TEMPLATE.format(step=step, index=index))
+    return state_file
+
+
+def _run_main_with_mocks(monkeypatch, tmp_path, state_file, validate_result):
+    """Run main() with standard mocks; return captured record_outcome calls."""
+    import sys
+
+    stdin_data = json.dumps({"session_id": "test-session", "transcript_path": ""})
+    monkeypatch.setattr(sys, "stdin", io.StringIO(stdin_data))
+    monkeypatch.setattr(_psh, "STATE_FILE", state_file)
+    monkeypatch.setattr(_psh, "get_usage_from_transcript", lambda *_a, **_k: _FAKE_USAGE)
+    monkeypatch.setattr(_psh, "is_same_session", lambda *_a: True)
+    monkeypatch.setattr(_psh, "is_workflow_stale", lambda *_a: False)
+    monkeypatch.setattr(_psh, "_record_session_outcome", lambda *_a: None)
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a: validate_result)
+
+    captured = []
+
+    fake_conductor = MagicMock()
+    fake_conductor.record_outcome.side_effect = lambda **kw: captured.append(kw)
+    fake_conductor.last_had_brain_context = 0
+    fake_conductor.incremental_reindex = MagicMock()
+    fake_conductor.build_agent_instruction = MagicMock(return_value="instruction")
+
+    fake_module = MagicMock()
+    fake_module.Conductor.return_value = fake_conductor
+
+    with patch.dict(sys.modules, {"conductor_engine": fake_module}):
+        with pytest.raises(SystemExit):
+            _psh.main()
+
+    return captured
+
+
+def test_gate_passed_zero_recorded_when_validation_fails(tmp_path, monkeypatch):
+    """When validation fails, record_outcome must be called with gate_passed=0."""
+    # write_failing_tests (index 3) has red_with_trace validation
+    state_file = _make_state_file(tmp_path, "write_failing_tests", 3)
+    fail_result = {
+        "valid": False,
+        "message": "Tests are not failing",
+        "continue_instruction": "Write failing tests first",
+    }
+    captured = _run_main_with_mocks(monkeypatch, tmp_path, state_file, fail_result)
+
+    assert len(captured) == 1, "record_outcome should be called exactly once"
+    assert captured[0]["metrics"]["gate_passed"] == 0
+
+
+def test_gate_passed_one_recorded_when_validation_passes(tmp_path, monkeypatch):
+    """When validation passes, record_outcome must be called with gate_passed=1."""
+    # implement_tasks (index 5) has green validation; next step is verify_green_state (agent)
+    state_file = _make_state_file(tmp_path, "implement_tasks", 5)
+    pass_result = {"valid": True, "message": "Tests passing", "continue_instruction": ""}
+    captured = _run_main_with_mocks(monkeypatch, tmp_path, state_file, pass_result)
+
+    assert len(captured) == 1, "record_outcome should be called exactly once"
+    assert captured[0]["metrics"]["gate_passed"] == 1
+
+
+def test_gate_passed_one_when_no_validation(tmp_path, monkeypatch):
+    """Steps with no validation type should record gate_passed=1."""
+    # review_previous_notes (index 0) has validation=None; next step is draft_story (agent)
+    state_file = _make_state_file(tmp_path, "review_previous_notes", 0)
+    # validate_step should not be called, but mock it just in case
+    pass_result = {"valid": True, "message": "", "continue_instruction": ""}
+    captured = _run_main_with_mocks(monkeypatch, tmp_path, state_file, pass_result)
+
+    assert len(captured) == 1, "record_outcome should be called exactly once"
+    assert captured[0]["metrics"]["gate_passed"] == 1

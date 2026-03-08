@@ -1314,11 +1314,43 @@ def main():
     if step_type == "gate":
         sys.exit(0)
 
+    # Build step history metrics early — needed for record_outcome on both pass and fail
+    now_ts = datetime.now()
+    step_dur_secs = 0
+    step_ref_str = state.get("step_started_at", state.get("started_at", ""))
+    if step_ref_str:
+        try:
+            step_dur_secs = max(0, int((now_ts - datetime.fromisoformat(step_ref_str)).total_seconds()))
+        except (ValueError, TypeError):
+            pass
+    step_tok_start = state.get("step_tokens_start", 0)
+    step_toks_used = max(0, usage["total_tokens"] - step_tok_start)
+    step_skill_calls = usage.get("skill_calls", 0)
+    step_tool_calls = usage.get("tool_calls", 0)
+
     # VALIDATE current step before advancing
+    gate_passed = 1  # default: no validation required = passed
     if validation:
         validation_result = validate_step(step_id, validation, state)
 
         if not validation_result["valid"]:
+            # Record failure outcome so Conductor learns from validation failures
+            try:
+                from conductor_engine import Conductor
+                Conductor().record_outcome(
+                    prompt_id=f"{agent}/{step_id}",
+                    persona=agent,
+                    step_id=step_id,
+                    metrics={
+                        "tokens_used": step_toks_used,
+                        "duration_s": step_dur_secs,
+                        "gate_passed": 0,
+                        "skill_calls": step_skill_calls,
+                        "tool_calls": step_tool_calls,
+                    },
+                )
+            except Exception:
+                pass
             # Block stop - work not complete
             print(json.dumps({
                 "decision": "block",
@@ -1338,20 +1370,6 @@ def main():
 
     next_step = get_step_info(next_index)
     next_step_id, next_agent, next_action, next_step_type, next_loop_back, next_validation = next_step
-
-    # Build step history metrics for the step we just completed
-    now_ts = datetime.now()
-    step_dur_secs = 0
-    step_ref_str = state.get("step_started_at", state.get("started_at", ""))
-    if step_ref_str:
-        try:
-            step_dur_secs = max(0, int((now_ts - datetime.fromisoformat(step_ref_str)).total_seconds()))
-        except (ValueError, TypeError):
-            pass
-    step_tok_start = state.get("step_tokens_start", 0)
-    step_toks_used = max(0, usage["total_tokens"] - step_tok_start)
-    step_skill_calls = usage.get("skill_calls", 0)
-    step_tool_calls = usage.get("tool_calls", 0)
 
     # Auto-observe: record step completion to mulch (Observe->Classify->Stage pipeline)
     _auto_observe_stage(
@@ -1423,7 +1441,7 @@ def main():
             metrics={
                 "tokens_used": step_toks_used,
                 "duration_s": step_dur_secs,
-                "gate_passed": 1,
+                "gate_passed": gate_passed,
                 "skill_calls": step_skill_calls,
                 "tool_calls": step_tool_calls,
             },
