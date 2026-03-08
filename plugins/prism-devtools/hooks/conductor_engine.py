@@ -47,7 +47,7 @@ class Conductor:
         self._try_init_brain()
 
     def _try_init_brain(self) -> None:
-        """Attempt to initialise Brain. Fails silently if unavailable."""
+        """Attempt to initialise Brain. Logs specific error to stderr if unavailable."""
         try:
             from brain_engine import Brain
             self._brain = Brain()
@@ -204,7 +204,11 @@ class Conductor:
             variant_name = prompt_id.split("/", 1)[1] if "/" in prompt_id else "default"
             content = self._brain.get_prompt(persona, variant_name)
             return (prompt_id, content)
-        except Exception:
+        except Exception as exc:
+            print(
+                f"Conductor: _select_prompt failed ({type(exc).__name__}: {exc})",
+                file=sys.stderr,
+            )
             return (f"{persona}/default", "")
 
     def _save_prompt_id(self, prompt_id: str) -> None:
@@ -255,7 +259,11 @@ class Conductor:
                 brain_ctx = self._brain.system_context(
                     story_file=story_file, persona=agent
                 )
-            except Exception:
+            except Exception as exc:
+                print(
+                    f"Conductor: system_context failed ({type(exc).__name__}: {exc})",
+                    file=sys.stderr,
+                )
                 brain_ctx = ""
 
         self.last_had_brain_context = (

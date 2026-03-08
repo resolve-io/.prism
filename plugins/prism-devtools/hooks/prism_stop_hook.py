@@ -1421,13 +1421,20 @@ def main():
             state["story_file"], state["prompt"], runner,
         )
         brain_queries = conductor.last_had_brain_context
-    except (ImportError, Exception):
+    except (ImportError, Exception) as exc:
         # Conductor unavailable — reindex Brain directly so knowledge stays current
+        print(
+            f"[PRISM] Conductor unavailable ({type(exc).__name__}: {exc}), falling back to base instruction",
+            file=sys.stderr,
+        )
         try:
             from brain_engine import Brain
             Brain().incremental_reindex()
-        except Exception:
-            pass
+        except Exception as brain_exc:
+            print(
+                f"[PRISM] Brain reindex failed ({type(brain_exc).__name__}: {brain_exc})",
+                file=sys.stderr,
+            )
         instruction = build_agent_instruction(
             next_step_id, next_agent, next_action,
             state["story_file"], state["prompt"], runner,
