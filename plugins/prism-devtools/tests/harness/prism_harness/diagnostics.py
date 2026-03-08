@@ -105,48 +105,52 @@ def _check_subagent_lifecycle(events: list[HarnessEvent]) -> DiagnosticResult:
     """Check 1: sub-agent lifecycle completeness."""
     if correlate_subagent_lifecycle is not None:
         lifecycle_data = correlate_subagent_lifecycle(events)
-    else:
-        # Fallback: look for Agent tool calls in assistant messages
-        from .parser import extract_tool_calls
-        tool_calls = extract_tool_calls(events)
-        agent_calls = [tc for tc in tool_calls if tc.get("name") == "Agent"]
-        if not agent_calls:
+        if not lifecycle_data:
             return DiagnosticResult(
                 name="subagent-lifecycle",
                 status="PASS",
                 detail="No sub-agent events found",
             )
-        lifecycle_data = [{"type": "spawn", "complete": False} for _ in agent_calls]
+        # SubagentLifecycle dataclass: complete means stop_event is present
+        complete = [e for e in lifecycle_data if e.stop_event is not None]
+        total = len(lifecycle_data)
 
-    if not lifecycle_data:
+        if len(complete) == total:
+            return DiagnosticResult(
+                name="subagent-lifecycle",
+                status="PASS",
+                detail=f"All {total} spawn(s) have complete lifecycle (started+stopped)",
+                data={"total": total, "complete": len(complete)},
+            )
+        if complete:
+            return DiagnosticResult(
+                name="subagent-lifecycle",
+                status="WARN",
+                detail=f"{len(complete)}/{total} spawns completed; some only started but did not stop",
+                data={"total": total, "complete": len(complete)},
+            )
+        return DiagnosticResult(
+            name="subagent-lifecycle",
+            status="FAIL",
+            detail=f"{total} spawn(s) found but none completed lifecycle",
+            data={"total": total, "complete": 0},
+        )
+
+    # Fallback: look for Agent tool calls in assistant messages
+    from .parser import extract_tool_calls
+    tool_calls = extract_tool_calls(events)
+    agent_calls = [tc for tc in tool_calls if tc.get("name") == "Agent"]
+    if not agent_calls:
         return DiagnosticResult(
             name="subagent-lifecycle",
             status="PASS",
             detail="No sub-agent events found",
         )
-
-    complete = [e for e in lifecycle_data if e.get("complete", False)]
-    total = len(lifecycle_data)
-
-    if len(complete) == total:
-        return DiagnosticResult(
-            name="subagent-lifecycle",
-            status="PASS",
-            detail=f"All {total} spawn(s) have complete lifecycle (started+stopped)",
-            data={"total": total, "complete": len(complete)},
-        )
-    if complete:
-        return DiagnosticResult(
-            name="subagent-lifecycle",
-            status="WARN",
-            detail=f"{len(complete)}/{total} spawns completed; some only started but did not stop",
-            data={"total": total, "complete": len(complete)},
-        )
     return DiagnosticResult(
         name="subagent-lifecycle",
-        status="FAIL",
-        detail=f"{total} spawn(s) found but none completed lifecycle",
-        data={"total": total, "complete": 0},
+        status="WARN",
+        detail=f"{len(agent_calls)} Agent call(s) found but lifecycle correlation unavailable (parser extractor not merged)",
+        data={"total": len(agent_calls), "complete": 0},
     )
 
 
@@ -163,7 +167,8 @@ def _check_sfr_certificates(events: list[HarnessEvent]) -> DiagnosticResult:
 
     if extract_sfr_certificates is not None:
         certs = extract_sfr_certificates(events)
-        complete_certs = [c for c in certs if c.get("complete", False)]
+        # SfrCertificate dataclass: complete means sections dict is non-empty
+        complete_certs = [c for c in certs if c.sections]
         if complete_certs:
             return DiagnosticResult(
                 name="sfr-certificates",
@@ -219,10 +224,10 @@ def _check_hook_chain(events: list[HarnessEvent]) -> DiagnosticResult:
                 detail="System events present but no hook events found (hooks expected but missing)",
                 data={"system_events": len(system_events), "hook_events": 0},
             )
+        # HookEvent dataclass: use .content attribute, not .get("content")
         error_evs = [
             e for e in hook_evs
-            if "error" in str(e.get("content", "")).lower()
-            or "fail" in str(e.get("content", "")).lower()
+            if "error" in e.content.lower() or "fail" in e.content.lower()
         ]
         if error_evs:
             return DiagnosticResult(
