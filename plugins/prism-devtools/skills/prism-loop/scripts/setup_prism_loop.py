@@ -171,6 +171,28 @@ def initialize_context_system() -> bool:
         return False
 
 
+def write_bootstrap_handoff(prompt: str):
+    """Write a minimal handoff so review_previous_notes always takes the fast path.
+
+    Only writes if no handoff exists (preserves real handoffs from previous sessions).
+    """
+    handoff_path = STATE_DIR.parent / "handoff.md"
+    if handoff_path.exists():
+        return
+    timestamp = datetime.now().isoformat()
+    prompt_line = prompt.strip() if prompt.strip() else "(none)"
+    content = (
+        "## Session Handoff Available\n\n"
+        "**First run — no previous session context.**\n\n"
+        f"Prompt: {prompt_line}\n"
+        f"Started: {timestamp}\n\n"
+        "No prior story or decisions to carry forward. "
+        "Proceed to draft_story with prompt as sole context.\n"
+    )
+    handoff_path.parent.mkdir(parents=True, exist_ok=True)
+    handoff_path.write_text(content, encoding='utf-8')
+
+
 def brain_bootstrap():
     """Run initial Brain indexing if brain is available."""
     try:
@@ -363,6 +385,7 @@ def main():
         print("")
 
     brain_bootstrap()
+    write_bootstrap_handoff(config.get("prompt", ""))
 
     create_state_file(config)
 
