@@ -5,11 +5,22 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.7.2] - 2026-03-09
+## [3.8.0] - 2026-03-09
 
 ### Added
 
 ### Fixed
+
+## [3.7.2] - 2026-03-09
+
+### Fixed
+
+- **Dashboard: self-healing for `claude plugin update` cache bug** — `resolve_plugin_root()` probes `CLAUDE_PLUGIN_ROOT`, then `CLAUDE_PLUGIN_ROOT/plugins/prism-devtools/`, then walks up from `__file__` to find `.claude-plugin/plugin.json`. Customers no longer need to manually fix `installPath` in `installed_plugins.json`.
+- **Dashboard: `wrong_depth` detection** — `check_plugin_cache_stale()` detects when cache contains the repo root instead of the plugin subdirectory; TUI shows `⚠CACHE WRONG_DEPTH` (red), snapshot shows `[!!] CACHE WRONG_DEPTH` with fix instructions.
+- **Dashboard: removed duplicate `_read_plugin_version()`** — consolidated from `app.py` + `snapshot.py` into single `read_plugin_version()` in `parsing.py`.
+- **Dashboard: friendly textual import error** — `__main__.py` catches `ImportError` and prints `pip install 'textual>=0.40.0'` instead of a raw traceback.
+- **Hooks: shared `plugin_resolve.py`** — self-healing plugin root resolution for all hooks (`session-start`, `capture-file-context`, `capture-commit-context`, `consolidate-story-learnings`).
+- **Scripts: dynamic parent traversal** — replaced all `parent.parent.parent` chains with walk-up search for `.claude-plugin/plugin.json` across `parsing.py`, `prism-bug.py`, `validate-all.py`, `version_bump.py`. Works from any directory depth on both Windows and Linux.
 
 ## [3.7.1] - 2026-03-08
 
