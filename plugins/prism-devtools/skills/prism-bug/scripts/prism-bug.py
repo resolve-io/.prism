@@ -519,6 +519,175 @@ def collect_sfr_status() -> str:
     return "\n".join(lines)
 
 
+# ── New platform / hook diagnostic collectors ────────────────────────────────
+
+
+def collect_platform_diagnostics() -> str:
+    """Collect OS name/version, Python executable, command availability, shell."""
+    import platform
+    import shutil
+
+    lines = [
+        f"**OS:** {platform.system()} {platform.release()} ({platform.version()})",
+        f"**Machine:** {platform.machine()}",
+        f"**Python executable:** `{sys.executable}`",
+        f"**Python version:** {platform.python_version()}",
+    ]
+
+    shell = os.environ.get("SHELL") or os.environ.get("COMSPEC") or "(unknown)"
+    lines.append(f"**Shell:** `{shell}`")
+
+    for cmd in ("python3", "python", "sh", "bash"):
+        path = shutil.which(cmd)
+        if path:
+            lines.append(f"**`{cmd}`:** found at `{path}`")
+        else:
+            lines.append(f"**`{cmd}`:** ⚠ NOT FOUND")
+
+    return "\n".join(lines)
+
+
+def collect_hooks_json_content() -> str:
+    """Include the actual hooks.json commands in the report."""
+    hooks_json_path = _plugin_root() / "hooks" / "hooks.json"
+    if not hooks_json_path.exists():
+        return f"_hooks.json not found at `{hooks_json_path}`_"
+    try:
+        content = hooks_json_path.read_text(encoding="utf-8")
+        return f"**Path:** `{hooks_json_path}`\n```json\n{content.strip()}\n```"
+    except Exception as exc:
+        return f"_Error reading hooks.json: {exc}_"
+
+
+def _extract_hook_script_paths(hooks_json_path: Path) -> list[str]:
+    """Extract all script paths referenced in hooks.json commands."""
+    try:
+        data = json.loads(hooks_json_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    scripts = []
+    for event_hooks in data.get("hooks", {}).values():
+        for entry in event_hooks:
+            for hook in entry.get("hooks", []):
+                cmd = hook.get("command", "")
+                # Pattern: sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh <script>
+                # or: python3 <script>
+                # Extract the last path-like argument
+                parts = cmd.split()
+                for part in reversed(parts):
+                    if part.endswith(".py") and "/" in part:
+                        scripts.append(part)
+                        break
+    return scripts
+
+
+def collect_hook_script_verification() -> str:
+    """For each command in hooks.json, verify the referenced script path exists."""
+    hooks_json_path = _plugin_root() / "hooks" / "hooks.json"
+    if not hooks_json_path.exists():
+        return f"_hooks.json not found at `{hooks_json_path}`_"
+
+    plugin_root = _plugin_root()
+    scripts = _extract_hook_script_paths(hooks_json_path)
+    if not scripts:
+        return "_No script paths found in hooks.json commands._"
+
+    lines = []
+    for script_template in scripts:
+        resolved = script_template.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
+        path = Path(resolved)
+        exists = path.exists()
+        status = "✓ exists" if exists else "✗ MISSING"
+        lines.append(f"- `{path.name}`: {status} (`{path}`)")
+    return "\n".join(lines)
+
+
+def collect_hook_execution_test() -> str:
+    """Try running the session-start hook, report exit code and stderr."""
+    plugin_root = _plugin_root()
+    run_hook_sh = plugin_root / "hooks" / "run-hook.sh"
+    session_start = plugin_root / "hooks" / "session-start.py"
+
+    lines = []
+
+    # Verify run-hook.sh
+    if run_hook_sh.exists():
+        lines.append(f"**run-hook.sh:** ✓ exists at `{run_hook_sh}`")
+    else:
+        lines.append(f"**run-hook.sh:** ✗ MISSING at `{run_hook_sh}`")
+
+    if not session_start.exists():
+        lines.append(f"**session-start.py:** ✗ MISSING at `{session_start}`")
+        return "\n".join(lines)
+    else:
+        lines.append(f"**session-start.py:** ✓ exists at `{session_start}`")
+
+    # Try running via run-hook.sh if it exists, else fall back to direct python
+    if run_hook_sh.exists():
+        cmd = ["sh", str(run_hook_sh), str(session_start)]
+    else:
+        cmd = [sys.executable, str(session_start)]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            input="{}",
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        lines.append(f"**Exit code:** `{result.returncode}`")
+        if result.stderr.strip():
+            lines.append(f"**stderr:**\n```\n{result.stderr.strip()[:500]}\n```")
+        else:
+            lines.append("**stderr:** _(empty)_")
+        if result.returncode == 0:
+            lines.append("**Result:** ✓ Hook executed successfully")
+        else:
+            lines.append("**Result:** ✗ Hook exited with error")
+    except Exception as exc:
+        lines.append(f"**Error running hook:** `{exc}`")
+
+    return "\n".join(lines)
+
+
+def collect_transcript_system_events(transcript_path: "Path | None") -> str:
+    """Scan transcript for system role messages containing 'hook' (errors, lifecycle events)."""
+    if not transcript_path or not transcript_path.exists():
+        return "_No transcript to scan for system hook events._"
+    try:
+        lines = transcript_path.read_text(encoding="utf-8").splitlines()
+    except Exception as exc:
+        return f"_Error reading transcript: {exc}_"
+
+    events = []
+    for raw in lines:
+        raw = raw.strip()
+        if not raw or "hook" not in raw.lower():
+            continue
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        msg = obj.get("message", obj)
+        role = msg.get("role", "")
+        if role != "system":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    text = block.get("text", "") or block.get("content", "")
+                    if "hook" in text.lower():
+                        events.append(text[:400])
+        elif isinstance(content, str) and "hook" in content.lower():
+            events.append(content[:400])
+
+    if not events:
+        return "_No system hook events found in transcript._"
+    return "\n".join(f"- `{e}`" for e in events[-20:])
+
+
 # ── GitHub integration ────────────────────────────────────────────────────────
 
 
@@ -609,6 +778,10 @@ def build_report(
     description: str,
     version: str,
     plugin_cache: str,
+    platform_diag: str,
+    hooks_json: str,
+    hook_script_check: str,
+    hook_exec_test: str,
     state: str,
     step_history: str,
     brain: str,
@@ -619,6 +792,7 @@ def build_report(
     test_runner: str,
     excerpt: str,
     hook_progress: str,
+    transcript_system_events: str,
     gates: str,
     git_ctx: str,
     gist_url: str | None,
@@ -639,9 +813,33 @@ def build_report(
 
 ---
 
+## Platform Diagnostics
+
+{platform_diag}
+
+---
+
 ## Plugin Cache Path
 
 {plugin_cache}
+
+---
+
+## hooks.json Content
+
+{hooks_json}
+
+---
+
+## Hook Script Verification
+
+{hook_script_check}
+
+---
+
+## Hook Execution Test
+
+{hook_exec_test}
 
 ---
 
@@ -701,9 +899,15 @@ def build_report(
 
 ---
 
-## Hook Execution Results
+## Hook Progress Events
 
 {hook_progress}
+
+---
+
+## Transcript System Events (hook-related)
+
+{transcript_system_events}
 
 ---
 
@@ -750,8 +954,20 @@ def main() -> None:
     version = collect_plugin_version()
     print(f"  Plugin version: {version}")
 
+    print("  Collecting platform diagnostics...")
+    platform_diag = collect_platform_diagnostics()
+
     plugin_cache = collect_plugin_cache_path()
     print(f"  Plugin root: {_plugin_root()}")
+
+    print("  Reading hooks.json...")
+    hooks_json = collect_hooks_json_content()
+
+    print("  Verifying hook scripts...")
+    hook_script_check = collect_hook_script_verification()
+
+    print("  Testing hook execution...")
+    hook_exec_test = collect_hook_execution_test()
 
     state = collect_state()
     print(f"  State file: {'found' if 'No state file' not in state else 'not found'}")
@@ -780,6 +996,7 @@ def main() -> None:
     print(f"  Transcript: {transcript_path or 'not found'}")
 
     hook_progress = collect_hook_progress(transcript_path)
+    transcript_system_events = collect_transcript_system_events(transcript_path)
     gates = collect_gate_results()
     git_ctx = collect_git_context()
 
@@ -799,6 +1016,10 @@ def main() -> None:
         description=description,
         version=version,
         plugin_cache=plugin_cache,
+        platform_diag=platform_diag,
+        hooks_json=hooks_json,
+        hook_script_check=hook_script_check,
+        hook_exec_test=hook_exec_test,
         state=state,
         step_history=step_history,
         brain=brain,
@@ -809,6 +1030,7 @@ def main() -> None:
         test_runner=test_runner,
         excerpt=excerpt,
         hook_progress=hook_progress,
+        transcript_system_events=transcript_system_events,
         gates=gates,
         git_ctx=git_ctx,
         gist_url=gist_url,

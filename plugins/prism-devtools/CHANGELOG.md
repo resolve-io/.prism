@@ -5,6 +5,15 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.0] - 2026-03-09
+
+### Added
+- `prism-bug`: Platform Diagnostics section — OS name/version, Python executable path, command availability (`python3`/`python`/`sh`/`bash`), current shell
+- `prism-bug`: hooks.json Content section — includes actual hooks.json commands in the report
+- `prism-bug`: Hook Script Verification section — for each command in hooks.json, verifies the referenced script path exists and reports missing scripts
+- `prism-bug`: Hook Execution Test section — reads hooks.json, runs session-start hook via `run-hook.sh`, reports exit code + stderr; verifies `run-hook.sh` exists
+- `prism-bug`: Transcript System Events section — scans transcript for system-role messages containing 'hook' (hook errors, lifecycle events), not just `hook_progress`
+
 ## [3.9.3] - 2026-03-09
 
 ### Added

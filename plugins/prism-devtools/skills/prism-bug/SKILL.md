@@ -19,12 +19,17 @@ Capture full session diagnostics and submit a structured GitHub issue for post-m
 ## How It Works
 
 1. Reads the PRISM state file (`.claude/prism-loop.local.md`) for current step and history
-2. Extracts the last ~50 tool calls from the active session transcript
-3. Captures validation errors and gate results from `artifacts/qa/gates/*.yml`
-4. Collects git context (branch, recent commits, dirty files)
-5. Reads the plugin version from `plugin.json`
-6. Uploads full transcript to a GitHub Gist for reference
-7. Creates a GitHub Issue in `siegeon/.prism` with structured markdown containing all context
+2. Collects platform diagnostics (OS, Python executable, command availability, shell)
+3. Reads and includes `hooks.json` content with all configured commands
+4. Verifies each hook script referenced in `hooks.json` exists on disk
+5. Runs the session-start hook via `run-hook.sh` and reports exit code + stderr
+6. Extracts the last ~50 tool calls from the active session transcript
+7. Scans transcript for system-role hook events (errors, lifecycle messages)
+8. Captures validation errors and gate results from `artifacts/qa/gates/*.yml`
+9. Collects git context (branch, recent commits, dirty files)
+10. Reads the plugin version from `plugin.json`
+11. Uploads full transcript to a GitHub Gist for reference
+12. Creates a GitHub Issue in `siegeon/.prism` with structured markdown containing all context
 
 ## Quick Start
 
@@ -45,6 +50,10 @@ The description becomes the issue title prefix.
 
 | Source | Contents |
 |--------|---------|
+| Platform diagnostics | OS name/version, Python executable path, `python3`/`python`/`sh`/`bash` availability, shell |
+| hooks.json content | Full hooks.json with all configured hook commands |
+| Hook script verification | Whether each script referenced in hooks.json exists on disk |
+| Hook execution test | Exit code + stderr from running session-start hook via `run-hook.sh` |
 | State file | Current step, step history, active/paused status |
 | Step history analysis | Per-step `bq` (Brain queries) and `s` (skill calls) summary |
 | Brain status | Init success/failure, doc count, `system_context()` result count |
@@ -54,7 +63,8 @@ The description becomes the issue title prefix.
 | Plugin cache path | `CLAUDE_PLUGIN_ROOT` value — cache vs live source detection |
 | Test runner | Detected type, test command, lint command |
 | Transcript | Last ~50 tool calls (name + input summary, errors) |
-| Hook execution results | `hook_progress` events extracted from transcript |
+| Hook progress events | `hook_progress` events extracted from transcript |
+| Transcript system events | System-role messages containing 'hook' (errors, lifecycle events) |
 | Gate results | `artifacts/qa/gates/*.yml` if present |
 | Git context | Branch, last 5 commits, dirty files |
 | Plugin version | From `.claude-plugin/plugin.json` |
