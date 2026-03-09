@@ -58,9 +58,10 @@ python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py tag
 2. Computes new version per semver (major/minor/patch)
 3. Updates `plugin.json` with new version
 4. Prepends a new section to `CHANGELOG.md` with today's date
-5. Creates an annotated git tag `v{new_version}`
-6. Commits the version files with `PLAT-XXXX Bump version X → Y`
-7. Pushes to `origin main` with tags (so downstream users get the update)
+5. Updates version assertions in `test_release_docs.py` (AC-4 and AC-5)
+6. Creates an annotated git tag `v{new_version}`
+7. Commits all version files with `PLAT-XXXX Bump version X → Y`
+8. Pushes to `origin main` with tags (so downstream users get the update)
 
 ## Semver Rules for This Plugin
 
@@ -79,6 +80,7 @@ The script commits and pushes automatically. After it runs:
 
 - **Source of truth**: `plugins/prism-devtools/.claude-plugin/plugin.json`
 - **Change log**: `plugins/prism-devtools/CHANGELOG.md`
+- **Release tests**: `plugins/prism-devtools/tools/prism-cli/tests/test_release_docs.py`
 - **Cache path**: `~/.claude/plugins/cache/prism/prism-devtools/{VERSION}/`
 
 ## Reference
