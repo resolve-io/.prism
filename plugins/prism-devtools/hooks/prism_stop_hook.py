@@ -48,60 +48,60 @@ WORKFLOW_STEPS = [
 ]
 
 
-# Directories to skip during recursive glob traversal.
-_EXCLUDED_GLOB_DIRS: frozenset = frozenset({
-    "node_modules", "bin", "obj", ".git", "__pycache__",
-    "dist", ".next", ".nuget", ".venv", "venv", "build", "target", "vendor",
-})
+_BYOS_TEST_NAME_RE = re.compile(r"(^|[-_])test(s?)([-_]|$)", re.IGNORECASE)
 
 
-def _filtered_glob(root: Path, pattern: str, timeout: float = 10.0) -> list:
-    """Recursive glob with directory exclusion and timeout guard.
+def _extract_byos_execute_command(skill_content: str) -> Optional[str]:
+    """Extract the bash command from the ## Execute section of a SKILL.md."""
+    execute_match = re.search(r"^##\s+Execute\s*\n", skill_content, re.MULTILINE)
+    if not execute_match:
+        return None
+    after_execute = skill_content[execute_match.end():]
+    bash_match = re.search(r"```(?:bash|sh)?\n(.*?)```", after_execute, re.DOTALL)
+    if not bash_match:
+        return None
+    command = bash_match.group(1).strip()
+    return command if command else None
 
-    Skips _EXCLUDED_GLOB_DIRS during traversal.  If the walk exceeds
-    *timeout* seconds the function aborts and falls back to a non-recursive
-    glob of *root* only (avoids hanging the hook entirely).
+
+def _detect_byos_test_skill(cwd: Path) -> Optional[dict]:
+    """Check .claude/skills/ for a BYOS test skill and extract its command.
+
+    Looks for skill directories whose name contains 'test' as a word component
+    (e.g. run-tests, tests, test, integration-tests). Reads SKILL.md and extracts
+    the bash command from the ## Execute section.
+
+    Returns a runner dict or None if no matching skill is found.
     """
-    if "**" not in pattern:
-        return list(root.glob(pattern))
-
-    # The filename-level pattern after the last "**/" segment.
-    suffix = pattern.rsplit("**/", 1)[-1]  # e.g. "*.csproj"
-
-    results: list = []
-    deadline = time.monotonic() + timeout
-    timed_out = False
-
-    def _walk(d: Path) -> None:
-        nonlocal timed_out
-        if timed_out or time.monotonic() > deadline:
-            timed_out = True
-            return
+    skills_dir = cwd / ".claude" / "skills"
+    if not skills_dir.is_dir():
+        return None
+    for skill_dir in sorted(skills_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        if not _BYOS_TEST_NAME_RE.search(skill_dir.name):
+            continue
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.is_file():
+            continue
         try:
-            for item in d.iterdir():
-                if timed_out or time.monotonic() > deadline:
-                    timed_out = True
-                    return
-                if item.is_dir():
-                    if item.name not in _EXCLUDED_GLOB_DIRS:
-                        _walk(item)
-                elif fnmatch.fnmatch(item.name, suffix):
-                    results.append(item)
-        except (PermissionError, OSError):
-            pass
-
-    _walk(root)
-
-    if timed_out:
-        # Fall back: non-recursive search in root only.
-        return list(root.glob(suffix))
-
-    return results
+            content = skill_md.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        command = _extract_byos_execute_command(content)
+        if command:
+            return {"type": "byos", "command": command, "lint": None}
+    return None
 
 
 def detect_test_runner() -> dict:
     """Detect the test runner for the current project."""
     cwd = Path.cwd()
+
+    # Check for BYOS test skill first — project-defined commands take priority
+    byos_runner = _detect_byos_test_skill(cwd)
+    if byos_runner:
+        return byos_runner
 
     # Check for Node.js project
     package_json = cwd / "package.json"
