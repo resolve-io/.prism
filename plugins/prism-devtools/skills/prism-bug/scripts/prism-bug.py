@@ -393,6 +393,132 @@ def collect_step_history_analysis(state_content: str) -> str:
     return "\n".join(rows)
 
 
+def collect_sfr_status() -> str:
+    """Collect SFR variant state for bug reports."""
+    _add_hooks_to_path()
+    lines = []
+
+    # --- Canopy: which SFR variants are registered? ---
+    canopy_path = Path(".canopy/prompts.jsonl")
+    sfr_variants: list[str] = []
+    if canopy_path.exists():
+        try:
+            for raw in canopy_path.read_text(encoding="utf-8").splitlines():
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    obj = json.loads(raw)
+                    pid = obj.get("prompt_id", "")
+                    if "/sfr" in pid:
+                        sfr_variants.append(pid)
+                except json.JSONDecodeError:
+                    continue
+        except Exception as exc:
+            lines.append(f"**Canopy read error:** `{exc}`")
+    sfr_enabled = len(sfr_variants) > 0
+    lines.append(f"**Enabled:** {'Yes' if sfr_enabled else 'No'} ({len(sfr_variants)} variants in Canopy)")
+    if sfr_variants:
+        lines.append("**Registered variants:**")
+        for v in sfr_variants:
+            lines.append(f"- `{v}`")
+
+    # --- Brain: query subagent_outcomes for performance data ---
+    try:
+        from brain_engine import Brain  # type: ignore[import]
+        brain = Brain()
+        try:
+            rows = brain._scores.execute(
+                "SELECT prompt_id, validator, certificate_complete, gate_agreed, tokens_used"
+                " FROM subagent_outcomes"
+            ).fetchall()
+        except Exception:
+            rows = []
+
+        if rows:
+            # Group by (validator, variant)
+            from collections import defaultdict
+            groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+            for row in rows:
+                prompt_id, validator, cert_complete, gate_agreed, tokens_used = row
+                variant = "sfr" if prompt_id and "/sfr" in prompt_id else "freeform"
+                groups[(validator or "unknown", variant)].append({
+                    "cert_complete": cert_complete or 0,
+                    "gate_agreed": gate_agreed,
+                    "tokens_used": tokens_used or 0,
+                })
+
+            lines.append("\n**Performance comparison:**")
+            lines.append("| Validator | Variant | Runs | Avg Cert | Gate Agree |")
+            lines.append("|-----------|---------|------|----------|------------|")
+            for (validator, variant), entries in sorted(groups.items()):
+                runs = len(entries)
+                gate_vals = [e["gate_agreed"] for e in entries if e["gate_agreed"] is not None]
+                gate_pct = f"{sum(gate_vals) / len(gate_vals) * 100:.1f}%" if gate_vals else "—"
+                if variant == "sfr":
+                    avg_cert = sum(e["cert_complete"] for e in entries) / runs
+                    cert_str = f"{avg_cert:.1f}/6"
+                else:
+                    cert_str = "—"
+                lines.append(f"| {validator} | {variant} | {runs} | {cert_str} | {gate_pct} |")
+        else:
+            lines.append("\n**Performance comparison:** _No sub-agent outcomes recorded yet._")
+
+        # Last variant used
+        try:
+            last = brain._scores.execute(
+                "SELECT prompt_id FROM subagent_outcomes ORDER BY timestamp DESC LIMIT 1"
+            ).fetchone()
+            last_variant = last[0] if last else None
+        except Exception:
+            last_variant = None
+        if last_variant:
+            lines.append(f"\n**Last variant used:** `{last_variant}`")
+
+        # Retired variants
+        try:
+            retired = brain._scores.execute(
+                "SELECT prompt_id FROM retired_variants WHERE prompt_id LIKE 'validator/%'"
+            ).fetchall()
+            retired_ids = [r[0] for r in retired]
+        except Exception:
+            retired_ids = []
+        lines.append(f"**Retired:** {', '.join(f'`{r}`' for r in retired_ids) if retired_ids else 'None'}")
+
+    except Exception as exc:
+        lines.append(f"\n**Brain query:** FAILED — `{exc}`")
+
+    # --- Conductor: epsilon state ---
+    try:
+        from conductor_engine import Conductor  # type: ignore[import]
+        c = Conductor()
+        epsilon = getattr(c, "_epsilon", None)
+        if epsilon is not None:
+            lines.append(f"**Epsilon:** {epsilon:.2f} (exploring {epsilon * 100:.0f}%)")
+        else:
+            lines.append("**Epsilon:** _not available_")
+    except Exception as exc:
+        lines.append(f"**Conductor (epsilon):** FAILED — `{exc}`")
+
+    # --- Agent defs: do they declare skills: [sfr-variant, brain-context]? ---
+    agent_defs_dir = _plugin_root() / "agents"
+    agents_with_skills: list[str] = []
+    if agent_defs_dir.is_dir():
+        for agent_file in sorted(agent_defs_dir.glob("*.md")):
+            try:
+                content = agent_file.read_text(encoding="utf-8")
+                if "sfr-variant" in content:
+                    agents_with_skills.append(agent_file.stem)
+            except Exception:
+                pass
+    if agents_with_skills:
+        lines.append(f"**Agent defs with sfr-variant skill:** {', '.join(f'`{a}`' for a in agents_with_skills)}")
+    else:
+        lines.append("**Agent defs with sfr-variant skill:** _None (SFR not yet wired into agent defs)_")
+
+    return "\n".join(lines)
+
+
 # ── GitHub integration ────────────────────────────────────────────────────────
 
 
@@ -487,6 +613,7 @@ def build_report(
     step_history: str,
     brain: str,
     conductor: str,
+    sfr_status: str,
     skills: str,
     session_start: str,
     test_runner: str,
@@ -541,6 +668,12 @@ def build_report(
 ## Conductor Status
 
 {conductor}
+
+---
+
+## SFR Status
+
+{sfr_status}
 
 ---
 
@@ -631,6 +764,9 @@ def main() -> None:
     print("  Checking Conductor status...")
     conductor = collect_conductor_status()
 
+    print("  Collecting SFR status...")
+    sfr_status = collect_sfr_status()
+
     print("  Running skill discovery...")
     skills = collect_skill_discovery()
 
@@ -667,6 +803,7 @@ def main() -> None:
         step_history=step_history,
         brain=brain,
         conductor=conductor,
+        sfr_status=sfr_status,
         skills=skills,
         session_start=session_start,
         test_runner=test_runner,
