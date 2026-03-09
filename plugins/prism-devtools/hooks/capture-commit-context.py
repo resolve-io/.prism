@@ -13,16 +13,10 @@ import sys
 from pathlib import Path
 
 
-def _get_plugin_root() -> Path:
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    if plugin_root:
-        return Path(plugin_root)
-    return Path(__file__).parent
-
-
 def _load_brain():
     """Import Brain class, adding hooks dir to sys.path."""
-    hooks_dir = str(_get_plugin_root())
+    from plugin_resolve import resolve_hooks_dir
+    hooks_dir = str(resolve_hooks_dir(__file__))
     if hooks_dir not in sys.path:
         sys.path.insert(0, hooks_dir)
     from brain_engine import Brain

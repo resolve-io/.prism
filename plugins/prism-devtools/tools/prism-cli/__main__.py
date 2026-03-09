@@ -48,7 +48,18 @@ def main() -> None:
         return
 
     # Import here so argparse --help works without textual installed
-    from app import PrismDashboard
+    try:
+        from app import PrismDashboard
+    except ImportError as exc:
+        if "textual" in str(exc).lower() or "No module named 'textual'" in str(exc):
+            print(
+                "Error: textual is not installed.\n"
+                "Install it with:  pip install 'textual>=0.40.0'\n\n"
+                "For snapshot mode (no TUI dependency), use:  --snapshot",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        raise
 
     PrismDashboard(path=args.path, interval=args.interval).run()
 

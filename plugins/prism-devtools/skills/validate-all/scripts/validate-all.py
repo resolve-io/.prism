@@ -28,9 +28,16 @@ from pathlib import Path
 
 def find_plugin_dir() -> Path:
     """Walk up from this script to find the prism-devtools plugin root."""
-    # This script lives at skills/validate-all/scripts/validate-all.py
-    # Plugin root is 4 levels up: scripts/ → validate-all/ → skills/ → plugin root
-    return Path(__file__).resolve().parent.parent.parent.parent
+    p = Path(__file__).resolve().parent
+    while p != p.parent:
+        if (p / ".claude-plugin" / "plugin.json").is_file():
+            return p
+        p = p.parent
+    # Last resort (should not happen)
+    raise FileNotFoundError(
+        "Could not locate plugin root (.claude-plugin/plugin.json) "
+        f"walking up from {__file__}"
+    )
 
 
 def find_script(plugin_dir: Path, name: str) -> Path:

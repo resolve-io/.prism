@@ -27,29 +27,29 @@ and creates a git tag. Claude Code uses the version string to resolve plugin cac
 
 ## Quick Start
 
-Run the bump script — it handles everything (bump, commit, tag, push):
+Run the bump script from `.claude/scripts/` — it handles everything (bump, commit, tag, push):
 
 ```bash
 # Patch bump (3.5.0 → 3.5.1) — bug fixes
-python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py patch
+python .claude/scripts/version_bump.py patch
 
 # Minor bump (3.5.0 → 3.6.0) — new features
-python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py minor
+python .claude/scripts/version_bump.py minor
 
 # Major bump (3.5.0 → 4.0.0) — breaking changes
-python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py major
+python .claude/scripts/version_bump.py major
 
 # With a Jira ticket
-python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py patch --ticket PLAT-1234
+python .claude/scripts/version_bump.py patch --ticket PLAT-1234
 
 # Commit but don't push yet
-python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py patch --no-push
+python .claude/scripts/version_bump.py patch --no-push
 
 # Just show current version
-python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py status
+python .claude/scripts/version_bump.py status
 
 # Create missing git tag for current version
-python plugins/prism-devtools/skills/version-bump/scripts/version_bump.py tag
+python .claude/scripts/version_bump.py tag
 ```
 
 ## What It Does

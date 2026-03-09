@@ -30,11 +30,40 @@ def run(cmd: list[str], check: bool = False) -> tuple[int, str, str]:
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
+_PLUGIN_JSON_REL = Path(".claude-plugin") / "plugin.json"
+
+
+def _walk_up_to_plugin_root(start: Path) -> Path | None:
+    """Walk up from *start* until .claude-plugin/plugin.json is found."""
+    p = start.resolve()
+    while p != p.parent:
+        if (p / _PLUGIN_JSON_REL).is_file():
+            return p
+        p = p.parent
+    return None
+
+
 def _plugin_root() -> Path:
-    """Resolve CLAUDE_PLUGIN_ROOT or fall back to script location."""
+    """Resolve CLAUDE_PLUGIN_ROOT with self-healing for the update cache bug.
+
+    ``claude plugin update`` can cache the entire marketplace repo root
+    instead of the ``plugins/prism-devtools/`` subdirectory.  When that
+    happens CLAUDE_PLUGIN_ROOT points at the repo root and every relative
+    path (tools/, hooks/, .claude-plugin/) breaks.  We probe for the
+    nested path and use it when the direct path lacks plugin.json.
+    """
     env_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if env_root:
-        return Path(env_root)
+        candidate = Path(env_root)
+        if (candidate / _PLUGIN_JSON_REL).is_file():
+            return candidate
+        nested = candidate / "plugins" / "prism-devtools"
+        if (nested / _PLUGIN_JSON_REL).is_file():
+            return nested
+    # Walk up from this script to find plugin root dynamically
+    found = _walk_up_to_plugin_root(Path(__file__).resolve().parent)
+    if found:
+        return found
     return Path(__file__).resolve().parent.parent.parent
 
 

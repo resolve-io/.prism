@@ -16,7 +16,14 @@ from pathlib import Path
 _CLI_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_CLI_DIR))
 
-from parsing import parse_state_file, parse_story_file, update_state_field, _count_green_tests
+from parsing import (
+    parse_state_file,
+    parse_story_file,
+    update_state_field,
+    _count_green_tests,
+    check_plugin_cache_stale,
+    resolve_plugin_root,
+)
 from models import WorkflowState, StoryInfo
 
 
@@ -242,3 +249,76 @@ class TestCountGreenTests:
         passing, total = _count_green_tests(tmp_path)
         assert passing == 0
         assert total == 0
+
+
+class TestCheckPluginCacheStale:
+    """Tests for check_plugin_cache_stale wrong_depth detection."""
+
+    def _make_cache(self, tmp_path: Path, version: str, wrong_depth: bool) -> Path:
+        """Set up a fake cache directory structure."""
+        cache_base = tmp_path / "home" / ".claude" / "plugins" / "cache" / "prism" / "prism-devtools"
+        version_dir = cache_base / version
+        if wrong_depth:
+            # Simulate wrong-depth: plugin.json nested under plugins/prism-devtools/
+            nested = version_dir / "plugins" / "prism-devtools" / ".claude-plugin"
+            nested.mkdir(parents=True)
+            (nested / "plugin.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+        else:
+            # Correct depth: plugin.json at version root
+            plugin_dir = version_dir / ".claude-plugin"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "plugin.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+        return cache_base
+
+    def test_wrong_depth_detected(self, tmp_path: Path, monkeypatch):
+        """wrong_depth is True when cache has repo root instead of plugin subdir."""
+        work_dir = tmp_path / "project"
+        source = work_dir / "plugins" / "prism-devtools" / ".claude-plugin"
+        source.mkdir(parents=True)
+        (source / "plugin.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+
+        cache_base = self._make_cache(tmp_path, "1.0.0", wrong_depth=True)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "home"))
+
+        result = check_plugin_cache_stale(work_dir)
+        assert result["wrong_depth"] is True
+
+    def test_correct_depth_not_flagged(self, tmp_path: Path, monkeypatch):
+        """wrong_depth is False when cache structure is correct."""
+        work_dir = tmp_path / "project"
+        source = work_dir / "plugins" / "prism-devtools" / ".claude-plugin"
+        source.mkdir(parents=True)
+        (source / "plugin.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+
+        cache_base = self._make_cache(tmp_path, "1.0.0", wrong_depth=False)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "home"))
+
+        result = check_plugin_cache_stale(work_dir)
+        assert result["wrong_depth"] is False
+
+
+class TestResolvePluginRoot:
+    """Tests for resolve_plugin_root self-healing."""
+
+    def test_self_heals_wrong_depth(self, tmp_path: Path, monkeypatch):
+        """When CLAUDE_PLUGIN_ROOT points to repo root, resolves nested plugin."""
+        repo_root = tmp_path / "repo"
+        nested = repo_root / "plugins" / "prism-devtools" / ".claude-plugin"
+        nested.mkdir(parents=True)
+        (nested / "plugin.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(repo_root))
+        root = resolve_plugin_root()
+        assert root == repo_root / "plugins" / "prism-devtools"
+
+    def test_correct_root_used_directly(self, tmp_path: Path, monkeypatch):
+        """When CLAUDE_PLUGIN_ROOT is correct, uses it directly."""
+        plugin_dir = tmp_path / "plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+            '{"version": "1.0.0"}', encoding="utf-8"
+        )
+
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_dir))
+        root = resolve_plugin_root()
+        assert root == plugin_dir

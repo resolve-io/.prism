@@ -17,25 +17,15 @@ from datetime import datetime
 from pathlib import Path
 
 from models import WORKFLOW_STEPS, WorkflowState, StoryInfo
-from parsing import check_plugin_cache_stale, parse_state_file, parse_story_file
+from parsing import (
+    check_plugin_cache_stale,
+    parse_state_file,
+    parse_story_file,
+    read_plugin_version,
+)
 
 
-def _read_plugin_version() -> str:
-    """Read version from plugin.json; returns empty string on failure."""
-    import os
-    try:
-        root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-        if root:
-            plugin_json = Path(root) / ".claude-plugin" / "plugin.json"
-        else:
-            plugin_json = Path(__file__).resolve().parent.parent.parent / ".claude-plugin" / "plugin.json"
-        data = _json.loads(plugin_json.read_text(encoding="utf-8"))
-        return str(data.get("version", ""))
-    except Exception:
-        return ""
-
-
-_PLUGIN_VERSION: str = _read_plugin_version()
+_PLUGIN_VERSION: str = read_plugin_version()
 
 
 def _inject_live_tokens(state: WorkflowState) -> None:
@@ -305,7 +295,17 @@ def render_snapshot(work_dir: Path) -> str:
     lines.append(f"  {now.strftime('%Y-%m-%d %H:%M:%S')}")
     if state and state.active and state.current_step:
         lines.append(f"  Step: {state.current_step}")
-    if cache["linked"]:
+    if cache.get("wrong_depth"):
+        lines.append(
+            "  [!!] CACHE WRONG_DEPTH — 'claude plugin update' cached repo root"
+        )
+        lines.append(
+            "       instead of plugins/prism-devtools/. Fix installPath in"
+        )
+        lines.append(
+            "       ~/.claude/installed_plugins.json or reinstall the plugin."
+        )
+    elif cache["linked"]:
         lines.append("  [*] CACHE LIVE — junction active, edits apply instantly")
     elif cache["stale"]:
         lines.append("  [!] CACHE STALE — source newer than ~/.claude/plugins/cache")

@@ -1,6 +1,6 @@
 # PRISM Development System
 
-**Version 2.3.1** - BYOS Simplification + File Reorganization
+**Version 3.9.0** - Compaction Resilience + Stop Hook Hardening
 
 A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
@@ -109,18 +109,19 @@ All documentation follows token-efficient loading:
 
 ## What's New
 
-### Version 2.3.1
-BYOS skills no longer need `phase:` — declare `agent` only. Loop step instructions externalized to `hooks/core-steps/*.md`. Checklists and artifacts moved into their owning skill directories. Docs restructured around 3-tier usage hierarchy.
+### Version 3.9.0
+Stop hook compaction resilience — no-progress detection, step-transition debounce, and compaction-marker awareness prevent post-compaction idle stops from causing false-positive step advancement. 5 new tests added, 104 total passing.
 
 ### Recent Updates
-- **2.3.0**: Bring Your Own Skill (BYOS) — project-level skills shared via git with PRISM agent assignment
-- **2.2.2**: Fixed prism-loop command session isolation, removed dead env var fallback
-- **2.2.1**: PRISM Loop session isolation fix, Windows Unicode encoding fix
-- **2.2.0**: Documentation audit & completeness - backfilled 4 CHANGELOG versions, 247 links validated
-- **2.1.0**: prism-loop TDD orchestration, Orca integration suite, Jira v2.2.0
+- **3.9.0**: Compaction resilience — stop hook no-progress detection, step-transition debounce, compaction-marker awareness
+- **3.8.0**: Stop hook hardening
+- **3.7.2**: Dashboard self-healing for `claude plugin update` cache bug
+- **3.7.1**: Plugin resolve path fixes
+- **3.5.2**: Stop hook stability improvements
+- **3.5.1**: Brain context assembly fixes
+- **3.5.0**: Semi-formal reasoning integration
+- **2.3.1**: BYOS simplification + file reorganization
 - **2.0.0**: 11 sub-agents, file-first architecture, PRISM loop introduction
-- **1.9.0**: 8 templates, 9 checklists, 8 hooks
-- **1.8.0**: Strangler pattern, SDLC handoff, PROBE estimation, story decomposition
 
 📋 **[Complete Changelog](CHANGELOG.md)**
 

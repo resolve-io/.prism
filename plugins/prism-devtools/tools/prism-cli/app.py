@@ -18,7 +18,12 @@ from textual.css.query import NoMatches
 from textual.widgets import Footer, Header, Static
 
 from models import StoryInfo, WorkflowState
-from parsing import check_plugin_cache_stale, parse_state_file, parse_story_file
+from parsing import (
+    check_plugin_cache_stale,
+    parse_state_file,
+    parse_story_file,
+    read_plugin_version,
+)
 from widgets import (
     ActivityFeed,
     AgentRoster,
@@ -29,22 +34,7 @@ from widgets import (
 )
 
 
-def _read_plugin_version() -> str:
-    """Read version from plugin.json; returns empty string on failure."""
-    import os
-    try:
-        root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-        if root:
-            plugin_json = Path(root) / ".claude-plugin" / "plugin.json"
-        else:
-            plugin_json = Path(__file__).resolve().parent.parent.parent / ".claude-plugin" / "plugin.json"
-        data = _json.loads(plugin_json.read_text(encoding="utf-8"))
-        return str(data.get("version", ""))
-    except Exception:
-        return ""
-
-
-_PLUGIN_VERSION: str = _read_plugin_version()
+_PLUGIN_VERSION: str = read_plugin_version()
 
 
 def _brain_status(work_dir: Path) -> tuple[int, int]:
@@ -126,6 +116,7 @@ class PrismDashboard(App):
         self._story: StoryInfo | None = None
         self._cache_stale: bool = False
         self._cache_linked: bool = False
+        self._cache_wrong_depth: bool = False
         self._cache_check_tick: int = 0
         # Live transcript reading — incremental, never re-reads from the start
         self._live_session_id: str = ""
@@ -163,7 +154,9 @@ class PrismDashboard(App):
         else:
             parts.append(("  \u25cbIDLE", "dim"))
 
-        if self._cache_linked:
+        if self._cache_wrong_depth:
+            parts.append(("  \u26a0CACHE WRONG_DEPTH", "bold red"))
+        elif self._cache_linked:
             parts.append(("  \u25cfCACHE LIVE", "bold cyan"))
         elif self._cache_stale:
             parts.append(("  \u26a1CACHE STALE", "bold yellow"))
@@ -322,6 +315,7 @@ class PrismDashboard(App):
             cache = check_plugin_cache_stale(self._work_dir)
             self._cache_linked = cache["linked"]
             self._cache_stale = cache["stale"]
+            self._cache_wrong_depth = cache.get("wrong_depth", False)
 
         self._brain_check_tick += 1
         if self._brain_check_tick % 10 == 1:

@@ -19,10 +19,8 @@ _SENTINEL_FILE = _SENTINEL_DIR / ".last-consolidated-story"
 
 
 def _get_plugin_root() -> Path:
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    if plugin_root:
-        return Path(plugin_root)
-    return Path(__file__).parent
+    from plugin_resolve import resolve_plugin_root
+    return resolve_plugin_root(__file__)
 
 
 def _find_project_root() -> Path:
