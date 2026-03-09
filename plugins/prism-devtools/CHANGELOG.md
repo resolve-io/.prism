@@ -5,6 +5,14 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.1] - 2026-03-08
+
+### Fixed
+
+- **Brain: traversal crash** — replaced `p.rglob("*")` with `os.walk(topdown=True)` + `dirnames[:] = [...]` pruning to prevent descending into excluded/corrupted directories (fixes WinError 1392)
+- **Brain: rebuild data loss** — removed upfront `_purge_deleted()` from `_cmd_rebuild()` to prevent data loss on crash mid-ingest
+- **Brain: HF Hub warning** — suppress unauthenticated Hub warning via logging filter + early command validation in `brain_engine.py`
+
 ## [3.7.0] - 2026-03-08
 
 ### Added

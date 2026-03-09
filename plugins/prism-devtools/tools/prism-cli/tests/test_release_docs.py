@@ -254,9 +254,9 @@ class TestAC5_VersionOrdering:
         text = _changelog_text()
         first_version = re.search(r"## \[(\d+\.\d+\.\d+)\]", text)
         assert first_version, "No version headings found in CHANGELOG"
-        assert first_version.group(1) == "3.7.0", (
+        assert first_version.group(1) == "3.7.1", (
             f"First version in CHANGELOG is '{first_version.group(1)}', "
-            f"expected '3.7.0' (should be latest)"
+            f"expected '3.7.1' (should be latest)"
         )
 
 
