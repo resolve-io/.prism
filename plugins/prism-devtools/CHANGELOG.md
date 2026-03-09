@@ -5,6 +5,31 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-03-08
+
+### Added
+
+- **SFR (Subagent Flow Recording)** — Full observability pipeline for subagent lifecycle
+  - Phase 1+3a: certificate templates, canopy variants, agent reasoning instructions
+  - Phase 2: SubagentStart hook, Conductor extensions, hooks.json registration
+  - Phase 3b+4: stop hook directive + SubagentStop recorder
+  - Phase 4+5: `subagent_outcomes` table, analytics, bug report diagnostics
+- **SFR CLI dashboard** — snapshot + TUI header for observability in terminal
+- **Brain: app project detection** — detect `app.*` project dirs (#19, #20)
+- **BYOS test skill detection** — `detect_test_runner()` now finds BYOS test skills
+- **Brain: expanded source dirs** — `_cli_source_dirs()` expansion + `_should_index()` allowlist
+- **Harness tests** — brain-preload, gate-validation, subagent lifecycle tests
+- **Diagnose subcommand** — `prism-harness diagnose` for troubleshooting
+- **Harness parser** — sub-agent lifecycle event extractors
+
+### Fixed
+
+- **Brain: 4 critical bugs** making Brain unusable on real projects (GH #22)
+- **Stop hook** — recursive glob hang and dotnet error false positives
+- **Diagnostics** — dataclass attribute access fix in `diagnostics.py`
+- **Brain: HF Hub** — suppress unauthenticated warning in `brain_engine.py`
+- **Brain: merge regression** — restore `_filtered_glob` and `_EXCLUDED_GLOB_DIRS`
+
 ## [3.5.2] - 2026-03-08
 
 ### Fixed
