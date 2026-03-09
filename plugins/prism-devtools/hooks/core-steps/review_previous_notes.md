@@ -1,34 +1,36 @@
-PLANNING REVIEW: Review Context Before Drafting
+CONTEXT RESTORE: Resume from Handoff
 
-**Token budget: complete this step in under 50K tokens. Read at most 3 files total.**
+**Token budget: complete this step in under 10K tokens.**
 
-DO NOT explore codebase architecture — that is draft_story's job.
-DO NOT read more than 3 files total.
-DO NOT Glob or Grep for patterns, dev notes, or conventions — skip straight to summarize.
+The handoff is always present — bootstrap writes one on first run.
+Read it. If it names a story file, read that file. Then summarize and stop.
 
-## Path A: Session Handoff Available (check first)
+## Step 1: Read the handoff
 
 If a "## Session Handoff Available" section appears in this instruction,
-read ONLY that handoff summary, then go directly to Step 5 (Summarize).
-No file reads required.
+that IS the handoff — it is already loaded. Skip to Step 2.
 
-## Path B: No Handoff (first run or handoff missing)
+Otherwise read `.prism/handoff.md` directly. That file always exists.
 
-1. Read the prompt from your instruction context. That is your primary context.
-2. Check for the most recent story: Glob `docs/stories/*.md`, read at most 1-2 files (newest only).
-3. If Brain is available: `/brain search "recent decisions"` — one query, done.
-   Do NOT fall through to Glob/Grep if Brain returns nothing.
-4. Go to Step 5.
+## Step 2: Read the story file (if any)
 
-## Skills
+If the handoff contains a `story_file:` path, read ONLY that one file.
+No other reads.
 
-Check for available skills using the Skill tool before implementing manually.
+If the handoff has no story_file, skip this step.
 
-## Step 5: Summarize
+## Step 3: Summarize
 
-Output a brief (3-10 bullet) summary of:
+Output a brief (3-8 bullet) summary covering:
 - What the prompt is asking for
-- Any directly relevant prior decisions or story context found
-- Key constraints or facts to carry into draft_story
+- Which story we are working on (if any), and where we left off
+- What the next action is
 
-Then STOP. Do not implement, do not explore further.
+If there is no story (first run), output:
+> No prior story context. Prompt acknowledged. Ready for draft_story.
+
+## STOP
+
+Do NOT Glob, Grep, or run Brain queries.
+Do NOT scan docs/ or look for other stories.
+The handoff already tells you everything you need.
