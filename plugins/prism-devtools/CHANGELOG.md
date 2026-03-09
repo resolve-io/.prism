@@ -5,6 +5,18 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.2] - 2026-03-09
+
+### Changed
+
+- **Stop hook: write instruction to file** — `build_agent_instruction()` output (~3-5KB) is now written to `.prism/current_instruction.md` at step transitions instead of being injected into the block decision reason field. Block decisions are now short pointers (~150 bytes): `[PRISM] Step N/8: step_id. Your full instruction is at .prism/current_instruction.md — read it now and begin.`
+- **Stop hook: no-progress re-engagement** — `_emit_current_step_reinstruct` now emits a concise pointer message instead of rebuilding the full instruction. No longer calls `build_agent_instruction()` or `Conductor.build_agent_instruction()` on idle stops, eliminating token accumulation from repeated re-injection.
+- **Stop hook: cleanup** — `cleanup()` now removes `.prism/current_instruction.md` alongside the state file when the workflow completes.
+
+### Tests
+
+- 10 new tests added, 114 total passing
+
 ## [3.9.1] - 2026-03-09
 
 ### Fixed

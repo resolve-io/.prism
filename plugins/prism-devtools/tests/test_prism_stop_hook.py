@@ -38,6 +38,8 @@ from prism_stop_hook import (  # noqa: E402
     _ADVANCE_DEBOUNCE_SECS,
     parse_frontmatter,
     is_same_session,
+    _write_instruction_file,
+    cleanup,
 )
 
 
@@ -1239,9 +1241,142 @@ def test_emit_reinstruct_fallback_resilience(tmp_path, monkeypatch):
             with pytest.raises(SystemExit):
                 _psh.main()
 
-    # Must emit a block decision with the minimal fallback instruction
+    # Must emit a block decision with the short re-engagement message
     assert captured, "Expected at least one print call"
     output = json.loads(captured[0])
     assert output.get("decision") == "block"
     assert "No progress" in output.get("reason", "")
-    assert "Continue with the current step." in output.get("reason", "")
+    assert "Continue current step" in output.get("reason", "")
+
+
+# ---------------------------------------------------------------------------
+# _write_instruction_file() tests
+# ---------------------------------------------------------------------------
+
+def test_write_instruction_file_creates_file(tmp_path):
+    """_write_instruction_file writes content to .prism/current_instruction.md."""
+    _write_instruction_file("## Step Instructions\nDo the thing.", tmp_path)
+    dest = tmp_path / ".prism" / "current_instruction.md"
+    assert dest.exists()
+    assert dest.read_text(encoding="utf-8") == "## Step Instructions\nDo the thing."
+
+
+def test_write_instruction_file_creates_prism_dir(tmp_path):
+    """_write_instruction_file creates .prism/ if it doesn't exist."""
+    assert not (tmp_path / ".prism").exists()
+    _write_instruction_file("content", tmp_path)
+    assert (tmp_path / ".prism").exists()
+
+
+def test_write_instruction_file_overwrites_existing(tmp_path):
+    """_write_instruction_file overwrites a stale instruction from a previous step."""
+    dest = tmp_path / ".prism" / "current_instruction.md"
+    dest.parent.mkdir()
+    dest.write_text("old content", encoding="utf-8")
+    _write_instruction_file("new content", tmp_path)
+    assert dest.read_text(encoding="utf-8") == "new content"
+
+
+def test_write_instruction_file_silently_tolerates_errors(tmp_path, monkeypatch):
+    """_write_instruction_file never raises, even on IO error."""
+    monkeypatch.setattr(Path, "mkdir", MagicMock(side_effect=OSError("disk full")))
+    # Should not raise
+    _write_instruction_file("content", tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# cleanup() removes current_instruction.md
+# ---------------------------------------------------------------------------
+
+def test_cleanup_removes_instruction_file(tmp_path, monkeypatch):
+    """cleanup() also removes .prism/current_instruction.md if it exists."""
+    import prism_stop_hook as _psh2
+    state_file = tmp_path / ".claude" / "prism-loop.local.md"
+    state_file.parent.mkdir(parents=True)
+    state_file.write_text("active: true\n", encoding="utf-8")
+
+    instruction_file = tmp_path / ".prism" / "current_instruction.md"
+    instruction_file.parent.mkdir(parents=True)
+    instruction_file.write_text("instructions", encoding="utf-8")
+
+    monkeypatch.setattr(_psh2, "STATE_FILE", state_file)
+    cleanup()
+
+    assert not state_file.exists()
+    # cleanup() uses STATE_FILE.parent.parent / ".prism" / "current_instruction.md"
+    # which resolves to tmp_path / ".prism" / "current_instruction.md"
+    assert not instruction_file.exists()
+
+
+def test_cleanup_tolerates_missing_instruction_file(tmp_path, monkeypatch):
+    """cleanup() works fine when current_instruction.md doesn't exist."""
+    import prism_stop_hook as _psh2
+    state_file = tmp_path / ".claude" / "prism-loop.local.md"
+    state_file.parent.mkdir(parents=True)
+    state_file.write_text("active: true\n", encoding="utf-8")
+
+    monkeypatch.setattr(_psh2, "STATE_FILE", state_file)
+    cleanup()  # Should not raise even without instruction file
+
+    assert not state_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# Step transition block: short pointer to instruction file
+# ---------------------------------------------------------------------------
+
+def test_step_transition_block_is_short_pointer(tmp_path, monkeypatch):
+    """At step transition, block reason should be a short pointer, not the full instruction."""
+    # review_previous_notes (index 0) → draft_story (index 1), no validation
+    state_file = _make_state_file(tmp_path, "review_previous_notes", 0)
+
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a, **_k: {
+        "valid": True, "message": "ok", "continue_instruction": None
+    })
+
+    output, _state = _run_main_capture(monkeypatch, tmp_path, state_file, tool_calls=5)
+
+    reason = output.get("reason", "")
+    # Short pointer format, not the full instruction body
+    assert ".prism/current_instruction.md" in reason
+    assert output.get("decision") == "block"
+    # Must NOT contain the large instruction body (conductor mock returns "REINSTRUCT")
+    # The reason should be short — a pointer, not 3-5KB of instruction text
+    assert len(reason) < 300
+
+
+def test_step_transition_writes_instruction_file(tmp_path, monkeypatch):
+    """At step transition, _write_instruction_file is called with the full instruction."""
+    state_file = _make_state_file(tmp_path, "review_previous_notes", 0)
+
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a, **_k: {
+        "valid": True, "message": "ok", "continue_instruction": None
+    })
+
+    written = []
+    original_write = _psh._write_instruction_file
+
+    def _capture(instruction, project_root):
+        written.append((instruction, project_root))
+        original_write(instruction, project_root)
+
+    monkeypatch.setattr(_psh, "_write_instruction_file", _capture)
+
+    _run_main_capture(monkeypatch, tmp_path, state_file, tool_calls=5)
+
+    assert written, "_write_instruction_file should have been called"
+    instruction, project_root = written[0]
+    assert instruction == "REINSTRUCT"  # conductor mock returns "REINSTRUCT"
+
+
+def test_no_progress_reinstruct_is_short(tmp_path, monkeypatch):
+    """No-progress re-engagement block reason should be short and reference instruction file."""
+    state_file = _make_state_file(tmp_path, "implement_tasks", 5)
+
+    output, _ = _run_main_capture(monkeypatch, tmp_path, state_file, tool_calls=0)
+
+    reason = output.get("reason", "")
+    assert "No progress" in reason
+    assert ".prism/current_instruction.md" in reason
+    # Should be short — not the full instruction body
+    assert len(reason) < 400

@@ -1595,34 +1595,38 @@ def _is_no_progress_stop(validation: Optional[str], tool_calls: int) -> bool:
     return min_calls > 0 and tool_calls < min_calls
 
 
+def _write_instruction_file(instruction: str, project_root: Path) -> None:
+    """Write the full step instruction to .prism/current_instruction.md.
+
+    Called at step transitions so the instruction is available for Claude to
+    read once, rather than being injected into the block decision reason on
+    every Stop event.  Best-effort — never raises.
+    """
+    try:
+        prism_dir = project_root / ".prism"
+        prism_dir.mkdir(parents=True, exist_ok=True)
+        (prism_dir / "current_instruction.md").write_text(instruction, encoding="utf-8")
+    except Exception as exc:
+        print(f"[PRISM] Warning: could not write instruction file ({exc})", file=sys.stderr)
+
+
 def _emit_current_step_reinstruct(
     step_id: str, agent: str, action: str, state: dict, runner: dict,
     reason_prefix: str,
 ) -> None:
-    """Build and print a block decision re-emitting the current step instruction.
+    """Print a short block decision to re-engage Claude with the current step.
 
-    Used by no-progress detection and advance debounce to re-engage Claude with
-    the current step after a suspected post-compaction idle stop.  Never raises.
+    Used by no-progress detection and advance debounce.  Emits a concise
+    pointer to .prism/current_instruction.md rather than the full instruction
+    body, so the reason field stays small on every Stop event.  Never raises.
     """
-    try:
-        from conductor_engine import Conductor
-        conductor = Conductor()
-        conductor.incremental_reindex()
-        instruction = conductor.build_agent_instruction(
-            step_id, agent, action,
-            state.get("story_file", ""), state.get("prompt", ""), runner,
-        )
-    except Exception:
-        try:
-            instruction = build_agent_instruction(
-                step_id, agent, action,
-                state.get("story_file", ""), state.get("prompt", ""), runner,
-            )
-        except Exception:
-            instruction = "Continue with the current step."
     print(json.dumps({
         "decision": "block",
-        "reason": f"{reason_prefix}\n\n{instruction}",
+        "reason": (
+            f"{reason_prefix}\n\n"
+            f"[PRISM] Continue current step: {step_id}. "
+            "Read .prism/current_instruction.md if you need your full instructions."
+        ),
     }))
 
 
@@ -1691,9 +1695,12 @@ Command:
 
 
 def cleanup():
-    """Remove state file."""
+    """Remove state file and instruction file."""
     if STATE_FILE.exists():
         STATE_FILE.unlink()
+    instruction_file = STATE_FILE.parent.parent / ".prism" / "current_instruction.md"
+    if instruction_file.exists():
+        instruction_file.unlink()
 
 
 def detect_story_file() -> str:
@@ -2052,9 +2059,14 @@ def main():
     updated_content = update_state_file(content, updates)
     STATE_FILE.write_text(updated_content, encoding='utf-8')
 
+    _write_instruction_file(instruction, STATE_FILE.parent.parent)
     print(json.dumps({
         "decision": "block",
-        "reason": f"[PRISM - Step {next_index + 1}/{len(WORKFLOW_STEPS)}: {next_step_id}]\n\n{instruction}{subagent_directive}"
+        "reason": (
+            f"[PRISM] Step {next_index + 1}/{len(WORKFLOW_STEPS)}: {next_step_id}. "
+            "Your full instruction is at .prism/current_instruction.md — read it now and begin."
+            f"{subagent_directive}"
+        )
     }))
     sys.exit(0)
 
