@@ -28,6 +28,8 @@ from prism_stop_hook import (
     get_gate_message,
     validate_step,
     detect_test_runner,
+    _detect_byos_test_skill,
+    _extract_byos_execute_command,
 )
 
 
@@ -465,3 +467,148 @@ def test_gate_passed_one_when_no_validation(tmp_path, monkeypatch):
 
     assert len(captured) == 1, "record_outcome should be called exactly once"
     assert captured[0]["metrics"]["gate_passed"] == 1
+
+
+# ---------------------------------------------------------------------------
+# _extract_byos_execute_command() tests
+# ---------------------------------------------------------------------------
+
+def test_extract_byos_execute_command_returns_command():
+    content = "# My Skill\n\n## Execute\n\n```bash\nbun test\n```\n"
+    assert _extract_byos_execute_command(content) == "bun test"
+
+
+def test_extract_byos_execute_command_no_execute_section():
+    content = "# My Skill\n\n## Usage\n\n```bash\nbun test\n```\n"
+    assert _extract_byos_execute_command(content) is None
+
+
+def test_extract_byos_execute_command_empty_block():
+    content = "# My Skill\n\n## Execute\n\n```bash\n```\n"
+    assert _extract_byos_execute_command(content) is None
+
+
+def test_extract_byos_execute_command_plain_code_block():
+    content = "## Execute\n\n```\npython -m pytest\n```\n"
+    assert _extract_byos_execute_command(content) == "python -m pytest"
+
+
+def test_extract_byos_execute_command_multiline_takes_all():
+    content = "## Execute\n\n```bash\nexport CI=1\nbun test --reporter=verbose\n```\n"
+    assert _extract_byos_execute_command(content) == "export CI=1\nbun test --reporter=verbose"
+
+
+# ---------------------------------------------------------------------------
+# _detect_byos_test_skill() tests
+# ---------------------------------------------------------------------------
+
+def _make_skill(tmp_path: Path, skill_name: str, command: str) -> Path:
+    skill_dir = tmp_path / ".claude" / "skills" / skill_name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {skill_name}\ndescription: Run tests\n---\n\n## Execute\n\n```bash\n{command}\n```\n"
+    )
+    return skill_dir
+
+
+def test_detect_byos_test_skill_run_tests(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_skill(tmp_path, "run-tests", "bun test")
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is not None
+    assert result["type"] == "byos"
+    assert result["command"] == "bun test"
+
+
+def test_detect_byos_test_skill_tests(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_skill(tmp_path, "tests", "pytest -x")
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is not None
+    assert result["command"] == "pytest -x"
+
+
+def test_detect_byos_test_skill_test(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_skill(tmp_path, "test", "go test ./...")
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is not None
+    assert result["command"] == "go test ./..."
+
+
+def test_detect_byos_test_skill_integration_tests(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_skill(tmp_path, "integration-tests", "cargo test")
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is not None
+    assert result["command"] == "cargo test"
+
+
+def test_detect_byos_test_skill_no_skills_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is None
+
+
+def test_detect_byos_test_skill_non_test_skill_ignored(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_skill(tmp_path, "code-review", "some command")
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is None
+
+
+def test_detect_byos_test_skill_missing_execute_section(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    skill_dir = tmp_path / ".claude" / "skills" / "run-tests"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: run-tests\ndescription: Tests\n---\n\n## Usage\n\nRun bun test manually.\n"
+    )
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is None
+
+
+def test_detect_byos_test_skill_no_skill_md(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    skill_dir = tmp_path / ".claude" / "skills" / "run-tests"
+    skill_dir.mkdir(parents=True)
+    # No SKILL.md file created
+    result = _detect_byos_test_skill(tmp_path)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# detect_test_runner() BYOS priority tests
+# ---------------------------------------------------------------------------
+
+def test_detect_test_runner_byos_takes_priority_over_package_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # Create both a package.json with test script and a BYOS skill
+    (tmp_path / "package.json").write_text('{"scripts": {"test": "jest"}}')
+    _make_skill(tmp_path, "run-tests", "bun test --coverage")
+    result = detect_test_runner()
+    assert result["type"] == "byos"
+    assert result["command"] == "bun test --coverage"
+
+
+def test_detect_test_runner_byos_takes_priority_over_pyproject(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest]\n")
+    _make_skill(tmp_path, "tests", "python -m pytest -k unit")
+    result = detect_test_runner()
+    assert result["type"] == "byos"
+    assert result["command"] == "python -m pytest -k unit"
+
+
+def test_detect_test_runner_falls_back_when_no_byos_skill(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "package.json").write_text('{"scripts": {"test": "jest"}}')
+    result = detect_test_runner()
+    assert result["type"] == "npm"
+
+
+def test_detect_test_runner_byos_lint_is_none(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_skill(tmp_path, "run-tests", "bun test")
+    result = detect_test_runner()
+    assert result["lint"] is None

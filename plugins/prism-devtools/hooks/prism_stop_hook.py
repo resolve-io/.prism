@@ -46,9 +46,60 @@ WORKFLOW_STEPS = [
 ]
 
 
+_BYOS_TEST_NAME_RE = re.compile(r"(^|[-_])test(s?)([-_]|$)", re.IGNORECASE)
+
+
+def _extract_byos_execute_command(skill_content: str) -> Optional[str]:
+    """Extract the bash command from the ## Execute section of a SKILL.md."""
+    execute_match = re.search(r"^##\s+Execute\s*\n", skill_content, re.MULTILINE)
+    if not execute_match:
+        return None
+    after_execute = skill_content[execute_match.end():]
+    bash_match = re.search(r"```(?:bash|sh)?\n(.*?)```", after_execute, re.DOTALL)
+    if not bash_match:
+        return None
+    command = bash_match.group(1).strip()
+    return command if command else None
+
+
+def _detect_byos_test_skill(cwd: Path) -> Optional[dict]:
+    """Check .claude/skills/ for a BYOS test skill and extract its command.
+
+    Looks for skill directories whose name contains 'test' as a word component
+    (e.g. run-tests, tests, test, integration-tests). Reads SKILL.md and extracts
+    the bash command from the ## Execute section.
+
+    Returns a runner dict or None if no matching skill is found.
+    """
+    skills_dir = cwd / ".claude" / "skills"
+    if not skills_dir.is_dir():
+        return None
+    for skill_dir in sorted(skills_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        if not _BYOS_TEST_NAME_RE.search(skill_dir.name):
+            continue
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        command = _extract_byos_execute_command(content)
+        if command:
+            return {"type": "byos", "command": command, "lint": None}
+    return None
+
+
 def detect_test_runner() -> dict:
     """Detect the test runner for the current project."""
     cwd = Path.cwd()
+
+    # Check for BYOS test skill first — project-defined commands take priority
+    byos_runner = _detect_byos_test_skill(cwd)
+    if byos_runner:
+        return byos_runner
 
     # Check for Node.js project
     package_json = cwd / "package.json"
