@@ -413,6 +413,12 @@ def main():
         "review_previous_notes", "sm", "planning-review",
         "", prompt, runner
     )
+    # Write instruction to file so Claude can read it even if stop hook doesn't fire
+    instruction_path = STATE_DIR / "current_instruction.md"
+    try:
+        instruction_path.write_text(instruction, encoding='utf-8')
+    except Exception as exc:
+        print(f"Warning: could not write instruction file ({exc})", file=sys.stderr)
     print(instruction)
     print("")
     print("The stop hook auto-advances agent steps on completion.")

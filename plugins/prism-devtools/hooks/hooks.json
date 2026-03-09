@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py",
             "description": "Bootstrap Brain, seed auto-memory pointer, run incremental reindex"
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/enforce-story-context.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/enforce-story-context.py",
             "description": "Ensure workflow commands have required story context"
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/prism_activity_hook.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/prism_activity_hook.py",
             "description": "Update dashboard with real-time activity"
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/track-current-story.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/track-current-story.py",
             "description": "Track story file as current workflow context"
           }
         ]
@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validate-story-updates.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/validate-story-updates.py",
             "description": "Validate story file updates"
           }
         ]
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/validate-required-sections.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/validate-required-sections.py",
             "description": "Verify all required PRISM sections exist"
           }
         ]
@@ -69,7 +69,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/capture-commit-context.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/capture-commit-context.py",
             "description": "Capture git commit context into Brain on commit"
           }
         ]
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/capture-file-context.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/capture-file-context.py",
             "description": "Trigger Brain incremental reindex on file edits (30s debounce)"
           }
         ]
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/subagent_sfr_inject.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/subagent_sfr_inject.py",
             "description": "Inject SFR certificate template + Brain context into sub-agent"
           }
         ]
@@ -101,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/subagent_stop_recorder.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/subagent_stop_recorder.py",
             "description": "Record sub-agent outcome for SFR scoring and observability"
           }
         ]
@@ -112,7 +112,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/prism_stop_hook.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/prism_stop_hook.py",
             "description": "Auto-advance PRISM workflow on response completion",
             "timeout": 120000
           }
@@ -122,7 +122,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/consolidate-story-learnings.py",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh ${CLAUDE_PLUGIN_ROOT}/hooks/consolidate-story-learnings.py",
             "description": "Consolidate completed story learnings into Mulch"
           }
         ]

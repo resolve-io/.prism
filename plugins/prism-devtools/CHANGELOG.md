@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.9.3] - 2026-03-09
 
-### Fixed
+### Added
+- `hooks/run-hook.sh`: cross-platform Python resolver — tries `python3` then `python`, fixing hooks failing on Windows where Python is installed as `python` not `python3` (root cause of issues #25, #28, #30)
 
-- **Cross-platform hook execution (#30)** — hooks never fired on Windows because `python3` isn't found. Added `hooks/run-hook.sh` cross-platform Python resolver (tries `python3`, falls back to `python`). All 11 `hooks.json` commands updated to use `sh .../run-hook.sh .../script.py`.
-- **Instruction file safety net** — setup script now writes instruction to `.prism/current_instruction.md` so even if the stop hook doesn't fire, the instruction persists. Breaks the pattern of "hooks don't fire → stuck at step 0 → wasted tokens."
+### Changed
+- `hooks/hooks.json`: all hook commands now use `sh run-hook.sh` instead of `python3` directly
+- `setup_prism_loop.py`: writes first-step instruction to `.prism/current_instruction.md` at setup time so the instruction file exists before the first stop hook fires
 
 ## [3.9.2] - 2026-03-09
 
