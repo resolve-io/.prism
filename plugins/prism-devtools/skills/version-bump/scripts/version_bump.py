@@ -46,6 +46,7 @@ def _find_plugin_root() -> Path:
 PLUGIN_ROOT = _find_plugin_root()
 PLUGIN_JSON = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
 CHANGELOG = PLUGIN_ROOT / "CHANGELOG.md"
+RELEASE_TESTS = PLUGIN_ROOT / "tools" / "prism-cli" / "tests" / "test_release_docs.py"
 
 
 def read_version() -> str:
@@ -111,6 +112,52 @@ def update_changelog(new_version: str) -> bool:
     return True
 
 
+def update_release_tests(old_version: str, new_version: str) -> bool:
+    """Update version assertions in test_release_docs.py. Returns True if updated."""
+    if not RELEASE_TESTS.exists():
+        print(f"  WARNING: test_release_docs.py not found at {RELEASE_TESTS}", file=sys.stderr)
+        return False
+
+    text = RELEASE_TESTS.read_text(encoding="utf-8")
+    original = text
+
+    # Update AC-4: plugin.json version assertion
+    # Matches patterns like: == "3.7.0"  and  expected '3.7.0'
+    text = re.sub(
+        r'(== ["\'])' + re.escape(old_version) + r'(["\'])',
+        rf'\g<1>{new_version}\g<2>',
+        text,
+    )
+    text = re.sub(
+        r"(expected ')(" + re.escape(old_version) + r")(')",
+        rf"\g<1>{new_version}\g<3>",
+        text,
+    )
+
+    # Update AC-5: latest CHANGELOG version assertion
+    # Matches: f"expected '3.7.0' (should be latest)"
+    text = re.sub(
+        r'(expected ["\'])' + re.escape(old_version) + r"([\"'] \(should be latest\))",
+        rf"\g<1>{new_version}\g<2>",
+        text,
+    )
+
+    # Update version references in docstrings (e.g. "Version bump from X → Y")
+    text = re.sub(
+        r"(Version bump from )\S+ → \S+( for)",
+        rf"\g<1>{old_version} → {new_version}\g<2>",
+        text,
+    )
+
+    if text == original:
+        print(f"  test_release_docs.py: no version references to update")
+        return False
+
+    RELEASE_TESTS.write_text(text, encoding="utf-8")
+    print(f"  Updated test_release_docs.py assertions: {old_version} → {new_version}")
+    return True
+
+
 def create_tag(version: str) -> bool:
     """Create an annotated git tag if it doesn't exist."""
     tag_name = f"v{version}"
@@ -144,6 +191,8 @@ def git_commit_and_push(old_version: str, new_version: str, ticket: str, push: b
     files_to_stage = [str(PLUGIN_JSON)]
     if CHANGELOG.exists():
         files_to_stage.append(str(CHANGELOG))
+    if RELEASE_TESTS.exists():
+        files_to_stage.append(str(RELEASE_TESTS))
 
     subprocess.run(
         ["git", "add"] + files_to_stage,
@@ -261,6 +310,8 @@ def main() -> None:
 
     if update_changelog(new_version):
         print(f"  Updated CHANGELOG.md with [{new_version}] section")
+
+    update_release_tests(current, new_version)
 
     create_tag(new_version)
     git_commit_and_push(current, new_version, ticket, push)
