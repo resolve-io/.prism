@@ -1511,9 +1511,10 @@ def is_same_session(state: dict, current_session_id: str) -> bool:
         return True
 
     # If we have a stored session but no current session ID from the hook
-    # input, we can't verify — reject to prevent cross-session pollution.
+    # input, we can't verify — be lenient and allow the hook to run.
+    # The staleness check downstream provides protection against orphaned state.
     if not current_session_id:
-        return False
+        return True
 
     return stored_session == current_session_id
 
@@ -1768,6 +1769,11 @@ def main():
         # User should explicitly run /prism-loop or /prism-status to re-engage
         sys.exit(0)
 
+    # Always refresh last_activity unconditionally so the workflow never
+    # becomes permanently stale between stops that lack tokens or branch changes.
+    content = update_state_file(content, {"last_activity": datetime.now().isoformat()})
+    STATE_FILE.write_text(content, encoding='utf-8')
+
     # Update branch tracking on every active stop
     current_branch = detect_git_branch()
     stored_branch = state.get("branch", "")
@@ -2018,10 +2024,17 @@ def main():
                 f"[PRISM] Brain reindex failed ({type(brain_exc).__name__}: {brain_exc})",
                 file=sys.stderr,
             )
-        instruction = build_agent_instruction(
-            next_step_id, next_agent, next_action,
-            state["story_file"], state["prompt"], runner,
-        )
+        try:
+            instruction = build_agent_instruction(
+                next_step_id, next_agent, next_action,
+                state["story_file"], state["prompt"], runner,
+            )
+        except Exception as instr_exc:
+            print(
+                f"[PRISM] Fallback instruction build failed ({type(instr_exc).__name__}: {instr_exc})",
+                file=sys.stderr,
+            )
+            instruction = f"Proceed with step: {next_step_id}"
 
     history.append({
         "i": current_index,

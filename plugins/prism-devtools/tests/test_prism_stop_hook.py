@@ -37,6 +37,7 @@ from prism_stop_hook import (  # noqa: E402
     _MIN_STEP_TOOL_CALLS,
     _ADVANCE_DEBOUNCE_SECS,
     parse_frontmatter,
+    is_same_session,
 )
 
 
@@ -1205,3 +1206,138 @@ def test_no_progress_stop_does_not_fire_for_no_validation_step(tmp_path, monkeyp
     # Should advance (no-progress only fires when validation is set)
     assert "No progress" not in output.get("reason", "")
     assert state_after["current_step"] == "draft_story"
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: is_same_session() lenient when current_session_id is empty
+# ---------------------------------------------------------------------------
+
+def test_is_same_session_returns_true_when_stored_empty():
+    """No stored session: always allow (orphan-safe)."""
+    assert is_same_session({}, "") is True
+    assert is_same_session({"session_id": ""}, "abc") is True
+
+
+def test_is_same_session_returns_true_when_current_empty():
+    """Stored session set but hook input missing session_id: be lenient."""
+    assert is_same_session({"session_id": "abc"}, "") is True
+
+
+def test_is_same_session_returns_true_when_ids_match():
+    assert is_same_session({"session_id": "abc"}, "abc") is True
+
+
+def test_is_same_session_returns_false_when_ids_differ():
+    assert is_same_session({"session_id": "abc"}, "xyz") is False
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: last_activity updated unconditionally after staleness check
+# ---------------------------------------------------------------------------
+
+_NO_USAGE = {
+    "total_tokens": 0,
+    "model": "",
+    "total_lines": 0,
+    "skill_calls": 0,
+    "tool_calls": 3,
+}
+
+_OLD_TIMESTAMP = "2000-01-01T00:00:00"
+
+_STATE_NO_TOKENS_TEMPLATE = """\
+---
+active: true
+current_step: review_previous_notes
+current_step_index: 0
+story_file: story.md
+paused_for_manual: false
+session_id: test-session
+started_at: {ts}
+step_started_at: {ts}
+last_activity: {ts}
+step_tokens_start: 0
+---
+"""
+
+
+def test_last_activity_updated_when_no_tokens_and_no_branch_change(tmp_path, monkeypatch):
+    """last_activity must be refreshed even when transcript has no tokens and branch is unchanged."""
+    state_file = tmp_path / "state.md"
+    state_file.write_text(_STATE_NO_TOKENS_TEMPLATE.format(ts=_OLD_TIMESTAMP))
+
+    stdin_data = json.dumps({"session_id": "test-session", "transcript_path": ""})
+    monkeypatch.setattr(sys, "stdin", io.StringIO(stdin_data))
+    monkeypatch.setattr(_psh, "STATE_FILE", state_file)
+    monkeypatch.setattr(_psh, "get_usage_from_transcript", lambda *_a, **_k: _NO_USAGE)
+    monkeypatch.setattr(_psh, "is_same_session", lambda *_a: True)
+    monkeypatch.setattr(_psh, "is_workflow_stale", lambda *_a: False)
+    monkeypatch.setattr(_psh, "_record_session_outcome", lambda *_a: None)
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a: {"valid": True, "message": "", "continue_instruction": ""})
+    monkeypatch.setattr(_psh, "detect_git_branch", lambda: "main")
+
+    fake_conductor = MagicMock()
+    fake_conductor.last_had_brain_context = 0
+    fake_conductor.incremental_reindex = MagicMock()
+    fake_conductor.build_agent_instruction = MagicMock(return_value="instruction")
+    fake_module = MagicMock()
+    fake_module.Conductor.return_value = fake_conductor
+
+    with patch.dict(sys.modules, {"conductor_engine": fake_module}):
+        with pytest.raises(SystemExit):
+            _psh.main()
+
+    state_after = parse_frontmatter(state_file.read_text())
+    assert state_after.get("last_activity") != _OLD_TIMESTAMP, (
+        "last_activity should have been refreshed even without transcript tokens"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: build_agent_instruction() fallback wrapped in try/except
+# ---------------------------------------------------------------------------
+
+def test_fallback_instruction_resilient_when_build_agent_instruction_raises(tmp_path, monkeypatch):
+    """When conductor AND build_agent_instruction both fail, hook emits a minimal proceed block."""
+    state_file = tmp_path / "state.md"
+    state_file.write_text(_STATE_NO_TOKENS_TEMPLATE.format(ts="2026-01-01T00:00:00"))
+
+    stdin_data = json.dumps({"session_id": "test-session", "transcript_path": ""})
+    monkeypatch.setattr(sys, "stdin", io.StringIO(stdin_data))
+    monkeypatch.setattr(_psh, "STATE_FILE", state_file)
+    monkeypatch.setattr(_psh, "get_usage_from_transcript", lambda *_a, **_k: _FAKE_USAGE)
+    monkeypatch.setattr(_psh, "is_same_session", lambda *_a: True)
+    monkeypatch.setattr(_psh, "is_workflow_stale", lambda *_a: False)
+    monkeypatch.setattr(_psh, "_record_session_outcome", lambda *_a: None)
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a: {"valid": True, "message": "", "continue_instruction": ""})
+    monkeypatch.setattr(_psh, "detect_git_branch", lambda: "main")
+    # Simulate build_agent_instruction failure (e.g. missing core-steps file)
+    monkeypatch.setattr(_psh, "build_agent_instruction", MagicMock(side_effect=FileNotFoundError("core-steps missing")))
+
+    captured_output = []
+    original_print = __builtins__["print"] if isinstance(__builtins__, dict) else print
+
+    import builtins
+    original_print = builtins.print
+
+    def capture_print(*args, file=None, **kwargs):
+        if file is None:
+            captured_output.append(" ".join(str(a) for a in args))
+        else:
+            original_print(*args, file=file, **kwargs)
+
+    monkeypatch.setattr(builtins, "print", capture_print)
+
+    # Conductor import should fail so fallback path is exercised
+    with patch.dict(sys.modules, {"conductor_engine": None}):
+        with pytest.raises(SystemExit):
+            _psh.main()
+
+    # Should have emitted a block decision (not crashed)
+    decisions = [json.loads(line) for line in captured_output if line.startswith("{")]
+    assert any(d.get("decision") == "block" for d in decisions), (
+        "Hook should emit a block decision even when build_agent_instruction raises"
+    )
+    # The reason should contain the minimal proceed instruction with the step name
+    block = next(d for d in decisions if d.get("decision") == "block")
+    assert "Proceed with step:" in block["reason"]
