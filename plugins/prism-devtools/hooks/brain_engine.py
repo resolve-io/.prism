@@ -550,6 +550,20 @@ class Brain:
                 skill_name TEXT NOT NULL,
                 timestamp TEXT DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS subagent_outcomes (
+                prompt_id TEXT,
+                validator TEXT,
+                recommendation TEXT,
+                evidence_count INTEGER,
+                certificate_complete INTEGER,
+                certificate_blocked INTEGER DEFAULT 0,
+                timed_out INTEGER DEFAULT 0,
+                gate_agreed INTEGER,
+                tokens_used INTEGER,
+                duration_s REAL,
+                timestamp TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (prompt_id, validator, timestamp)
+            );
         """)
 
     # ------------------------------------------------------------------
@@ -2355,7 +2369,95 @@ def _cmd_analytics(brain: "Brain") -> int:
         score = float(r.get("score") or 0.0)
         print(f"  {ts}  {pid:<40}  score={score:.3f}")
 
+    # SFR variant comparison
+    _print_sfr_analytics(brain)
+
     return 0
+
+
+def _print_sfr_analytics(brain: "Brain") -> None:
+    """Print SFR vs freeform comparison from subagent_outcomes table."""
+    try:
+        rows = brain._scores.execute(
+            "SELECT prompt_id, validator, recommendation, evidence_count,"
+            " certificate_complete, certificate_blocked, timed_out, gate_agreed,"
+            " tokens_used FROM subagent_outcomes"
+        ).fetchall()
+    except Exception:
+        return  # Table may not exist yet in older DBs
+
+    if not rows:
+        print("\nSFR Variant Performance — no sub-agent outcomes recorded yet.")
+        return
+
+    # Group by (validator, variant_type)
+    # SFR variants have prompt_id containing '/sfr'
+    from collections import defaultdict
+    groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        prompt_id, validator, recommendation, evidence_count, cert_complete, \
+            cert_blocked, timed_out, gate_agreed, tokens_used = row
+        variant = "sfr" if prompt_id and "/sfr" in prompt_id else "freeform"
+        groups[(validator or "unknown", variant)].append({
+            "cert_complete": cert_complete or 0,
+            "cert_blocked": cert_blocked or 0,
+            "gate_agreed": gate_agreed,
+            "tokens_used": tokens_used or 0,
+            "timed_out": timed_out or 0,
+        })
+
+    print("\nSFR Variant Performance — validator/* namespace")
+    print("─" * 90)
+    hdr = (
+        f"{'Validator':<32} {'Variant':<10} {'Runs':>5}"
+        f"  {'Tokens':>7}  {'Gate Agree':>10}  {'Cert':>12}  {'Blocks':>6}"
+    )
+    print(hdr)
+    print("─" * 90)
+
+    for (validator, variant), entries in sorted(groups.items()):
+        runs = len(entries)
+        avg_tokens = sum(e["tokens_used"] for e in entries) / runs if runs else 0.0
+        gate_vals = [e["gate_agreed"] for e in entries if e["gate_agreed"] is not None]
+        gate_pct = (sum(gate_vals) / len(gate_vals) * 100) if gate_vals else None
+        if variant == "sfr":
+            cert_vals = [e["cert_complete"] for e in entries]
+            avg_cert = sum(cert_vals) / len(cert_vals) if cert_vals else 0.0
+            avg_blocks = sum(e["cert_blocked"] for e in entries) / runs if runs else 0.0
+            cert_str = f"{avg_cert:.1f}/6"
+            blocks_str = f"{avg_blocks:.1f}"
+        else:
+            cert_str = "—"
+            blocks_str = "—"
+        gate_str = f"{gate_pct:.1f}%" if gate_pct is not None else "—"
+        print(
+            f"{validator:<32} {variant:<10} {runs:>5}"
+            f"  {avg_tokens:>7,.0f}  {gate_str:>10}  {cert_str:>12}  {blocks_str:>6}"
+        )
+
+    # Retired SFR variants
+    try:
+        retired = brain._scores.execute(
+            "SELECT prompt_id FROM retired_variants WHERE prompt_id LIKE 'validator/%'"
+        ).fetchall()
+        retired_ids = [r[0] for r in retired]
+    except Exception:
+        retired_ids = []
+
+    # Epsilon from score_aggregates (proxy: distinct validator/* prompts tried)
+    try:
+        variant_count = brain._scores.execute(
+            "SELECT COUNT(DISTINCT prompt_id) FROM score_aggregates"
+            " WHERE prompt_id LIKE 'validator/%'"
+        ).fetchone()[0]
+    except Exception:
+        variant_count = 0
+
+    timeouts = sum(1 for row in rows if row[6])  # timed_out column
+    print(f"\nTimeouts with incomplete cert: {timeouts}")
+    print(f"Retired variants: {', '.join(retired_ids) if retired_ids else 'none'}")
+    if variant_count:
+        print(f"Distinct validator variants tracked: {variant_count}")
 
 
 def _print_usage() -> None:
