@@ -6,7 +6,7 @@ Coverage:
 - _cli_source_dirs() includes .claude/skills/ when present.
 - _cli_source_dirs() includes .prism/brain/memory/ when present.
 - _cli_source_dirs() includes .prism/handoff.md when present.
-- _cli_source_dirs() includes auto-detected dirs (app/, packages/, modules/).
+- _cli_source_dirs() includes auto-detected dirs (app/, packages/, modules/, app.*/).
 - _should_index() allows .claude/skills/ paths via _ALLOWED_SUBPATHS.
 - _should_index() allows .prism/brain/memory/ paths via _ALLOWED_SUBPATHS.
 - _should_index() allows .prism/handoff.md via _ALLOWED_SUBPATHS.
@@ -114,6 +114,19 @@ def test_cli_source_dirs_auto_detects_app_dir(tmp_path, monkeypatch):
     assert str(tmp_path / "app") in sources
     assert str(tmp_path / "packages") in sources
     assert str(tmp_path / "modules") in sources
+
+
+def test_cli_source_dirs_auto_detects_dot_prefixed_app_dirs(tmp_path, monkeypatch):
+    """_cli_source_dirs() auto-detects app.server, app.client, app.docs, etc."""
+    for d in ("app.server", "app.client", "app.docs"):
+        (tmp_path / d).mkdir()
+
+    monkeypatch.chdir(tmp_path)
+    sources = _cli_source_dirs()
+
+    assert str(tmp_path / "app.server") in sources
+    assert str(tmp_path / "app.client") in sources
+    assert str(tmp_path / "app.docs") in sources
 
 
 # ---------------------------------------------------------------------------

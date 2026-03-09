@@ -2160,7 +2160,7 @@ def _cli_source_dirs() -> list[str]:
     - .claude/skills/ — skill command documentation
     - .prism/brain/memory/ — Brain auto-memory files
     - .prism/handoff.md — session handoff artifact
-    - Auto-detected dirs: app/, packages/, modules/
+    - Auto-detected dirs: app/, packages/, modules/, app.*/ (e.g. app.server)
     - Plugin core-steps
     """
     sources: list[str] = []
@@ -2200,6 +2200,11 @@ def _cli_source_dirs() -> list[str]:
     for auto_dir in ("app", "packages", "modules"):
         candidate = cwd / auto_dir
         if candidate.exists() and candidate.is_dir():
+            sources.append(str(candidate))
+
+    # Auto-detect dot-prefixed app dirs (app.server, app.client, app.docs, …)
+    for candidate in sorted(cwd.glob("app.*")):
+        if candidate.is_dir() and str(candidate) not in sources:
             sources.append(str(candidate))
 
     if not sources:
