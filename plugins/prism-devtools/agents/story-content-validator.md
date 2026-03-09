@@ -77,6 +77,15 @@ Called by SM agent during *draft, after story-structure-validator confirms struc
 - Consistent with PSP PROBE estimation
 - Size category assigned (VS/S/M/L/VL)
 
+## Reasoning Approach
+
+If a reasoning template was provided in your context, you MUST follow it section by section
+before reaching your conclusion. Complete each section in order. Your final output format
+(JSON with quality_score, recommendations, etc.) remains the same — the template governs
+your reasoning process, not your output.
+
+If no template was provided, use your standard freeform analysis approach.
+
 ## Output Format
 
 ```json

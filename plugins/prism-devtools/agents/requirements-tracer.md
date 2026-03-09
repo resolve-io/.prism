@@ -176,6 +176,15 @@ Tests (Test Files)
 - 80-99% = GAPS (acceptable with justification)
 - <80% = MISSING (unacceptable)
 
+## Reasoning Approach
+
+If a reasoning template was provided in your context, you MUST follow it section by section
+before reaching your conclusion. Complete each section in order. Your final output format
+(JSON with traceability_status, trace_matrix, gaps, recommendation, etc.) remains the same
+— the template governs your reasoning process, not your output.
+
+If no template was provided, use your standard freeform analysis approach.
+
 ## Output Format
 
 ```json

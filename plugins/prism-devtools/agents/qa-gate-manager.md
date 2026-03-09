@@ -156,6 +156,15 @@ mitigation_plan: "Plan for addressing waived issues in future"
 3. Validate YAML syntax
 4. Return result to QA agent
 
+## Reasoning Approach
+
+If a reasoning template was provided in your context, you MUST follow it section by section
+before reaching your conclusion. Complete each section in order. Your final output format
+(JSON with status, gate_id, critical_issues, coverage_*, etc.) remains the same — the
+template governs your reasoning process, not your output.
+
+If no template was provided, use your standard freeform analysis approach.
+
 ## Output Format
 
 Return structured JSON result to calling QA agent:
