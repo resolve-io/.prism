@@ -1891,9 +1891,26 @@ class Brain:
                     ):
                         count += 1
             elif p.is_dir():
-                for child in p.rglob("*"):
-                    if child.is_file() and self._should_index(str(child)):
+                # Use os.walk with topdown=True so we can prune excluded dirs
+                # before descending into them (avoids WinError 1392 on corrupted
+                # NTFS dirs like a broken node_modules).
+                import os as _os
+                # Dirs that are excluded but are parents of allowed subpaths
+                # (e.g. .claude→.claude/skills, .prism→.prism/brain/memory)
+                # must still be descended into.
+                allowed_parents = {Path(sp).parts[0] for sp in self._ALLOWED_SUBPATHS}
+                for dirpath, dirnames, filenames in _os.walk(str(p), topdown=True, onerror=lambda _: None):
+                    # Prune excluded dirs in-place so os.walk won't descend,
+                    # but keep any dir that is an allowed-subpath parent.
+                    dirnames[:] = [
+                        d for d in dirnames
+                        if d not in self._effective_excludes or d in allowed_parents
+                    ]
+                    for fname in filenames:
                         try:
+                            child = Path(dirpath) / fname
+                            if not self._should_index(str(child)):
+                                continue
                             content = child.read_text(encoding="utf-8", errors="replace")
                             rel = str(child)
                             domain = child.suffix.lstrip(".")
@@ -2307,7 +2324,8 @@ def _cmd_explain(brain: "Brain", filepath: str) -> int:
 
 
 def _cmd_rebuild(brain: "Brain") -> int:
-    brain._purge_deleted()
+    # Do NOT purge first — if ingest() crashes mid-walk the DB would be empty.
+    # ingest() already calls _purge_deleted() at the end after a successful walk.
     # Walk the entire project root so any manually-ingested dirs are also
     # re-indexed; _should_index() handles exclusions.
     count = brain.ingest([str(Path.cwd())])
