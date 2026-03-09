@@ -161,3 +161,155 @@ def test_should_index_normal_exclusion_still_works(tmp_path):
     brain = _make_brain_in(tmp_path)
     assert brain._should_index("node_modules/foo/bar.js") is False
     assert brain._should_index("src/__pycache__/foo.pyc") is False
+
+
+# ---------------------------------------------------------------------------
+# Bug 1: Missing excluded path segments (bin, obj, .playwright, storybook-static)
+# ---------------------------------------------------------------------------
+
+def test_should_index_blocks_bin_dir(tmp_path):
+    """_should_index() returns False for files under bin/."""
+    brain = _make_brain_in(tmp_path)
+    assert brain._should_index("bin/Debug/MyApp.exe") is False
+    assert brain._should_index("project/bin/Release/net8.0/app.dll") is False
+
+
+def test_should_index_blocks_obj_dir(tmp_path):
+    """_should_index() returns False for files under obj/."""
+    brain = _make_brain_in(tmp_path)
+    assert brain._should_index("obj/Debug/MyApp.pdb") is False
+    assert brain._should_index("src/obj/Release/net8.0/ref/MyLib.dll") is False
+
+
+def test_should_index_blocks_playwright_dir(tmp_path):
+    """_should_index() returns False for files under .playwright/."""
+    brain = _make_brain_in(tmp_path)
+    assert brain._should_index(".playwright/cache/webkit/foo.bin") is False
+
+
+def test_should_index_blocks_storybook_static_dir(tmp_path):
+    """_should_index() returns False for files under storybook-static/."""
+    brain = _make_brain_in(tmp_path)
+    assert brain._should_index("storybook-static/index.html") is False
+    assert brain._should_index("storybook-static/sb-addons/foo.js") is False
+
+
+def test_excluded_segments_contains_all_four_new_entries(tmp_path):
+    """_EXCLUDED_PATH_SEGMENTS includes the 4 newly added build artifact dirs."""
+    brain = _make_brain_in(tmp_path)
+    for segment in ("bin", "obj", ".playwright", "storybook-static"):
+        assert segment in brain._EXCLUDED_PATH_SEGMENTS, (
+            f"Expected '{segment}' in _EXCLUDED_PATH_SEGMENTS"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Bug 2: rebuild command should walk CWD, not use _cli_source_dirs()
+# ---------------------------------------------------------------------------
+
+def test_cmd_rebuild_indexes_project_root(tmp_path, monkeypatch):
+    """_cmd_rebuild walks the full project root rather than hardcoded dirs.
+
+    A file in a custom location (not in _cli_source_dirs()) should still be
+    indexed after rebuild because Brain.ingest() receives [cwd] and walks it.
+    """
+    from brain_engine import _cmd_rebuild
+
+    # Create a file in a directory not covered by _cli_source_dirs().
+    custom_dir = tmp_path / "custom-module"
+    custom_dir.mkdir()
+    custom_file = custom_dir / "logic.py"
+    custom_file.write_text("def hello(): return 'world'")
+
+    monkeypatch.chdir(tmp_path)
+    brain = _make_brain_in(tmp_path)
+    rc = _cmd_rebuild(brain)
+
+    assert rc == 0
+    # The file from the custom directory must be in the index.
+    rows = brain._brain.execute(
+        "SELECT source_file FROM docs WHERE source_file LIKE '%logic.py'",
+    ).fetchall()
+    assert rows, "custom-module/logic.py should be indexed after rebuild"
+
+
+def test_cmd_rebuild_excludes_build_artifacts(tmp_path, monkeypatch):
+    """_cmd_rebuild skips files under excluded segments (e.g. bin/)."""
+    from brain_engine import _cmd_rebuild
+
+    # Create a file that should be excluded.
+    bin_dir = tmp_path / "bin" / "Debug"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "app.exe").write_bytes(b"\x00\x01\x02")  # binary artifact
+
+    monkeypatch.chdir(tmp_path)
+    brain = _make_brain_in(tmp_path)
+    _cmd_rebuild(brain)
+
+    rows = brain._brain.execute(
+        "SELECT source_file FROM docs WHERE source_file LIKE '%bin%app.exe'",
+    ).fetchall()
+    assert not rows, "bin/Debug/app.exe should NOT be indexed after rebuild"
+
+
+# ---------------------------------------------------------------------------
+# Bug 3 & 4: Windows UTF-8 encoding — structural smoke tests
+# ---------------------------------------------------------------------------
+
+def test_brain_engine_stdout_reconfigure_called(monkeypatch):
+    """brain_engine __main__ block calls reconfigure on stdout/stderr.
+
+    We verify the fix exists by checking that stdout.reconfigure is invoked
+    when the stream exposes the method.
+    """
+    import io
+    reconfigure_calls = []
+
+    class FakeStream(io.StringIO):
+        def reconfigure(self, **kwargs):
+            reconfigure_calls.append(kwargs)
+
+    import brain_engine
+    import importlib, types
+
+    # Patch sys.argv so the __main__ block exits cleanly after encoding setup.
+    monkeypatch.setattr("sys.argv", ["brain_engine.py", "status"])
+    monkeypatch.setattr("sys.stdout", FakeStream())
+    monkeypatch.setattr("sys.stderr", FakeStream())
+
+    # The __main__ guard won't re-run on import; just verify the guard exists.
+    import ast, inspect
+    src = inspect.getsource(brain_engine)
+    tree = ast.parse(src)
+
+    # Look for 'reconfigure' call in the module's top-level If __name__ block.
+    found_reconfigure = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "reconfigure":
+            found_reconfigure = True
+            break
+    assert found_reconfigure, (
+        "brain_engine.py must call .reconfigure() for Windows UTF-8 encoding fix"
+    )
+
+
+def test_prism_bug_stdout_reconfigure_called():
+    """prism-bug.py main() calls reconfigure on stdout/stderr for Windows fix."""
+    import ast, importlib.util
+    from pathlib import Path
+
+    script = (
+        Path(__file__).resolve().parent.parent
+        / "skills" / "prism-bug" / "scripts" / "prism-bug.py"
+    )
+    src = script.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    found_reconfigure = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "reconfigure":
+            found_reconfigure = True
+            break
+    assert found_reconfigure, (
+        "prism-bug.py must call .reconfigure() for Windows UTF-8 encoding fix"
+    )

@@ -600,6 +600,12 @@ _Submitted via `/prism-bug`_
 
 
 def main() -> None:
+    # Ensure stdout/stderr use UTF-8 on Windows (cp1252 consoles raise
+    # UnicodeEncodeError when printing non-ASCII content).
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+
     args = sys.argv[1:]
     if not args:
         print("Usage: prism-bug.py <description of what went wrong>", file=sys.stderr)

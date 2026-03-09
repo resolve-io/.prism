@@ -307,6 +307,8 @@ class Brain:
         ".claude", ".prism", "__pycache__", "node_modules", ".git",
         ".venv", "venv", ".env", "dist", "build", ".tox",
         ".mypy_cache", ".pytest_cache", ".overstory",
+        # build artifact directories — compiled output, not source
+        "bin", "obj", ".playwright", "storybook-static",
         # sample/test data directories — should not pollute code search results
         "sample-resumes", "samples", "test-data", "fixtures",
         "testdata", "seed-data",
@@ -2285,13 +2287,14 @@ def _cmd_explain(brain: "Brain", filepath: str) -> int:
 
 def _cmd_rebuild(brain: "Brain") -> int:
     brain._purge_deleted()
-    sources = _cli_source_dirs()
-    count = brain.ingest(sources)
+    # Walk the entire project root so any manually-ingested dirs are also
+    # re-indexed; _should_index() handles exclusions.
+    count = brain.ingest([str(Path.cwd())])
     if brain.vector_enabled:
         mode = "Full \u2014 BM25+Vector+GraphRAG"
     else:
         mode = "BM25+GraphRAG"
-    print(f"Brain: rebuilt index — {count} documents from {len(sources)} source(s) (mode: {mode})")
+    print(f"Brain: rebuilt index — {count} documents (mode: {mode})")
     return 0
 
 
@@ -2365,6 +2368,12 @@ def _print_usage() -> None:
 
 
 if __name__ == "__main__":
+    # Ensure stdout/stderr use UTF-8 on Windows (cp1252 consoles raise
+    # UnicodeEncodeError when printing non-ASCII content like em-dashes).
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+
     args = sys.argv[1:]
     if not args:
         _print_usage()
