@@ -5,6 +5,12 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.1] - 2026-03-09
+
+### Fixed
+
+- **Stop hook: `_emit_current_step_reinstruct` fallback resilience** — the `except Exception` branch that calls `build_agent_instruction()` now wraps that call in its own `try/except`; if it raises (e.g. missing core-steps file), the function falls back to a minimal "Continue with the current step." instruction and still emits a valid `block` decision, honouring the "Never raises" contract in the docstring.
+
 ## [3.9.0] - 2026-03-09
 
 ### Added

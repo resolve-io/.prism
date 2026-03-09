@@ -1612,10 +1612,13 @@ def _emit_current_step_reinstruct(
             state.get("story_file", ""), state.get("prompt", ""), runner,
         )
     except Exception:
-        instruction = build_agent_instruction(
-            step_id, agent, action,
-            state.get("story_file", ""), state.get("prompt", ""), runner,
-        )
+        try:
+            instruction = build_agent_instruction(
+                step_id, agent, action,
+                state.get("story_file", ""), state.get("prompt", ""), runner,
+            )
+        except Exception:
+            instruction = "Continue with the current step."
     print(json.dumps({
         "decision": "block",
         "reason": f"{reason_prefix}\n\n{instruction}",

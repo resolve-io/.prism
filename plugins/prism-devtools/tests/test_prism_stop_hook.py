@@ -1205,3 +1205,42 @@ def test_no_progress_stop_does_not_fire_for_no_validation_step(tmp_path, monkeyp
     # Should advance (no-progress only fires when validation is set)
     assert "No progress" not in output.get("reason", "")
     assert state_after["current_step"] == "draft_story"
+
+
+def test_emit_reinstruct_fallback_resilience(tmp_path, monkeypatch):
+    """_emit_current_step_reinstruct falls back to minimal instruction when both conductor
+    and build_agent_instruction raise — never raises, always emits a block decision."""
+    state_file = _make_state_file(tmp_path, "implement_tasks", 5)
+
+    import io as _io
+    stdin_data = json.dumps({"session_id": "test-session", "transcript_path": ""})
+    monkeypatch.setattr(sys, "stdin", _io.StringIO(stdin_data))
+    monkeypatch.setattr(_psh, "STATE_FILE", state_file)
+    monkeypatch.setattr(_psh, "get_usage_from_transcript", lambda *_a, **_k: {
+        "total_tokens": 500, "model": "test", "total_lines": 5,
+        "skill_calls": 0, "tool_calls": 0,
+    })
+    monkeypatch.setattr(_psh, "is_same_session", lambda *_a: True)
+    monkeypatch.setattr(_psh, "is_workflow_stale", lambda *_a: False)
+    monkeypatch.setattr(_psh, "_record_session_outcome", lambda *_a: None)
+    # Make build_agent_instruction (fallback) raise to trigger the inner except
+    monkeypatch.setattr(_psh, "build_agent_instruction", MagicMock(side_effect=RuntimeError("missing file")))
+
+    fake_conductor = MagicMock()
+    fake_conductor.build_agent_instruction = MagicMock(side_effect=RuntimeError("conductor down"))
+    fake_conductor.incremental_reindex = MagicMock(side_effect=RuntimeError("conductor down"))
+    fake_module = MagicMock()
+    fake_module.Conductor.return_value = fake_conductor
+
+    captured = []
+    with patch("builtins.print", side_effect=lambda *a, **k: captured.append(a[0]) if a else None):
+        with patch.dict(sys.modules, {"conductor_engine": fake_module}):
+            with pytest.raises(SystemExit):
+                _psh.main()
+
+    # Must emit a block decision with the minimal fallback instruction
+    assert captured, "Expected at least one print call"
+    output = json.loads(captured[0])
+    assert output.get("decision") == "block"
+    assert "No progress" in output.get("reason", "")
+    assert "Continue with the current step." in output.get("reason", "")
