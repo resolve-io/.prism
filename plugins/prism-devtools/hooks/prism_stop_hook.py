@@ -48,6 +48,57 @@ WORKFLOW_STEPS = [
 ]
 
 
+# Directories to skip during recursive glob traversal.
+_EXCLUDED_GLOB_DIRS: frozenset = frozenset({
+    "node_modules", "bin", "obj", ".git", "__pycache__",
+    "dist", ".next", ".nuget", ".venv", "venv", "build", "target", "vendor",
+})
+
+
+def _filtered_glob(root: Path, pattern: str, timeout: float = 10.0) -> list:
+    """Recursive glob with directory exclusion and timeout guard.
+
+    Skips _EXCLUDED_GLOB_DIRS during traversal.  If the walk exceeds
+    *timeout* seconds the function aborts and falls back to a non-recursive
+    glob of *root* only (avoids hanging the hook entirely).
+    """
+    if "**" not in pattern:
+        return list(root.glob(pattern))
+
+    # The filename-level pattern after the last "**/" segment.
+    suffix = pattern.rsplit("**/", 1)[-1]  # e.g. "*.csproj"
+
+    results: list = []
+    deadline = time.monotonic() + timeout
+    timed_out = False
+
+    def _walk(d: Path) -> None:
+        nonlocal timed_out
+        if timed_out or time.monotonic() > deadline:
+            timed_out = True
+            return
+        try:
+            for item in d.iterdir():
+                if timed_out or time.monotonic() > deadline:
+                    timed_out = True
+                    return
+                if item.is_dir():
+                    if item.name not in _EXCLUDED_GLOB_DIRS:
+                        _walk(item)
+                elif fnmatch.fnmatch(item.name, suffix):
+                    results.append(item)
+        except (PermissionError, OSError):
+            pass
+
+    _walk(root)
+
+    if timed_out:
+        # Fall back: non-recursive search in root only.
+        return list(root.glob(suffix))
+
+    return results
+
+
 _BYOS_TEST_NAME_RE = re.compile(r"(^|[-_])test(s?)([-_]|$)", re.IGNORECASE)
 
 
