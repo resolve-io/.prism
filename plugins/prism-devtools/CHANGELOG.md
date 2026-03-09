@@ -5,6 +5,18 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] - 2026-03-09
+
+### Added
+
+- **Stop hook: no-progress detection** — before validation, counts tool_use calls since `step_line_start`; if below per-step minimum threshold, re-emits current step instruction instead of validating (prevents post-compaction idle stops from causing false-positive advancement).
+- **Stop hook: step-transition debounce** — secondary guard catches rapid re-advance attempts: steps advanced within 30s with zero tool calls are blocked and the current step instruction is re-emitted.
+- **Stop hook: compaction-marker awareness** — `extract_test_result_from_transcript` now detects `type: "system"` entries (compaction markers) and discards accumulated Bash tool IDs and test results collected before the marker, preventing stale test output from being used post-compaction.
+
+### Fixed
+
+- **Stop hook: double-advance prevention** — `implement_tasks` → `verify_green_state` skip no longer possible; post-compaction idle stops are detected and blocked before validation runs.
+
 ## [3.8.0] - 2026-03-09
 
 ### Added
