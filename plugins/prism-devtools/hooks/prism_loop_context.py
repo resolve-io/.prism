@@ -324,14 +324,24 @@ def discover_prism_skills(story_file: str = "") -> list:
     return results
 
 
-def _format_discovered_skills(skills: list) -> str:
-    """Format discovered skills for injection into agent instructions."""
+def _format_discovered_skills(skills: list, is_filtered: bool = False) -> str:
+    """Format discovered skills for injection into agent instructions.
+
+    When is_filtered=True (Conductor-selected subset), uses softer 'Consider'
+    language. When False (full unfiltered list), uses the original MANDATORY
+    wording.
+    """
     if not skills:
         return ""
-    lines = [
-        "## Available Skills",
-        "MANDATORY: You MUST invoke relevant skills using the Skill tool before completing your task. For each skill below, if there is any chance it applies to your current step, invoke it — do not skip this check:",
-    ]
+    if is_filtered:
+        header = "Consider these relevant skills for this step. Invoke any that apply:"
+    else:
+        header = (
+            "MANDATORY: You MUST invoke relevant skills using the Skill tool before "
+            "completing your task. For each skill below, if there is any chance it "
+            "applies to your current step, invoke it — do not skip this check:"
+        )
+    lines = ["## Available Skills", header]
     for s in skills:
         desc = f" - {s['description']}" if s["description"] else ""
         lines.append(f"  - /{s['name']}{desc}")
@@ -456,7 +466,8 @@ def _build_fallback_instruction(step_id: str, agent: str, story_file: str,
 def build_agent_instruction(step_id: str, agent: str, action: str,
                             story_file: str, prompt: str = "",
                             runner: dict = None, brain_context: str = "",
-                            prompt_variant_text: str = "") -> str:
+                            prompt_variant_text: str = "",
+                            filtered_skills: list = None) -> str:
     """
     Build self-contained instruction for a workflow step.
 
@@ -469,6 +480,9 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
     instructions with project knowledge base results.
     prompt_variant_text: optional persona prompt variant content from Brain PSP
     selection. Injected after role card to provide variant-specific guidance.
+    filtered_skills: when provided by Conductor, use this pre-filtered list
+    instead of calling discover_prism_skills(). Empty list suppresses injection.
+    None means discover independently (backward-compatible default).
     """
     if runner is None:
         runner = {}
@@ -480,8 +494,11 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
         return _build_fallback_instruction(step_id, agent, story_file, conventions)
 
     agent_id, phase = phase_info
-    discovered_skills = discover_prism_skills(story_file)
-    skill_text = _format_discovered_skills(discovered_skills)
+    if filtered_skills is not None:
+        skill_text = _format_discovered_skills(filtered_skills, is_filtered=True)
+    else:
+        discovered_skills = discover_prism_skills(story_file)
+        skill_text = _format_discovered_skills(discovered_skills)
 
     # Load and split core step file into title (line 1) + body (rest)
     raw = _load_step_content(step_id)

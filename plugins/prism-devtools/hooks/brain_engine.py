@@ -2179,6 +2179,20 @@ class Brain:
         )
         self._scores.commit()
 
+    def get_skill_scores(self) -> dict:
+        """Return usage frequency per skill from the skill_usage table.
+
+        Returns a dict mapping skill_name -> int usage count across all sessions.
+        Returns an empty dict when the table is empty or an error occurs.
+        """
+        try:
+            rows = self._scores.execute(
+                "SELECT skill_name, COUNT(*) AS cnt FROM skill_usage GROUP BY skill_name"
+            ).fetchall()
+            return {row["skill_name"]: row["cnt"] for row in rows}
+        except Exception:
+            return {}
+
 
 # ---------------------------------------------------------------------------
 # CLI entrypoint
