@@ -216,13 +216,13 @@ class TestAC4_PluginJsonVersion:
 
     def test_ac4_plugin_json_version_is_371(self):
         """
-        AC-4: plugin.json 'version' field is '3.10.0'
-        Requirement: Version bump from 3.10.0 → 3.10.1 for prism-bug platform & hook diagnostics
-        Expected: json.loads(plugin.json)['version'] == '3.10.1'
+        AC-4: plugin.json 'version' field is '3.10.2'
+        Requirement: Version bump from 3.10.1 → 3.10.2 for Windows hooks direct python3 fix
+        Expected: json.loads(plugin.json)['version'] == '3.10.2'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.10.1", (
-            f"plugin.json version is '{data.get('version')}', expected '3.10.1'"
+        assert data.get("version") == "3.10.2", (
+            f"plugin.json version is '{data.get('version')}', expected '3.10.2'"
         )
 
 
