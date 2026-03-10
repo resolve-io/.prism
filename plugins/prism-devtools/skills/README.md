@@ -49,13 +49,6 @@ Auto-activating agent capabilities for PRISM workflows.
 | [strangler-pattern](./strangler-pattern/SKILL.md) | Strangler pattern |
 | [strangler-pattern-guide](./strangler-pattern-guide/SKILL.md) | Migration guide |
 
-## Integrations
-
-| Skill | Purpose |
-|-------|---------|
-| [jira](./jira/SKILL.md) | Jira integration |
-| [fetch-jira-issue](./fetch-jira-issue/SKILL.md) | Fetch Jira issues |
-
 ## Tooling
 
 | Skill | Purpose |

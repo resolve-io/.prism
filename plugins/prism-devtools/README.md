@@ -149,20 +149,9 @@ Edit `core-config.yaml` to configure:
 - Team preferences
 - Custom workflows
 
-## Jira Integration (Optional)
+## Jira Integration
 
-Enable Jira integration for fetching issue context:
-
-1. Copy `.env.example` to `.env`
-2. Get API token: https://id.atlassian.com/manage-profile/security/api-tokens
-3. Add credentials to `.env`:
-   ```env
-   JIRA_EMAIL=your.email@company.com
-   JIRA_API_TOKEN=your-api-token-here
-   ```
-4. Update `core-config.yaml` if needed
-
-See [Jira Integration Guide](utils/jira-integration.md) for details.
+Jira access is provided by the **Atlassian MCP server**. Connect it via `/mcp` — authentication is handled natively by the MCP server (no env vars or API tokens needed in the plugin).
 
 ## Validation
 
@@ -186,7 +175,7 @@ node validate-skill.js ../architect
 ├── templates/           # Document generation (PRD, stories, architecture)
 ├── docs/                # Complete documentation
 │   └── index.md         # Documentation hub
-├── utils/               # Jira integration, helpers
+├── utils/               # Helpers
 └── core-config.yaml     # Project configuration
 ```
 

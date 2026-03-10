@@ -10,7 +10,7 @@ PRISM uses a modular dependency system where each skill can reference:
 2. **Templates** - Document structures (`.prism/templates/`)
 3. **Checklists** - Quality gates (`.prism/checklists/`)
 4. **Data** - Reference information (`.prism/data/`)
-5. **Integrations** - External systems (Jira, etc.)
+5. **Integrations** - External systems (via MCP servers)
 
 ## File Resolution
 
@@ -131,57 +131,6 @@ docs/qa/gates/
 ### Tasks
 - `brownfield-create-epic.md` - Epic creation for brownfield projects
 
-## Jira Integration
-
-### Configuration
-Jira integration is configured in `.prism/core-config.yaml`:
-
-```yaml
-integrations:
-  jira:
-    enabled: true
-    baseUrl: "https://your-company.atlassian.net"
-    # Additional config...
-```
-
-### Usage Pattern
-
-**1. Fetch Issue Context:**
-```
-*jira PROJ-123
-```
-
-**2. Use in Workflows:**
-- Architect: Fetch epic for architecture planning
-- PO: Fetch epic/story for refinement
-- Dev: Fetch story for implementation context
-- QA: Fetch story for test planning
-
-**3. Automatic Linking:**
-- Created artifacts reference source Jira key
-- Traceability maintained throughout workflow
-
-### Integration Points
-
-**Available in:**
-- ✅ Architect skill
-- ✅ Product Owner skill
-- ✅ Developer skill
-- ✅ QA skill
-- ✅ Scrum Master skill
-
-**Command:**
-```
-*jira {issueKey}
-```
-
-**Output:**
-- Issue summary and description
-- Acceptance criteria (if available)
-- Comments and discussion
-- Current status and assignee
-- Labels and components
-
 ## PRISM Configuration
 
 ### Core Config File
@@ -210,10 +159,6 @@ dev:
     - "docs/architecture/technical-standards.md"
     - "docs/architecture/project-conventions.md"
 
-integrations:
-  jira:
-    enabled: true
-    baseUrl: "https://your-company.atlassian.net"
 ```
 
 ### Story File Structure
@@ -420,11 +365,6 @@ sections:
 - Check file path matches pattern: `.prism/{type}/{name}`
 - Verify file exists in correct directory
 - Check core-config.yaml paths configuration
-
-**Integration Failures:**
-- Verify Jira configuration in core-config.yaml
-- Check credentials and permissions
-- Test connection with `*jira {test-key}`
 
 **Task Execution Errors:**
 - Ensure all required dependencies loaded

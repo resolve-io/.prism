@@ -31,16 +31,6 @@ When using skills in slash command mode, prefix with `*`:
 - **Output**: Farewell message and return to normal mode
 - **Usage**: `*exit`
 
-### Jira Integration
-
-**`jira {issueKey}`**
-- **Purpose**: Fetch context from a Jira ticket
-- **Arguments**:
-  - `issueKey`: The Jira issue identifier (e.g., "PROJ-123")
-- **Output**: Issue details including description, acceptance criteria, comments
-- **Usage**: `*jira PROJ-123`
-- **Available in**: All skills with Jira integration
-
 ## Architect Commands
 
 ### Document Creation
@@ -274,14 +264,6 @@ When using skills in slash command mode, prefix with `*`:
 - ❌ Using `*yolo` mode for critical stories
 
 ## Integration Commands
-
-### Jira Integration Pattern
-
-```
-1. *jira PROJ-123              # Fetch issue
-2. Use fetched context for story/architecture creation
-3. Reference Jira key in created artifacts
-```
 
 ## Command Help
 

@@ -65,20 +65,9 @@ Return structured JSON:
     "agents_registered": 11,
     "issues_found": 37
   },
-  "issues": [
-    {
-      "rule_id": "TC001",
-      "severity": "Warning",
-      "file": "commands/po.md",
-      "line": 79,
-      "name": "fetch-jira-issue",
-      "actual_type": "skill",
-      "called_as": "task",
-      "fix": "Replace with '/fetch-jira-issue' or 'fetch-jira-issue skill'"
-    }
-  ],
+  "issues": [],
   "registry": {
-    "skills": ["create-epic", "fetch-jira-issue"],
+    "skills": ["create-epic"],
     "agents": ["link-checker", "test-runner"]
   }
 }
