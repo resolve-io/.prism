@@ -38,6 +38,16 @@ _AGENT_DOMAIN_MAP: dict[str, str] = {
     "verify-plan": "sm",
 }
 
+# Cold-start step-to-skill keyword mapping for skill filtering
+_STEP_SKILL_KEYWORDS: dict[str, list] = {
+    "write_failing_tests": ["test", "blackbox", "validate", "spec", "qa"],
+    "implement_tasks":     ["api", "db", "domain", "patterns", "implement", "code"],
+    "draft_story":         ["story", "requirements", "plan", "design", "draft"],
+    "verify_plan":         ["validate", "verify", "plan", "review"],
+    "verify_green_state":  ["test", "verify", "qa", "validate", "green"],
+    "review_previous_notes": ["context", "review", "notes", "memory", "brain"],
+}
+
 # Sub-agent namespace mapping for Canopy variant selection
 _AGENT_NAMESPACE_MAP: dict[str, str] = {
     "story-content-validator": "validator/story-content",
@@ -255,6 +265,57 @@ class Conductor:
         except Exception:
             return ""
 
+    def select_relevant_skills(
+        self,
+        step_id: str,
+        agent: str,
+        all_skills: list,
+        max_skills: int = 5,
+    ) -> list:
+        """Filter skills to top max_skills relevant ones for this step/persona.
+
+        When Brain has skill_usage data, ranks by usage frequency and returns
+        the top max_skills skills. On cold-start (no usage data), falls back
+        to a keyword heuristic matching skill names/descriptions against the
+        step's expected domain keywords. Returns at most max_skills skills.
+        """
+        if not all_skills:
+            return []
+
+        # Try Brain usage frequency data first
+        if self._brain_available and self._brain is not None:
+            try:
+                usage_scores = self._brain.get_skill_scores()
+                if usage_scores:
+                    scored = sorted(
+                        all_skills,
+                        key=lambda s: usage_scores.get(s.get("name", ""), 0),
+                        reverse=True,
+                    )
+                    return scored[:max_skills]
+            except Exception:
+                pass
+
+        # Cold-start: keyword matching against step→domain map
+        keywords = {kw.lower() for kw in _STEP_SKILL_KEYWORDS.get(step_id, [])}
+        if not keywords:
+            return all_skills[:max_skills]
+
+        matched = [
+            s for s in all_skills
+            if any(
+                kw in (s.get("name", "") or "").lower()
+                or kw in (s.get("description", "") or "").lower()
+                for kw in keywords
+            )
+        ]
+        unmatched = [s for s in all_skills if s not in matched]
+
+        result = matched[:max_skills]
+        if len(result) < 3 and unmatched:
+            result = result + unmatched[: max_skills - len(result)]
+        return result[:max_skills]
+
     def build_agent_instruction(
         self,
         step_id: str,
@@ -270,6 +331,7 @@ class Conductor:
         unavailable or returns no relevant context.
         """
         from prism_loop_context import build_agent_instruction as _base
+        from prism_loop_context import discover_prism_skills, LIGHTWEIGHT_STEPS
 
         brain_ctx = ""
         if self._brain_available and self._brain is not None:
@@ -292,10 +354,19 @@ class Conductor:
         self.last_prompt_id = prompt_id
         self._save_prompt_id(prompt_id)
 
+        # Conductor manages skill discovery and filtering.
+        # Lightweight steps get no skills; others get top 3-5 filtered.
+        if step_id in LIGHTWEIGHT_STEPS:
+            filtered_skills = []
+        else:
+            all_skills = discover_prism_skills(story_file)
+            filtered_skills = self.select_relevant_skills(step_id, agent, all_skills)
+
         return _base(
             step_id, agent, action, story_file, prompt, runner,
             brain_context=brain_ctx,
             prompt_variant_text=variant_text,
+            filtered_skills=filtered_skills,
         )
 
     def record_outcome(
