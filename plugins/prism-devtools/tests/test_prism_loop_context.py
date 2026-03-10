@@ -26,6 +26,7 @@ from prism_loop_context import (
     STEP_PHASE_MAP,
     STOP_DIRECTIVE,
     MEMORY_PERSIST_INSTRUCTION,
+    LIGHTWEIGHT_STEPS,
     build_agent_instruction,
     detect_project_conventions,
     find_project_root,
@@ -304,6 +305,8 @@ def test_skills_injection_uses_directive_language(tmp_path, monkeypatch):
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
 
     for step_id, agent, action in AGENT_STEPS:
+        if step_id in LIGHTWEIGHT_STEPS:
+            continue  # Lightweight steps skip skill injection — no directive expected
         instruction = build_agent_instruction(
             step_id, agent, action,
             "docs/stories/test-story.md", "", MOCK_RUNNER
@@ -324,6 +327,8 @@ def test_core_steps_have_skills_directive():
     """
     core_steps_dir = HOOKS_DIR / "core-steps"
     for step_id in STEP_PHASE_MAP:
+        if step_id in LIGHTWEIGHT_STEPS:
+            continue  # Lightweight steps skip skill injection — no directive needed
         step_file = core_steps_dir / f"{step_id}.md"
         content = step_file.read_text(encoding="utf-8")
         assert "Skill" in content, (
@@ -339,6 +344,8 @@ def test_skills_section_header_in_assembled_instruction(tmp_path, monkeypatch):
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
 
     for step_id, agent, action in AGENT_STEPS:
+        if step_id in LIGHTWEIGHT_STEPS:
+            continue  # Lightweight steps skip skill injection — no skills block expected
         instruction = build_agent_instruction(
             step_id, agent, action,
             "docs/stories/test-story.md", "", MOCK_RUNNER
@@ -734,8 +741,8 @@ prism:
     assert result[2]["priority"] == 99
 
 
-def test_discover_prism_skills_diagnostic_logging(tmp_path, monkeypatch, capsys):
-    """discover_prism_skills logs discovery progress and found skill names to stderr."""
+def test_discover_prism_skills_no_stderr(tmp_path, monkeypatch, capsys):
+    """discover_prism_skills produces no stderr output (hooks must not pollute conversation)."""
     monkeypatch.chdir(tmp_path)
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
@@ -743,24 +750,21 @@ def test_discover_prism_skills_diagnostic_logging(tmp_path, monkeypatch, capsys)
     result = discover_prism_skills()
     captured = capsys.readouterr()
 
-    assert "[skill-discovery]" in captured.err, "Missing [skill-discovery] prefix in log"
-    assert "my-discovery-skill" in captured.err, "Found skill name must appear in log"
-    assert "1 skill" in captured.err, "Total count must appear in log"
+    assert captured.err == "", "discover_prism_skills must not write to stderr (hook output pollution)"
     assert len(result) == 1
 
 
-def test_discover_prism_skills_logs_empty_result(tmp_path, monkeypatch, capsys):
-    """discover_prism_skills logs '0 skill(s) found' when nothing discovered."""
+def test_discover_prism_skills_no_stderr_empty_result(tmp_path, monkeypatch, capsys):
+    """discover_prism_skills produces no stderr even when no skills found."""
     monkeypatch.chdir(tmp_path)
     discover_prism_skills()
     captured = capsys.readouterr()
 
-    assert "[skill-discovery]" in captured.err
-    assert "0 skill" in captured.err
+    assert captured.err == "", "discover_prism_skills must not write to stderr"
 
 
-def test_discover_prism_skills_logs_invalid_frontmatter(tmp_path, monkeypatch, capsys):
-    """discover_prism_skills logs skipped skills with invalid frontmatter."""
+def test_discover_prism_skills_no_stderr_invalid_frontmatter(tmp_path, monkeypatch, capsys):
+    """discover_prism_skills produces no stderr when skipping invalid frontmatter."""
     monkeypatch.chdir(tmp_path)
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "missing-name", SKILL_MD_MISSING_FIELDS)
@@ -768,7 +772,7 @@ def test_discover_prism_skills_logs_invalid_frontmatter(tmp_path, monkeypatch, c
     discover_prism_skills()
     captured = capsys.readouterr()
 
-    assert "invalid frontmatter" in captured.err, "Must log skipped invalid-frontmatter skills"
+    assert captured.err == "", "discover_prism_skills must not write to stderr"
 
 
 def test_instructions_unchanged_without_discovered_skills():
@@ -1116,6 +1120,8 @@ def test_core_steps_have_role_scoped_brain_examples():
     """
     core_steps_dir = HOOKS_DIR / "core-steps"
     for step_id, role in _STEP_ROLE.items():
+        if step_id in LIGHTWEIGHT_STEPS:
+            continue  # Lightweight steps are context-only; Brain query examples not required
         content = (core_steps_dir / f"{step_id}.md").read_text(encoding="utf-8").lower()
         expected_domains = _ROLE_BRAIN_DOMAINS[role]
         matched = [d for d in expected_domains if d in content]
@@ -1254,3 +1260,63 @@ def test_review_previous_notes_md_references_handoff():
     assert "Session Handoff" in content, (
         "review_previous_notes.md must mention 'Session Handoff' so agents know to use it"
     )
+
+
+# --- LIGHTWEIGHT_STEPS: skill injection exclusion ---
+
+def test_lightweight_steps_constant_contains_expected_steps():
+    """LIGHTWEIGHT_STEPS must include review_previous_notes and verify_plan."""
+    assert "review_previous_notes" in LIGHTWEIGHT_STEPS
+    assert "verify_plan" in LIGHTWEIGHT_STEPS
+
+
+def test_skill_text_not_injected_for_review_previous_notes(tmp_path, monkeypatch):
+    """build_agent_instruction must NOT inject skill block for review_previous_notes."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "some-skill", VALID_SKILL_MD)
+
+    instruction = build_agent_instruction(
+        "review_previous_notes", "sm", "planning-review",
+        "docs/stories/test-story.md", "test prompt", MOCK_RUNNER
+    )
+    assert "## Available Skills" not in instruction, (
+        "skill block must NOT be injected for review_previous_notes (lightweight step)"
+    )
+
+
+def test_skill_text_not_injected_for_verify_plan(tmp_path, monkeypatch):
+    """build_agent_instruction must NOT inject skill block for verify_plan."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "some-skill", VALID_SKILL_MD)
+
+    instruction = build_agent_instruction(
+        "verify_plan", "sm", "verify",
+        "docs/stories/test-story.md", "test prompt", MOCK_RUNNER
+    )
+    assert "## Available Skills" not in instruction, (
+        "skill block must NOT be injected for verify_plan (lightweight step)"
+    )
+
+
+def test_skill_text_injected_for_non_lightweight_steps(tmp_path, monkeypatch):
+    """build_agent_instruction must inject skill block for non-lightweight steps."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "some-skill", VALID_SKILL_MD)
+
+    non_lightweight = [
+        ("draft_story", "sm", "draft"),
+        ("write_failing_tests", "qa", "write-failing-tests"),
+        ("implement_tasks", "dev", "develop-story"),
+        ("verify_green_state", "qa", "verify-green-state"),
+    ]
+    for step_id, agent, action in non_lightweight:
+        instruction = build_agent_instruction(
+            step_id, agent, action,
+            "docs/stories/test-story.md", "test prompt", MOCK_RUNNER
+        )
+        assert "## Available Skills" in instruction, (
+            f"skill block must be injected for {step_id} (non-lightweight step)"
+        )
