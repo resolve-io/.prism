@@ -44,7 +44,7 @@ def find_script(plugin_dir: Path, name: str) -> Path:
     """Find a script by name within the plugin directory."""
     candidates = [
         plugin_dir / 'scripts' / name,
-        plugin_dir / 'skills' / 'validate-markdown-refs' / 'scripts' / name,
+        plugin_dir / 'skills' / 'validate' / 'scripts' / name,
     ]
     for c in candidates:
         if c.exists():
