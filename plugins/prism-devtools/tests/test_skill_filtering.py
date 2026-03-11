@@ -8,7 +8,7 @@ Acceptance criteria:
 - AC-3: Cold-start keyword heuristic matches step domain (implement_tasks → api/db/domain/patterns)
 - AC-4: Brain usage data (when present) used to rank skills by frequency
 - AC-5: Empty input returns empty output
-- AC-6: Filtered skill injection uses 'Consider' language, not MANDATORY
+- AC-6: Filtered skill injection uses directive 'You MUST check and invoke' language, not 'Consider' or MANDATORY
 - AC-7: Unfiltered (None) path still uses MANDATORY language
 - AC-8: Brain.get_skill_scores() returns frequency dict from skill_usage table
 """
@@ -157,11 +157,11 @@ def test_ac5_empty_skills_returns_empty():
 
 
 # ---------------------------------------------------------------------------
-# AC-6: Filtered injection uses 'Consider' language
+# AC-6: Filtered injection uses directive 'You MUST check and invoke' language
 # ---------------------------------------------------------------------------
 
-def test_ac6_filtered_skills_use_consider_language():
-    """When filtered_skills provided to build_agent_instruction, uses 'Consider' wording."""
+def test_ac6_filtered_skills_use_directive_language():
+    """When filtered_skills provided to build_agent_instruction, uses directive 'You MUST' wording."""
     from prism_loop_context import build_agent_instruction
 
     filtered = [
@@ -173,17 +173,19 @@ def test_ac6_filtered_skills_use_consider_language():
         "story.md", "", {},
         filtered_skills=filtered,
     )
-    assert "Consider these relevant skills" in instruction
+    assert "You MUST check and invoke" in instruction
+    assert "Consider these relevant skills" not in instruction
     assert "MANDATORY" not in instruction
 
 
-def test_ac6_filtered_format_uses_consider():
-    """_format_discovered_skills(is_filtered=True) uses 'Consider' header."""
+def test_ac6_filtered_format_uses_directive_language():
+    """_format_discovered_skills(is_filtered=True) uses directive 'You MUST' header."""
     from prism_loop_context import _format_discovered_skills
 
     skills = [_skill("foo", "bar")]
     text = _format_discovered_skills(skills, is_filtered=True)
-    assert "Consider these relevant skills" in text
+    assert "You MUST check and invoke" in text
+    assert "Consider these relevant skills" not in text
     assert "MANDATORY" not in text
 
 
@@ -199,6 +201,7 @@ def test_ac7_unfiltered_format_uses_mandatory():
     text = _format_discovered_skills(skills, is_filtered=False)
     assert "MANDATORY" in text
     assert "Consider these relevant skills" not in text
+    assert "You MUST check and invoke" not in text
 
 
 # ---------------------------------------------------------------------------

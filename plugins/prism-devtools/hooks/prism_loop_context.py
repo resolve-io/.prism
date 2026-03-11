@@ -327,14 +327,17 @@ def discover_prism_skills(story_file: str = "") -> list:
 def _format_discovered_skills(skills: list, is_filtered: bool = False) -> str:
     """Format discovered skills for injection into agent instructions.
 
-    When is_filtered=True (Conductor-selected subset), uses softer 'Consider'
-    language. When False (full unfiltered list), uses the original MANDATORY
-    wording.
+    When is_filtered=True (Conductor-selected subset), uses directive language
+    that agents must act on. When False (full unfiltered list), uses the
+    original MANDATORY wording.
     """
     if not skills:
         return ""
     if is_filtered:
-        header = "Consider these relevant skills for this step. Invoke any that apply:"
+        header = (
+            "You MUST check and invoke these skills before completing your task. "
+            "These have been selected as relevant to this step:"
+        )
     else:
         header = (
             "MANDATORY: You MUST invoke relevant skills using the Skill tool before "
