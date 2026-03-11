@@ -24,9 +24,9 @@
 {"name": "e2e-test", "description": "End-to-end test automation, browser tests, and user journey testing for TalentSyncPro", "priority": 37, "agent": null}
 {"name": "regression", "description": "Regression test suite, change impact analysis, and baseline verification after changes", "priority": 38, "agent": null}
 {"name": "coverage", "description": "Code coverage analysis, coverage reports, coverage thresholds, and test gap identification", "priority": 39, "agent": null}
-{"name": "package", "description": "Build and package artifacts, container images, release bundles for TalentSyncPro", "priority": 41, "agent": null}
-{"name": "deploy", "description": "Deploy to target environments, deployment scripts, rollout strategies, blue-green deploys", "priority": 42, "agent": null}
-{"name": "release", "description": "Cut releases, tag versions, update changelogs, and author release notes", "priority": 43, "agent": null}
+{"name": "ci", "description": "Continuous integration pipeline, automated build execution, and CI/CD workflow configuration for TalentSyncPro", "priority": 41, "agent": null}
+{"name": "docs", "description": "Technical documentation, user guides, and knowledge base articles for TalentSyncPro", "priority": 42, "agent": null}
+{"name": "handoff", "description": "Sprint handoff, stakeholder delivery, release sign-off, and transition documentation for TalentSyncPro", "priority": 43, "agent": null}
 {"name": "monitor", "description": "System monitoring, dashboards, health checks, and observability setup for TalentSyncPro", "priority": 51, "agent": null}
 {"name": "alert", "description": "Configure alerts, incident detection, on-call notification rules, and SLA thresholds", "priority": 52, "agent": null}
 {"name": "rollback", "description": "Rollback procedures, hotfix deployment, emergency recovery, and incident response steps", "priority": 53, "agent": null}
