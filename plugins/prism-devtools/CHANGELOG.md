@@ -5,6 +5,22 @@ All notable changes to the PRISM Development System plugin will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.0] - 2026-03-11
+
+### Added
+- New `release` skill — end-to-end release workflow with change analysis, CHANGELOG authoring, and push coordination
+- New `local-dev-setup` skill
+- New `living-spec` skill
+
+### Changed
+- Consolidated 10 skills into 4: `brain`, `strangler-pattern`, `validate`, `jira`
+- Consolidated `probe-estimation` + `calibrate-sizing` + `resize-story` into `story-sizing`
+- Refactored 28+ skills to thin SKILL.md (≤20 lines) with progressive disclosure via `instructions.md`
+- Strengthened filtered skill instruction language to directive ("You MUST")
+
+### Fixed
+- FTS5 query length validation and adaptive RRF threshold in brain_engine.py
+
 ## [3.10.6] - 2026-03-10
 
 ### Added

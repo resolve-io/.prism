@@ -217,12 +217,12 @@ class TestAC4_PluginJsonVersion:
     def test_ac4_plugin_json_version_is_371(self):
         """
         AC-4: plugin.json 'version' field is '3.10.7'
-        Requirement: Version bump from 3.10.6 → 3.10.7 for skill overhaul
-        Expected: json.loads(plugin.json)['version'] == '3.10.7'
+        Requirement: Version bump from 3.10.7 → 3.11.0 for skill overhaul
+        Expected: json.loads(plugin.json)['version'] == '3.11.0'
         """
         data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        assert data.get("version") == "3.10.7", (
-            f"plugin.json version is '{data.get('version')}', expected '3.10.7'"
+        assert data.get("version") == "3.11.0", (
+            f"plugin.json version is '{data.get('version')}', expected '3.11.0'"
         )
 
 
