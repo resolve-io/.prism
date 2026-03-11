@@ -397,25 +397,28 @@ def test_ac10_task_skill_matches_draft_story():
     assert result == [skill], "'task' must keyword-match draft_story"
 
 
-# AC-11: 'test' appears in both write_failing_tests AND verify_green_state
+# AC-11: VERIFY steps return VERIFY-phase sub-skills (top-level 'test' may be
+# displaced by higher-scoring phase-matched skills in the full 33-skill pool)
 
-def test_ac11_test_skill_in_write_failing_tests_with_full_pool():
-    """'test' top-level skill appears in write_failing_tests result from full 33-skill pool."""
+def test_ac11_write_failing_tests_returns_verify_phase_skills():
+    """write_failing_tests returns VERIFY-phase sub-skills from the full pool."""
     c = _make_conductor_no_brain()
     result = c.select_relevant_skills("write_failing_tests", "qa", CUSTOMER_SKILLS)
     names = {s["name"] for s in result}
-    assert "test" in names, (
-        f"'test' must appear in write_failing_tests result; got {names}"
+    verify_count = len(names & _VERIFY_SKILL_NAMES)
+    assert verify_count >= 4, (
+        f"write_failing_tests must return >=4 VERIFY sub-skills; got {verify_count} in {names}"
     )
 
 
-def test_ac11_test_skill_in_verify_green_state_with_full_pool():
-    """'test' top-level skill appears in verify_green_state result from full 33-skill pool."""
+def test_ac11_verify_green_state_returns_verify_phase_skills():
+    """verify_green_state returns VERIFY-phase sub-skills from the full pool."""
     c = _make_conductor_no_brain()
     result = c.select_relevant_skills("verify_green_state", "qa", CUSTOMER_SKILLS)
     names = {s["name"] for s in result}
-    assert "test" in names, (
-        f"'test' must appear in verify_green_state result; got {names}"
+    verify_count = len(names & _VERIFY_SKILL_NAMES)
+    assert verify_count >= 4, (
+        f"verify_green_state must return >=4 VERIFY sub-skills; got {verify_count} in {names}"
     )
 
 
@@ -807,3 +810,103 @@ def test_ac20_priorities_are_positive_integers():
         assert isinstance(skill["priority"], int) and skill["priority"] > 0, (
             f"Skill '{skill['name']}' has invalid priority: {skill['priority']}"
         )
+
+
+# ============================================================================
+# prism-2140 ACs: Phase-aware skill matching
+# ============================================================================
+
+# AC-1: implement_tasks returns >=4 BUILD-phase skills
+
+def test_prism2140_ac1_implement_tasks_returns_build_skills():
+    """implement_tasks returns >=4 BUILD-phase sub-skills."""
+    c = _make_conductor_no_brain()
+    result = c.select_relevant_skills("implement_tasks", "dev", CUSTOMER_SKILLS)
+    names = {s["name"] for s in result}
+    build_count = len(names & _BUILD_SKILL_NAMES)
+    assert build_count >= 4, (
+        f"AC-1: implement_tasks must return >=4 BUILD sub-skills; got {build_count} in {names}"
+    )
+
+
+# AC-3: draft_story returns 0 BUILD sub-skills
+
+def test_prism2140_ac3_draft_story_no_build_sub_skills():
+    """draft_story must not return any BUILD sub-skills."""
+    c = _make_conductor_no_brain()
+    result = c.select_relevant_skills("draft_story", "sm", CUSTOMER_SKILLS)
+    names = {s["name"] for s in result}
+    build_in_result = names & _BUILD_SKILL_NAMES
+    assert len(build_in_result) == 0, (
+        f"AC-3: draft_story must have 0 BUILD sub-skills; got {build_in_result}"
+    )
+
+
+# AC-4: draft_story returns >=2 top-level skills
+
+def test_prism2140_ac4_draft_story_returns_top_level_skills():
+    """draft_story returns >=2 top-level skills."""
+    c = _make_conductor_no_brain()
+    result = c.select_relevant_skills("draft_story", "sm", CUSTOMER_SKILLS)
+    names = {s["name"] for s in result}
+    top_count = len(names & _TOP_LEVEL_SKILL_NAMES)
+    assert top_count >= 2, (
+        f"AC-4: draft_story must return >=2 top-level skills; got {top_count} in {names}"
+    )
+
+
+# AC-6: review_previous_notes returns 0 BUILD and 0 VERIFY sub-skills
+
+def test_prism2140_ac6_review_notes_no_build_verify():
+    """review_previous_notes must not return BUILD or VERIFY sub-skills."""
+    c = _make_conductor_no_brain()
+    result = c.select_relevant_skills("review_previous_notes", "sm", CUSTOMER_SKILLS)
+    names = {s["name"] for s in result}
+    build_verify = names & (_BUILD_SKILL_NAMES | _VERIFY_SKILL_NAMES)
+    assert len(build_verify) == 0, (
+        f"AC-6: review_previous_notes must have 0 BUILD/VERIFY sub-skills; got {build_verify}"
+    )
+
+
+# AC-10: SM sees different skills at each step transition
+
+def test_prism2140_ac10_sm_steps_differ():
+    """SM gets different top-5 skills for draft_story vs review_previous_notes."""
+    c = _make_conductor_no_brain()
+    draft = c.select_relevant_skills("draft_story", "sm", CUSTOMER_SKILLS)
+    rev = c.select_relevant_skills("review_previous_notes", "sm", CUSTOMER_SKILLS)
+    draft_names = {s["name"] for s in draft}
+    rev_names = {s["name"] for s in rev}
+    assert draft_names != rev_names, (
+        f"AC-10: SM draft_story and review_previous_notes must differ; both returned {draft_names}"
+    )
+
+
+# AC-11: QA write_failing_tests vs verify_green_state overlap
+
+def test_prism2140_ac11_qa_steps_overlap():
+    """QA write_failing_tests and verify_green_state overlap (both VERIFY phase)."""
+    c = _make_conductor_no_brain()
+    wft = c.select_relevant_skills("write_failing_tests", "qa", CUSTOMER_SKILLS)
+    vgs = c.select_relevant_skills("verify_green_state", "qa", CUSTOMER_SKILLS)
+    wft_names = {s["name"] for s in wft}
+    vgs_names = {s["name"] for s in vgs}
+    assert len(wft_names & vgs_names) > 0, (
+        f"AC-11: QA VERIFY steps must overlap; wft={wft_names}, vgs={vgs_names}"
+    )
+
+
+# AC-12: DEV implement_tasks has zero overlap with QA write_failing_tests top 5
+
+def test_prism2140_ac12_dev_qa_zero_overlap():
+    """DEV implement_tasks and QA write_failing_tests have zero overlap in top 5."""
+    c = _make_conductor_no_brain()
+    dev = c.select_relevant_skills("implement_tasks", "dev", CUSTOMER_SKILLS)
+    qa = c.select_relevant_skills("write_failing_tests", "qa", CUSTOMER_SKILLS)
+    dev_names = {s["name"] for s in dev}
+    qa_names = {s["name"] for s in qa}
+    overlap = dev_names & qa_names
+    assert len(overlap) == 0, (
+        f"AC-12: DEV and QA top-5 must have zero overlap; shared: {overlap}"
+    )
+

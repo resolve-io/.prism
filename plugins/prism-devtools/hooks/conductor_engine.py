@@ -44,7 +44,7 @@ _AGENT_DOMAIN_MAP: dict[str, str] = {
 _STEP_SKILL_KEYWORDS: dict[str, list] = {
     "write_failing_tests": ["test", "blackbox", "validate", "spec", "qa"],
     "implement_tasks":     ["api", "db", "domain", "patterns", "implement", "code"],
-    "draft_story":         ["story", "requirements", "plan", "design", "draft"],
+    "draft_story":         ["story", "requirements", "plan", "draft"],
     "verify_plan":         ["validate", "verify", "plan", "review"],
     "verify_green_state":  ["test", "verify", "qa", "validate", "green"],
     "review_previous_notes": ["context", "review", "notes", "memory", "brain"],
@@ -57,6 +57,92 @@ _STEP_SKILL_KEYWORDS: dict[str, list] = {
 _GATE_EXCLUDED_SKILL_NAMES: frozenset[str] = frozenset({
     "prism-approve", "prism-reject", "checkin", "task", "commit", "push",
 })
+
+# ---------------------------------------------------------------------------
+# Phase constants -- derived from customer-skills.jsonl priority ranges.
+# Customers encode lifecycle phase in the priority field; these constants let
+# the scoring algorithm map priority to phase without changing SKILL.md files.
+# ---------------------------------------------------------------------------
+PHASE_TOP_LEVEL = "top_level"   # priority 10-19 or >=60
+PHASE_BUILD     = "build"       # priority 20-29
+PHASE_VERIFY    = "verify"      # priority 30-39
+PHASE_SHIP      = "ship"        # priority 40-49
+PHASE_OPERATE   = "operate"     # priority 50-59
+
+# Step to phase mapping: which lifecycle phase each workflow step belongs to.
+_STEP_PHASE_MAP: dict[str, str] = {
+    "implement_tasks":       PHASE_BUILD,
+    "write_failing_tests":   PHASE_VERIFY,
+    "verify_green_state":    PHASE_VERIFY,
+    "verify_plan":           PHASE_VERIFY,
+    "draft_story":           PHASE_TOP_LEVEL,
+    "review_previous_notes": PHASE_TOP_LEVEL,
+}
+
+
+def _infer_skill_phase(skill: dict) -> str:
+    """Map a skill priority field to its lifecycle phase."""
+    p = skill.get("priority", 99)
+    if isinstance(p, str):
+        try:
+            p = int(p)
+        except (ValueError, TypeError):
+            p = 99
+    if 20 <= p <= 29:
+        return PHASE_BUILD
+    if 30 <= p <= 39:
+        return PHASE_VERIFY
+    if 40 <= p <= 49:
+        return PHASE_SHIP
+    if 50 <= p <= 59:
+        return PHASE_OPERATE
+    return PHASE_TOP_LEVEL
+
+
+def _score_skill(skill: dict, step_id: str, agent: str,
+                 usage_scores: Optional[dict] = None) -> float:
+    """Score a skill for relevance to the current step and agent.
+
+    Scoring layers (additive):
+    1. Phase match:   +10 if skill phase == step phase
+    2. Keyword match: +3 if any _STEP_SKILL_KEYWORDS hit name/description
+    3. Brain usage:   +usage_count (additive, not a separate path)
+    4. Priority tiebreak: small bonus inversely proportional to priority
+    """
+    score = 0.0
+    skill_phase = _infer_skill_phase(skill)
+    step_phase = _STEP_PHASE_MAP.get(step_id, PHASE_TOP_LEVEL)
+
+    # Layer 1: phase match
+    if skill_phase == step_phase:
+        score += 10.0
+    elif skill_phase == PHASE_TOP_LEVEL:
+        score += 2.0  # top-level skills are generically useful
+
+    # Layer 2: keyword match
+    keywords = {kw.lower() for kw in _STEP_SKILL_KEYWORDS.get(step_id, [])}
+    if keywords:
+        name = (skill.get("name", "") or "").lower()
+        desc = (skill.get("description", "") or "").lower()
+        if any(kw in name or kw in desc for kw in keywords):
+            score += 3.0
+
+    # Layer 3: Brain usage (additive)
+    if usage_scores:
+        skill_name = skill.get("name", "")
+        score += usage_scores.get(skill_name, 0)
+
+    # Layer 4: priority tiebreak (lower priority = slightly higher score)
+    p = skill.get("priority", 99)
+    if isinstance(p, str):
+        try:
+            p = int(p)
+        except (ValueError, TypeError):
+            p = 99
+    score += max(0, (100 - p)) * 0.01
+
+    return score
+
 
 # Sub-agent namespace mapping for Canopy variant selection
 _AGENT_NAMESPACE_MAP: dict[str, str] = {
@@ -284,51 +370,31 @@ class Conductor:
     ) -> list:
         """Filter skills to top max_skills relevant ones for this step/persona.
 
-        When Brain has skill_usage data, ranks by usage frequency and returns
-        the top max_skills skills. On cold-start (no usage data), falls back
-        to a keyword heuristic matching skill names/descriptions against the
-        step's expected domain keywords. Returns at most max_skills skills.
+        Uses scored ranking: phase match (from priority ranges) + keyword match
+        + Brain usage data (additive). Replaces the old boolean substring approach.
         """
         if not all_skills:
             return []
 
-        # Gate steps must never have skills — agent must wait for user action
+        # Gate steps must never have skills
         if step_id in ("red_gate", "green_gate"):
             return []
 
-        # Try Brain usage frequency data first
+        # Gather Brain usage scores (additive signal, not separate path)
+        usage_scores = None
         if self._brain_available and self._brain is not None:
             try:
-                usage_scores = self._brain.get_skill_scores()
-                if usage_scores:
-                    scored = sorted(
-                        all_skills,
-                        key=lambda s: usage_scores.get(s.get("name", ""), 0),
-                        reverse=True,
-                    )
-                    return scored[:max_skills]
+                usage_scores = self._brain.get_skill_scores() or None
             except Exception:
                 pass
 
-        # Cold-start: keyword matching against step→domain map
-        keywords = {kw.lower() for kw in _STEP_SKILL_KEYWORDS.get(step_id, [])}
-        if not keywords:
-            return all_skills[:max_skills]
-
-        matched = [
-            s for s in all_skills
-            if any(
-                kw in (s.get("name", "") or "").lower()
-                or kw in (s.get("description", "") or "").lower()
-                for kw in keywords
-            )
-        ]
-        unmatched = [s for s in all_skills if s not in matched]
-
-        result = matched[:max_skills]
-        if len(result) < 3 and unmatched:
-            result = result + unmatched[: max_skills - len(result)]
-        return result[:max_skills]
+        # Score every skill and sort descending
+        scored = sorted(
+            all_skills,
+            key=lambda s: _score_skill(s, step_id, agent, usage_scores),
+            reverse=True,
+        )
+        return scored[:max_skills]
 
     def build_agent_instruction(
         self,
