@@ -2,7 +2,6 @@
 name: test-design
 description: Design E2E integration test strategy for a story: scenarios, patterns, and test spec document.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Create comprehensive E2E integration test scenarios with complete user journey validation for story implementation.

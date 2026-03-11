@@ -2,7 +2,6 @@
 name: execute-checklist
 description: Validate documents, stories, or processes against defined checklists with pass/fail report.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Systematically validate documents, stories, or processes against defined checklists to ensure quality and completeness.

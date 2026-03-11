@@ -2,7 +2,6 @@
 name: story-sizing
 description: Use to estimate, calibrate, or resize stories using PROBE (PROxy-Based Estimation) and PSP data.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Manage story sizing using PROBE (PROxy-Based Estimation) across three modes.

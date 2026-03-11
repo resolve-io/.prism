@@ -2,7 +2,6 @@
 name: initialize-architecture
 description: Use to create complete architecture documentation structure. Creates all required architecture documents from templates.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Creates complete architecture documentation from templates in `docs/architecture/`.

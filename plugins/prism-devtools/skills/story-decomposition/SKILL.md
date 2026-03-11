@@ -1,7 +1,6 @@
 ---
 name: story-decomposition
 description: Break down large stories into optimally-sized stories (1-3 days) using PSP measurement discipline.
-disable-model-invocation: true
 ---
 
 # Story Decomposition

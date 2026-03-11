@@ -2,7 +2,6 @@
 name: file-first
 description: Read source files directly with Glob/Grep/Read. No RAG, no vector databases, no pre-loaded summaries.
 version: 1.1.1
-disable-model-invocation: true
 ---
 
 # file-first

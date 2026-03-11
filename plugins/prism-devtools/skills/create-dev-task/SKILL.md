@@ -2,7 +2,6 @@
 name: create-dev-task
 description: Generate a dev task document for the Dev agent based on validated issue and investigation results.
 version: 1.0.1
-disable-model-invocation: true
 ---
 
 # create-dev-task

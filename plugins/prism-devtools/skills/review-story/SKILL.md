@@ -2,7 +2,6 @@
 name: review-story
 description: QA review with risk assessment, code quality analysis, refactoring, and quality gate decision.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 # Review Story

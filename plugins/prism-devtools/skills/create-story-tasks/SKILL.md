@@ -2,7 +2,6 @@
 name: create-story-tasks
 description: Decompose user stories into 2-8 hour development tasks with estimates, dependencies, and task documents.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 # Create Story Tasks

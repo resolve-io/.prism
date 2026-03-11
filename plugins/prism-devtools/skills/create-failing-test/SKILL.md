@@ -2,7 +2,6 @@
 name: create-failing-test
 description: Create failing test specs for TDD: document reproduction steps and assertions for Dev/QA handoff.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Document a reproducible failing test case with evidence, steps, assertions, and handoff package.

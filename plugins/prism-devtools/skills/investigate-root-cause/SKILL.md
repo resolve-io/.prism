@@ -2,7 +2,6 @@
 name: investigate-root-cause
 description: Systematically investigate bugs to find root cause via code analysis, git history, and error tracing.
 version: 1.0.1
-disable-model-invocation: true
 ---
 
 # investigate-root-cause

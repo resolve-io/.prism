@@ -2,7 +2,6 @@
 name: nfr-assess
 description: Use to assess non-functional requirements (security, performance, reliability, maintainability) through E2E integration testing patterns.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Validates NFRs (security, performance, reliability, maintainability) via E2E integration testing and generates gate-ready outputs.

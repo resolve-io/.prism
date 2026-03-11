@@ -2,7 +2,6 @@
 name: risk-profile
 description: Use to assess and document risk factors for stories or features. Creates risk profiles with mitigation strategies.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Generates probability × impact risk matrix for a story with E2E-focused mitigation strategies and gate-ready outputs.

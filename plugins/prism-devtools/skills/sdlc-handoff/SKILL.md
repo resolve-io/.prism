@@ -2,7 +2,6 @@
 name: sdlc-handoff
 description: Use for SDLC phase transitions. Ensures proper handoff between development phases with documentation.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Creates a complete handoff package (SDLC doc, task assignments, comms plan) for Dev/QA from a validated customer issue.

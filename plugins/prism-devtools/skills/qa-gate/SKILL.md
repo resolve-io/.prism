@@ -2,7 +2,6 @@
 name: qa-gate
 description: Create/update QA gate YAML for a story: PASS/CONCERNS/FAIL/WAIVED decision with actionable issues.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Create or update a quality gate decision file for a story based on review findings.

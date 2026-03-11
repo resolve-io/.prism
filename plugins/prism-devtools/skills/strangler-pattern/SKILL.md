@@ -2,7 +2,6 @@
 name: strangler-pattern
 version: 1.0.0
 description: Safely migrate legacy controllers using strangler pattern with feature flags
-disable-model-invocation: true
 ---
 
 # Strangler Pattern

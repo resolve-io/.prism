@@ -2,7 +2,6 @@
 name: validate-issue
 description: Validate reported issues using Playwright: confirm reproducibility and document evidence for Dev team.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Use automated browser testing to reproduce customer issues, capture evidence, and confirm reproducibility.

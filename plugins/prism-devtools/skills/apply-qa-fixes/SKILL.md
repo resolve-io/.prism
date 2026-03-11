@@ -2,7 +2,6 @@
 name: apply-qa-fixes
 description: Apply code/test fixes from QA gate results: prioritized plan from gate YAML and assessments.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Implement fixes based on QA results (gate and assessments) for a story; apply code/test changes systematically.

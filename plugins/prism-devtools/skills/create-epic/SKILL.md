@@ -2,7 +2,6 @@
 name: create-epic
 description: Create Epic documents grouping related user stories with risk analysis, integration points, and PROBE estimation.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 # Create Epic

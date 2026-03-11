@@ -2,7 +2,6 @@
 name: document-project
 description: Use to analyze and document any project codebase. Creates comprehensive reference documentation for AI-assisted development including architecture and patterns.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Analyzes and documents any codebase into comprehensive AI-ready reference documentation in `docs/project/`.

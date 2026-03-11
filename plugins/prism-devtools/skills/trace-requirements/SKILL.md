@@ -2,7 +2,6 @@
 name: trace-requirements
 description: Map acceptance criteria to E2E integration tests: build traceability matrix and identify coverage gaps.
 version: 1.0.0
-disable-model-invocation: true
 ---
 
 Map story requirements to E2E integration test cases for comprehensive end-to-end traceability and workflow validation.
