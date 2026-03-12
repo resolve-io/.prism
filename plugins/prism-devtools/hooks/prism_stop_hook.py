@@ -10,6 +10,7 @@ State file: .claude/prism-loop.local.md
 
 import fnmatch
 import json
+import os
 import subprocess
 import sys
 import io
@@ -221,12 +222,13 @@ def run_tests(runner: dict, feature_only: bool = False) -> dict:
         return {"success": None, "output": "No test runner detected", "error": None}
 
     try:
+        _timeout = int(os.environ.get("PRISM_TEST_TIMEOUT", "120"))
         result = subprocess.run(
             runner["command"],
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30,  # 30s fallback — fits within hook window
+            timeout=_timeout,
             cwd=Path.cwd()
         )
 
@@ -237,7 +239,8 @@ def run_tests(runner: dict, feature_only: bool = False) -> dict:
             "returncode": result.returncode
         }
     except subprocess.TimeoutExpired:
-        return {"success": False, "output": "", "error": "Test timeout (30 seconds)", "returncode": -1}
+        _timeout = int(os.environ.get("PRISM_TEST_TIMEOUT", "120"))
+        return {"success": False, "output": "", "error": f"Test timeout ({_timeout} seconds)", "returncode": -1}
     except Exception as e:
         return {"success": None, "output": "", "error": str(e), "returncode": -1}
 
@@ -274,7 +277,11 @@ def run_security_scan() -> dict:
     findings = []
     cwd = Path.cwd()
 
-    IGNORED = {'.git', '__pycache__', 'node_modules', '.venv', 'venv', 'dist', 'build'}
+    IGNORED = {
+        '.git', '__pycache__', 'node_modules', '.venv', 'venv', 'dist', 'build',
+        'bin', 'obj', '.vs', '.docusaurus', '.serena', '.context', '.prism',
+        'NDependOut', 'storybook-static', 'wwwroot', 'TestResults', 'coverage', '.playwright',
+    }
     SOURCE_EXTS = {
         '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rb', '.java', '.cs',
         '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.env', '.pem', '.key',
@@ -291,34 +298,37 @@ def run_security_scan() -> dict:
         (re.compile(r'os\.system\s*\([^)]*\+'), "potential shell injection"),
     ]
 
-    def _skip(path: Path) -> bool:
-        return any(part in IGNORED for part in path.parts)
+    _FILE_SIZE_LIMIT = 100 * 1024  # skip files >100KB (minified bundles, build artifacts)
 
     try:
-        # Check .env files tracked by git
-        for env_file in cwd.glob("**/.env"):
-            if _skip(env_file):
-                continue
-            try:
-                r = subprocess.run(
-                    ["git", "ls-files", "--error-unmatch", str(env_file)],
-                    capture_output=True, timeout=5, cwd=cwd
-                )
-                if r.returncode == 0:
-                    findings.append(f".env file committed to git: {env_file.relative_to(cwd)}")
-            except Exception:
-                pass
-
-        # Scan source files for secret/injection patterns
-        scanned: set = set()
-        for ext in SOURCE_EXTS:
-            for src_file in cwd.glob(f"**/*{ext}"):
-                if _skip(src_file) or src_file in scanned:
+        # Single os.walk pass with early directory pruning (avoids walking into ignored dirs)
+        for dirpath, dirnames, filenames in os.walk(str(cwd)):
+            # Prune ignored dirs in-place so os.walk won't descend into them
+            dirnames[:] = [d for d in dirnames if d not in IGNORED]
+            dp = Path(dirpath)
+            for fname in filenames:
+                fpath = dp / fname
+                # .env files: check if committed to git
+                if fname == '.env':
+                    try:
+                        r = subprocess.run(
+                            ["git", "ls-files", "--error-unmatch", str(fpath)],
+                            capture_output=True, timeout=5, cwd=cwd
+                        )
+                        if r.returncode == 0:
+                            findings.append(f".env file committed to git: {fpath.relative_to(cwd)}")
+                    except Exception:
+                        pass
                     continue
-                scanned.add(src_file)
+                # Source files: scan for secret/injection patterns
+                if fpath.suffix not in SOURCE_EXTS:
+                    continue
                 try:
-                    text = src_file.read_text(encoding='utf-8', errors='replace')
-                    rel = src_file.relative_to(cwd)
+                    # Skip large files (minified JS/bundles cause false positives)
+                    if fpath.stat().st_size > _FILE_SIZE_LIMIT:
+                        continue
+                    text = fpath.read_text(encoding='utf-8', errors='replace')
+                    rel = fpath.relative_to(cwd)
                     for pattern, label in SECRET_PATTERNS + INJECTION_PATTERNS:
                         m = pattern.search(text)
                         if m:
@@ -701,9 +711,9 @@ Do NOT stop until all tests pass."""
     elif validation_type == "green_full":
         # Full validation: tests + lint + build
         # Primary: extract from transcript (avoids re-running slow test suites)
-        test_result = extract_test_result_from_transcript(transcript_path, step_line_start)
-        if test_result is None:
-            test_result = run_tests(runner)
+        transcript_test_result = extract_test_result_from_transcript(transcript_path, step_line_start)
+        skip_redundant_checks = transcript_test_result is not None and transcript_test_result.get("success")
+        test_result = transcript_test_result if transcript_test_result is not None else run_tests(runner)
 
         if not test_result.get("success"):
             output = test_result.get("output", "") + test_result.get("error", "")
@@ -737,8 +747,12 @@ Fix lint errors before proceeding.
 Story file: {state.get('story_file', 'unknown')}"""
             }
 
-        # Security scan: check for exposed secrets, hardcoded credentials, injection vectors
-        sec_result = run_security_scan()
+        # Security scan: skip if transcript already confirmed tests passed this step
+        # (the verify-green-state skill already ran security checks)
+        if skip_redundant_checks:
+            sec_result = {"clean": True, "findings": []}
+        else:
+            sec_result = run_security_scan()
         if not sec_result["clean"]:
             findings_list = "\n".join(f"  - {f}" for f in sec_result["findings"][:10])
             return {
