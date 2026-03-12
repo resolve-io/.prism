@@ -13,25 +13,24 @@ and creates a git tag. Claude Code uses the version string to resolve plugin cac
 
 ## Quick Start
 
-Run the bump script from `.claude/scripts/` — it handles everything (bump, commit, tag, push):
+**Always start with `suggest`** — it analyzes commits since the last tag, classifies them,
+and recommends the correct bump level with reasoning:
 
 ```bash
-# Patch bump (3.5.0 → 3.5.1) — bug fixes
-python .claude/scripts/version_bump.py patch
+# Step 1: Get a recommendation (ALWAYS run this first)
+python .claude/scripts/version_bump.py suggest
 
-# Minor bump (3.5.0 → 3.6.0) — new features
-python .claude/scripts/version_bump.py minor
+# Step 2: Present the suggestion to the user and ask them to confirm or override
 
-# Major bump (3.5.0 → 4.0.0) — breaking changes
-python .claude/scripts/version_bump.py major
-
-# With a Jira ticket
-python .claude/scripts/version_bump.py patch --ticket PLAT-1234
-
-# Commit but don't push yet
+# Step 3: Execute the confirmed bump (--no-push by default, ask before pushing)
 python .claude/scripts/version_bump.py patch --no-push
+python .claude/scripts/version_bump.py patch --no-push --ticket PLAT-1234
+```
 
-# Just show current version
+### Other commands
+
+```bash
+# Just show current version and sync status
 python .claude/scripts/version_bump.py status
 
 # Create missing git tag for current version
@@ -40,6 +39,12 @@ python .claude/scripts/version_bump.py tag
 
 ## What It Does
 
+### suggest (run first)
+1. Finds commits since the last version tag
+2. Classifies each commit (breaking, feature, fix, refactor, test, meta)
+3. Recommends major/minor/patch with reasoning and a commit breakdown
+
+### bump (after user confirms)
 1. Reads current version from `plugins/prism-devtools/.claude-plugin/plugin.json`
 2. Computes new version per semver (major/minor/patch)
 3. Updates `plugin.json` with new version
@@ -47,7 +52,7 @@ python .claude/scripts/version_bump.py tag
 5. Updates version assertions in `test_release_docs.py` (AC-4 and AC-5)
 6. Creates an annotated git tag `v{new_version}`
 7. Commits all version files with `PLAT-XXXX Bump version X → Y`
-8. Pushes to `origin main` with tags (so downstream users get the update)
+8. Pushes to `origin main` with tags (only if user confirms)
 
 ## Semver Rules for This Plugin
 
