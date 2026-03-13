@@ -279,6 +279,9 @@ def parse_state_file(path: Path) -> WorkflowState | None:
                 state.step_transcript_line = int(value)
             except ValueError:
                 pass
+        elif key == "story_size":
+            if value in ("R", "M", "L"):
+                state.story_size = value
 
     return state
 

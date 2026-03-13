@@ -41,6 +41,7 @@ class WorkflowState:
     step_tokens_start: int = 0
     step_transcript_line: int = 0
     step_history: str = "[]"
+    story_size: str = "M"
 
     @property
     def step_tokens(self) -> int:
