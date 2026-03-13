@@ -16,6 +16,7 @@ domains:
   - core-steps
   - sfr
   - gates
+  - sizing
 governance:
   max_entries: 100
   warn_entries: 150

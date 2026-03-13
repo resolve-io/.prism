@@ -25,6 +25,7 @@ Output a brief (3-8 bullet) summary covering:
 - What the prompt is asking for
 - Which story we are working on (if any), and where we left off
 - What the next action is
+- **Story size estimate**: R (routine/mechanical — single field, rename, config tweak), M (standard feature), or L (large — new subsystem, redesign, migration). Include as: `Size: R|M|L — <one-line reason>`
 
 If there is no story (first run), output:
 > No prior story context. Prompt acknowledged. Ready for draft_story.

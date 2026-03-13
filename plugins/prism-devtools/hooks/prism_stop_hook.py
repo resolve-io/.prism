@@ -49,6 +49,57 @@ WORKFLOW_STEPS = [
 ]
 
 
+# ── Story size classification ──────────────────────────────────────────────
+
+# Prompt substrings that signal Routine (mechanical/single-entity) work.
+_R_SIGNALS: frozenset = frozenset({
+    "add field", "add a field", "add column", "add parameter", "add attribute",
+    "add property", "rename", "config change", "bump version", "update prompt",
+    "thread through", "update text", "fix typo", "change label", "update label",
+    "update message", "update copy", "tweak", "minor change", "update config",
+    "add flag", "add option", "add key",
+})
+
+# Prompt substrings that signal Large (cross-cutting/multi-service) work.
+_L_SIGNALS: frozenset = frozenset({
+    "new subsystem", "redesign", "migration", "multi-service", "new api surface",
+    "architecture", "refactor", "overhaul", "rewrite", "new service",
+    "new module", "new component", "extract", "split into", "decompose",
+    "multi-tenant", "new infrastructure", "new pipeline",
+})
+
+# Steps to skip per story size.  R skips verify_plan and red_gate so
+# routine work goes: draft_story → write_failing_tests → implement_tasks → ...
+_SKIP_STEPS_FOR_SIZE: dict = {
+    "R": {"verify_plan", "red_gate"},
+    "M": set(),
+    "L": set(),
+}
+
+
+def _classify_story_size(prompt: str, brain=None) -> str:
+    """Classify story size as R (Routine), M (Standard), or L (Large).
+
+    Checks L signals first, then R signals, defaulting to M.
+    Optional brain parameter reserved for future calibration via past story data.
+
+    Returns "R", "M", or "L".
+    """
+    lower = prompt.lower()
+
+    # L signals take precedence — these are large cross-cutting efforts.
+    for signal in _L_SIGNALS:
+        if signal in lower:
+            return "L"
+
+    # R signals — mechanical/single-entity routine work.
+    for signal in _R_SIGNALS:
+        if signal in lower:
+            return "R"
+
+    return "M"
+
+
 # Directories to skip during recursive glob traversal.
 _EXCLUDED_GLOB_DIRS: frozenset = frozenset({
     "node_modules", "bin", "obj", ".git", "__pycache__",
@@ -1452,6 +1503,7 @@ def parse_frontmatter(content: str) -> dict:
         "session_id": "",
         "branch": "",
         "step_transcript_line": 0,
+        "story_size": "M",
     }
 
     match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
@@ -1503,6 +1555,9 @@ def parse_frontmatter(content: str) -> dict:
                     result["step_transcript_line"] = int(value)
                 except ValueError:
                     pass
+            elif key == "story_size":
+                if value in ("R", "M", "L"):
+                    result["story_size"] = value
 
     return result
 
@@ -1961,7 +2016,19 @@ def main():
             f'Use: Agent tool with subagent_type="{agent_name}"'
         )
 
+    # Set story_size at the review_previous_notes → draft_story transition.
+    # Compute early so skip_set below uses the fresh classification.
+    new_story_size: str | None = None
+    if step_id == "review_previous_notes":
+        new_story_size = _classify_story_size(state.get("prompt", ""))
+        state["story_size"] = new_story_size  # update local state for skip logic below
+
     next_index = current_index + 1
+
+    # Skip steps that are unnecessary for this story size (e.g. R skips verify_plan + red_gate).
+    skip_set = _SKIP_STEPS_FOR_SIZE.get(state.get("story_size", "M"), set())
+    while next_index < len(WORKFLOW_STEPS) and WORKFLOW_STEPS[next_index][0] in skip_set:
+        next_index += 1
 
     if next_index >= len(WORKFLOW_STEPS):
         print(json.dumps({
@@ -2003,6 +2070,10 @@ def main():
         "step_tokens_start": str(usage["total_tokens"]),
         "step_transcript_line": str(usage["total_lines"]),
     }
+
+    # Persist story_size if freshly classified (review_previous_notes transition).
+    if new_story_size is not None:
+        updates["story_size"] = new_story_size
 
     # Detect and capture the story file if not already set.
     # Retry at every step transition so long sessions (>1h) don't lose the story.
