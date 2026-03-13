@@ -9,7 +9,8 @@ TDD GREEN STATE VERIFICATION: Confirm Implementation Complete
 3. THEN proceed with verification steps
 
 ## Skills
-Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+IMPORTANT: See Available Skills listed above. For verification:
+- Run /test to verify all tests pass before marking complete
 
 Steps:
 1. Run all tests (unit, integration, e2e)

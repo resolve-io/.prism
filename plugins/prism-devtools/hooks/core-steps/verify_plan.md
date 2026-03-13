@@ -15,9 +15,6 @@ Play devil's advocate. Do not rubber-stamp — challenge the draft.
    - Design decisions: /brain search "design decisions and constraints"
 3. THEN read the story file and challenge it
 
-## Skills
-Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
-
 Steps:
 1. Read the original prompt/requirements from workflow context below
 2. Read the story file just drafted

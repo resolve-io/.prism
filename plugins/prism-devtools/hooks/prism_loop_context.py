@@ -520,6 +520,12 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
     if prompt_variant_text:
         parts.extend([prompt_variant_text, ""])
 
+    # BYOS discovered skills — injected right after role card so agent sees them
+    # before diving into the step body. Skip for lightweight steps (context-only
+    # work like review_previous_notes and verify_plan, plus gate steps).
+    if skill_text and step_id not in LIGHTWEIGHT_STEPS:
+        parts.extend([skill_text, ""])
+
     # Dynamic context: story file + conventions
     context = []
     if step_id in _STEPS_WITH_STORY and story_file:
@@ -553,10 +559,6 @@ def build_agent_instruction(step_id: str, agent: str, action: str,
 
     # Inline rules + retrieval instruction
     parts.extend(["", INLINE_RULES[phase], "", RETRIEVAL_INSTRUCTION])
-
-    # BYOS discovered skills (skip for lightweight steps — context-only work, not feature implementation)
-    if skill_text and step_id not in LIGHTWEIGHT_STEPS:
-        parts.extend(["", skill_text])
 
     # Brain context (Understanding the System) — injected before stop directive
     if brain_context:

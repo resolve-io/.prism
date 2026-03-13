@@ -11,7 +11,8 @@ TDD RED PHASE: Write Failing Tests
 4. Read existing tests to understand patterns
 
 ## Skills
-Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+IMPORTANT: See Available Skills listed above. For RED phase:
+- Use /test to run and confirm tests fail cleanly
 
 Trace Convention (REQUIRED - workflow blocks without this):
   Map each test to its AC. If any AC lacks a mapped test, workflow blocks

@@ -11,7 +11,9 @@ TDD GREEN PHASE: Make Failing Tests Pass
 4. THEN Glob/Grep for implementation files to modify
 
 ## Skills
-Check for available skills using the Skill tool before implementing manually. If a skill can handle any part of this task, invoke it.
+IMPORTANT: See Available Skills listed above. For GREEN phase:
+- Run /test to verify tests pass after each implementation step
+- Use /checkin to commit working changes
 
 Steps:
 1. Read failing test output to understand what needs implementing
