@@ -106,6 +106,15 @@ _EXCLUDED_GLOB_DIRS: frozenset = frozenset({
     "dist", ".next", ".nuget", ".venv", "venv", "build", "target", "vendor",
 })
 
+# Default directories excluded from the security scan.
+# Shipped as a module-level constant so it can be referenced in tests and
+# extended by callers without modifying the function body.
+_SECURITY_SCAN_IGNORED_DIRS: frozenset = frozenset({
+    '.git', '__pycache__', 'node_modules', '.venv', 'venv', 'dist', 'build',
+    'bin', 'obj', '.vs', '.docusaurus', '.serena', '.context', '.prism',
+    'NDependOut', 'storybook-static', 'wwwroot', 'TestResults', 'coverage', '.playwright',
+})
+
 # Minimum tool_use calls expected from Claude since step_line_start before
 # we consider validation meaningful.  Fewer calls → likely a post-compaction
 # idle stop; the hook should re-emit the current step instruction instead of
@@ -267,13 +276,37 @@ def detect_test_runner() -> dict:
     return {"type": "unknown", "command": None, "lint": None}
 
 
-def run_tests(runner: dict, feature_only: bool = False) -> dict:
+def _get_test_timeout(state: dict = None) -> int:
+    """Resolve test timeout in seconds.
+
+    Priority order:
+    1. PRISM_TEST_TIMEOUT environment variable
+    2. ``test_timeout`` key in *state* (from state file frontmatter)
+    3. Hard-coded default of 120 seconds
+    """
+    env_val = os.environ.get("PRISM_TEST_TIMEOUT")
+    if env_val is not None:
+        try:
+            return int(env_val)
+        except ValueError:
+            pass
+    if state:
+        state_val = state.get("test_timeout")
+        if state_val is not None:
+            try:
+                return int(state_val)
+            except (ValueError, TypeError):
+                pass
+    return 120
+
+
+def run_tests(runner: dict, feature_only: bool = False, state: dict = None) -> dict:
     """Run tests and return results."""
     if not runner.get("command"):
         return {"success": None, "output": "No test runner detected", "error": None}
 
+    _timeout = _get_test_timeout(state)
     try:
-        _timeout = int(os.environ.get("PRISM_TEST_TIMEOUT", "120"))
         result = subprocess.run(
             runner["command"],
             shell=True,
@@ -290,7 +323,6 @@ def run_tests(runner: dict, feature_only: bool = False) -> dict:
             "returncode": result.returncode
         }
     except subprocess.TimeoutExpired:
-        _timeout = int(os.environ.get("PRISM_TEST_TIMEOUT", "120"))
         return {"success": False, "output": "", "error": f"Test timeout ({_timeout} seconds)", "returncode": -1}
     except Exception as e:
         return {"success": None, "output": "", "error": str(e), "returncode": -1}
@@ -328,11 +360,7 @@ def run_security_scan() -> dict:
     findings = []
     cwd = Path.cwd()
 
-    IGNORED = {
-        '.git', '__pycache__', 'node_modules', '.venv', 'venv', 'dist', 'build',
-        'bin', 'obj', '.vs', '.docusaurus', '.serena', '.context', '.prism',
-        'NDependOut', 'storybook-static', 'wwwroot', 'TestResults', 'coverage', '.playwright',
-    }
+    IGNORED = _SECURITY_SCAN_IGNORED_DIRS
     SOURCE_EXTS = {
         '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rb', '.java', '.cs',
         '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.env', '.pem', '.key',
@@ -585,7 +613,7 @@ Map each requirement to its covering AC(s) with COVERED status."""
         # Primary: extract from transcript (avoids re-running slow test suites)
         test_result = extract_test_result_from_transcript(transcript_path, step_line_start)
         if test_result is None:
-            test_result = run_tests(runner)
+            test_result = run_tests(runner, state=state)
 
         if test_result["success"] is None:
             return {
@@ -721,7 +749,7 @@ ACTION REQUIRED:
         # Primary: extract from transcript (avoids re-running slow test suites)
         test_result = extract_test_result_from_transcript(transcript_path, step_line_start)
         if test_result is None:
-            test_result = run_tests(runner)
+            test_result = run_tests(runner, state=state)
 
         if test_result["success"] is None:
             return {
@@ -764,7 +792,7 @@ Do NOT stop until all tests pass."""
         # Primary: extract from transcript (avoids re-running slow test suites)
         transcript_test_result = extract_test_result_from_transcript(transcript_path, step_line_start)
         skip_redundant_checks = transcript_test_result is not None and transcript_test_result.get("success")
-        test_result = transcript_test_result if transcript_test_result is not None else run_tests(runner)
+        test_result = transcript_test_result if transcript_test_result is not None else run_tests(runner, state=state)
 
         if not test_result.get("success"):
             output = test_result.get("output", "") + test_result.get("error", "")
@@ -1504,6 +1532,7 @@ def parse_frontmatter(content: str) -> dict:
         "branch": "",
         "step_transcript_line": 0,
         "story_size": "M",
+        "test_timeout": None,
     }
 
     match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
@@ -1776,8 +1805,20 @@ Command:
 
 
 def cleanup():
-    """Remove state file and instruction file."""
+    """Remove state file and instruction file.
+
+    Before deleting the state file, archives its contents to
+    .prism/last_session_state.md so post-mortem diagnostics (e.g. prism-bug)
+    can access step_history and gate results after workflow completion.
+    """
     if STATE_FILE.exists():
+        try:
+            prism_dir = STATE_FILE.parent.parent / ".prism"
+            prism_dir.mkdir(parents=True, exist_ok=True)
+            archive_path = prism_dir / "last_session_state.md"
+            archive_path.write_text(STATE_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+        except (IOError, OSError):
+            pass  # best-effort; never block cleanup
         STATE_FILE.unlink()
     instruction_file = STATE_FILE.parent.parent / ".prism" / "current_instruction.md"
     if instruction_file.exists():

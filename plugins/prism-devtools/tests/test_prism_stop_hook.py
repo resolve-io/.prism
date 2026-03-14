@@ -10,6 +10,7 @@ Coverage:
 
 import io
 import json
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -21,6 +22,9 @@ sys.path.insert(0, str(HOOKS_DIR))
 
 from prism_stop_hook import (  # noqa: E402
     run_security_scan,
+    _SECURITY_SCAN_IGNORED_DIRS,
+    _get_test_timeout,
+    run_tests,
     build_trace_matrix,
     _format_trace_matrix,
     _filtered_glob,  # noqa: F401
@@ -131,6 +135,64 @@ def test_security_scan_ignores_venv(tmp_path, monkeypatch):
     (venv_dir / "config.py").write_text('api_key = "abcdefghijklmnopqrst"\n')
     result = run_security_scan()
     assert result["clean"]
+
+
+def test_security_scan_ignored_dirs_is_module_constant():
+    """_SECURITY_SCAN_IGNORED_DIRS ships the required default dirs."""
+    required = {"node_modules", ".git", "bin", "obj", ".playwright", "storybook-static"}
+    assert required.issubset(_SECURITY_SCAN_IGNORED_DIRS)
+
+
+@pytest.mark.parametrize("dirname", ["bin", "obj", ".playwright", "storybook-static"])
+def test_security_scan_ignores_build_artifact_dirs(dirname, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    artifact_dir = tmp_path / dirname / "sub"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "app.js").write_text('password = "supersecret123"\n')
+    result = run_security_scan()
+    assert result["clean"], f"Expected {dirname}/ to be ignored but findings: {result['findings']}"
+
+
+# ---------------------------------------------------------------------------
+# _get_test_timeout() tests
+# ---------------------------------------------------------------------------
+
+def test_get_test_timeout_default():
+    """Returns 120 when no env var or state value."""
+    assert _get_test_timeout() == 120
+    assert _get_test_timeout(state={}) == 120
+
+
+def test_get_test_timeout_from_env(monkeypatch):
+    monkeypatch.setenv("PRISM_TEST_TIMEOUT", "60")
+    assert _get_test_timeout() == 60
+    assert _get_test_timeout(state={"test_timeout": 999}) == 60  # env takes priority
+
+
+def test_get_test_timeout_from_state(monkeypatch):
+    monkeypatch.delenv("PRISM_TEST_TIMEOUT", raising=False)
+    assert _get_test_timeout(state={"test_timeout": 45}) == 45
+
+
+def test_get_test_timeout_state_invalid_falls_back(monkeypatch):
+    monkeypatch.delenv("PRISM_TEST_TIMEOUT", raising=False)
+    assert _get_test_timeout(state={"test_timeout": "not-a-number"}) == 120
+
+
+def test_run_tests_uses_state_timeout(monkeypatch):
+    """run_tests() reads timeout from state when env var absent."""
+    monkeypatch.delenv("PRISM_TEST_TIMEOUT", raising=False)
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["timeout"] = kwargs.get("timeout")
+        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 0))
+
+    import subprocess as _sp
+    monkeypatch.setattr("prism_stop_hook.subprocess.run", fake_run)
+    runner = {"command": "echo hi"}
+    run_tests(runner, state={"test_timeout": 30})
+    assert captured["timeout"] == 30
 
 
 # ---------------------------------------------------------------------------
@@ -1320,6 +1382,37 @@ def test_cleanup_tolerates_missing_instruction_file(tmp_path, monkeypatch):
     cleanup()  # Should not raise even without instruction file
 
     assert not state_file.exists()
+
+
+def test_cleanup_archives_state_to_last_session(tmp_path, monkeypatch):
+    """cleanup() writes .prism/last_session_state.md before deleting the state file."""
+    import prism_stop_hook as _psh2
+    state_file = tmp_path / ".claude" / "prism-loop.local.md"
+    state_file.parent.mkdir(parents=True)
+    state_content = "---\nactive: true\ncurrent_step: implement_tasks\n---\n"
+    state_file.write_text(state_content, encoding="utf-8")
+
+    monkeypatch.setattr(_psh2, "STATE_FILE", state_file)
+    cleanup()
+
+    assert not state_file.exists()
+    archive = tmp_path / ".prism" / "last_session_state.md"
+    assert archive.exists(), "last_session_state.md should be created by cleanup()"
+    assert archive.read_text(encoding="utf-8") == state_content
+
+
+def test_cleanup_archive_tolerates_missing_state_file(tmp_path, monkeypatch):
+    """cleanup() silently succeeds when state file doesn't exist."""
+    import prism_stop_hook as _psh2
+    state_file = tmp_path / ".claude" / "prism-loop.local.md"
+    state_file.parent.mkdir(parents=True)
+    # Don't create state file
+
+    monkeypatch.setattr(_psh2, "STATE_FILE", state_file)
+    cleanup()  # Should not raise
+
+    archive = tmp_path / ".prism" / "last_session_state.md"
+    assert not archive.exists()
 
 
 # ---------------------------------------------------------------------------
