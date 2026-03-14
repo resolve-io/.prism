@@ -38,7 +38,7 @@ except FileNotFoundError:
         raise
 sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
 from prism_loop_context import build_agent_instruction, parse_state as _parse_state, resolve_state_file
-from prism_stop_hook import detect_test_runner
+from prism_stop_hook import detect_test_runner, _auto_commit_phase_boundary
 
 STATE_FILE = resolve_state_file()
 
@@ -249,6 +249,10 @@ def main():
 
     # Check if this is the final gate (green_gate)
     if current_step == "green_gate":
+        # Auto-commit any remaining changes before completing the workflow.
+        # This ensures all implementation work is preserved at approval time.
+        _auto_commit_phase_boundary("green_gate")
+
         print("=" * 60)
         print("PRISM Workflow APPROVED and COMPLETE!")
         print("=" * 60)

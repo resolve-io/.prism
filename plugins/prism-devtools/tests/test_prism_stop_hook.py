@@ -45,6 +45,7 @@ from prism_stop_hook import (  # noqa: E402
     _write_instruction_file,
     cleanup,
     detect_story_file,
+    _auto_commit_phase_boundary,
 )
 
 
@@ -1559,3 +1560,107 @@ def test_detect_story_file_returns_empty_when_nothing_found(tmp_path, monkeypatc
     monkeypatch.chdir(tmp_path)
     result = detect_story_file()
     assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# _auto_commit_phase_boundary() tests
+# ---------------------------------------------------------------------------
+
+def _make_git_run(returncode_map: dict):
+    """Return a side_effect for subprocess.run that routes by first arg."""
+    def _run(cmd, **kwargs):
+        m = MagicMock()
+        # cmd is a list; use the git subcommand as the key
+        key = cmd[1] if isinstance(cmd, list) and len(cmd) > 1 else ""
+        m.returncode = returncode_map.get(key, 0)
+        m.stdout = ""
+        m.stderr = ""
+        return m
+    return _run
+
+
+def test_auto_commit_calls_git_add_and_commit(monkeypatch, tmp_path):
+    """_auto_commit_phase_boundary runs git add -A then git commit."""
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        m = MagicMock()
+        m.returncode = 0
+        m.stdout = ""
+        m.stderr = ""
+        return m
+
+    with patch("prism_stop_hook.subprocess.run", side_effect=fake_run):
+        _auto_commit_phase_boundary("write_failing_tests")
+
+    subcommands = [c[1] for c in calls if isinstance(c, list) and len(c) > 1]
+    assert "rev-parse" in subcommands
+    assert "add" in subcommands
+    assert "commit" in subcommands
+
+
+def test_auto_commit_message_contains_step_id(monkeypatch, tmp_path):
+    """Commit message includes the step_id so history is traceable."""
+    monkeypatch.chdir(tmp_path)
+    commit_msgs = []
+
+    def fake_run(cmd, **kwargs):
+        if isinstance(cmd, list) and len(cmd) > 1 and cmd[1] == "commit":
+            commit_msgs.append(cmd)
+        m = MagicMock()
+        m.returncode = 0
+        return m
+
+    with patch("prism_stop_hook.subprocess.run", side_effect=fake_run):
+        _auto_commit_phase_boundary("verify_green_state")
+
+    assert commit_msgs, "git commit was not called"
+    commit_cmd = " ".join(str(x) for x in commit_msgs[0])
+    assert "verify_green_state" in commit_cmd
+
+
+def test_auto_commit_skips_when_not_in_git_repo(monkeypatch, tmp_path):
+    """If git rev-parse fails, no git add or commit is attempted."""
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        m = MagicMock()
+        # rev-parse fails → not a git repo
+        m.returncode = 1 if "rev-parse" in cmd else 0
+        return m
+
+    with patch("prism_stop_hook.subprocess.run", side_effect=fake_run):
+        _auto_commit_phase_boundary("red_gate")
+
+    subcommands = [c[1] for c in calls if isinstance(c, list) and len(c) > 1]
+    assert "rev-parse" in subcommands
+    assert "add" not in subcommands
+    assert "commit" not in subcommands
+
+
+def test_auto_commit_tolerates_nothing_to_commit(monkeypatch, tmp_path):
+    """If git commit returns non-zero (nothing to commit), no exception is raised."""
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        m = MagicMock()
+        # commit exits 1 when there's nothing to commit — that's fine
+        m.returncode = 1 if isinstance(cmd, list) and len(cmd) > 1 and cmd[1] == "commit" else 0
+        return m
+
+    # Should not raise
+    with patch("prism_stop_hook.subprocess.run", side_effect=fake_run):
+        _auto_commit_phase_boundary("green_gate")
+
+
+def test_auto_commit_never_raises_on_exception(monkeypatch, tmp_path):
+    """_auto_commit_phase_boundary is best-effort and silences all exceptions."""
+    monkeypatch.chdir(tmp_path)
+
+    with patch("prism_stop_hook.subprocess.run", side_effect=RuntimeError("boom")):
+        # Must not propagate the exception
+        _auto_commit_phase_boundary("red_gate")

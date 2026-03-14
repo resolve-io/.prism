@@ -1702,6 +1702,47 @@ def _is_no_progress_stop(validation: Optional[str], tool_calls: int) -> bool:
     return min_calls > 0 and tool_calls < min_calls
 
 
+def _auto_commit_phase_boundary(step_id: str) -> None:
+    """Auto-commit all changes at a workflow phase boundary.
+
+    Runs ``git add -A`` then ``git commit`` to preserve work before a gate
+    pause.  This prevents context compaction from losing uncommitted changes
+    in long-running sessions.
+
+    Best-effort — never raises or interrupts workflow.
+    """
+    try:
+        cwd = Path.cwd()
+
+        # Verify we're inside a git repo before doing anything
+        check = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True, text=True, timeout=5, cwd=cwd,
+        )
+        if check.returncode != 0:
+            return
+
+        # Stage all changes (modified, deleted, new untracked)
+        subprocess.run(
+            ["git", "add", "-A"],
+            capture_output=True, text=True, timeout=30, cwd=cwd,
+        )
+
+        # Commit — exits non-zero when nothing to commit; that's fine
+        msg = f"PLAT-0000 PRISM: auto-commit at {step_id} phase boundary"
+        result = subprocess.run(
+            ["git", "commit", "-m", msg],
+            capture_output=True, text=True, timeout=30, cwd=cwd,
+        )
+        if result.returncode == 0:
+            print(
+                f"[PRISM] Auto-committed changes at {step_id} phase boundary",
+                file=sys.stderr,
+            )
+    except Exception:
+        pass  # Never interrupt workflow
+
+
 def _write_instruction_file(instruction: str, project_root: Path) -> None:
     """Write the full step instruction to .prism/current_instruction.md.
 
@@ -2131,6 +2172,10 @@ def main():
 
     # Handle GATE steps - pause for /prism-approve
     if next_step_type == "gate":
+        # Auto-commit at phase boundary before pausing for gate review.
+        # Prevents context compaction from losing uncommitted work in long sessions.
+        _auto_commit_phase_boundary(step_id)
+
         history.append({
             "i": current_index,
             "d": step_dur_secs,
