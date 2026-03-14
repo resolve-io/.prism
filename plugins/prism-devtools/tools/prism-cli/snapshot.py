@@ -60,8 +60,6 @@ def _inject_live_tokens(state: WorkflowState) -> None:
                     usage = entry["message"].get("usage")
                 if usage and isinstance(usage, dict):
                     total += usage.get("input_tokens", 0)
-                    total += usage.get("cache_creation_input_tokens", 0)
-                    total += usage.get("cache_read_input_tokens", 0)
                     total += usage.get("output_tokens", 0)
                 m = entry.get("model")
                 if not m and isinstance(entry.get("message"), dict):

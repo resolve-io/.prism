@@ -275,8 +275,6 @@ class PrismDashboard(App):
                         usage = entry["message"].get("usage")
                     if usage and isinstance(usage, dict):
                         self._live_total_tokens += int(usage.get("input_tokens", 0) or 0)
-                        self._live_total_tokens += int(usage.get("cache_creation_input_tokens", 0) or 0)
-                        self._live_total_tokens += int(usage.get("cache_read_input_tokens", 0) or 0)
                         self._live_total_tokens += int(usage.get("output_tokens", 0) or 0)
 
                     m = entry.get("model")

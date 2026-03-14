@@ -159,7 +159,7 @@ def test_get_session_metrics_tokens(tmp_path):
     ]
     path = _make_transcript(tmp_path, entries)
     result = get_session_metrics_from_transcript(path)
-    assert result["tokens_used"] == 1850
+    assert result["tokens_used"] == 1800
 
 
 def test_get_session_metrics_duration(tmp_path):

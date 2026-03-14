@@ -695,28 +695,28 @@ class TestTokenCountingConsistency:
         result = mod.get_usage_from_transcript(str(transcript))
         assert result["total_tokens"] == 150
 
-    def test_cache_creation_tokens_included(self, tmp_path):
-        """get_usage_from_transcript includes cache_creation_input_tokens."""
+    def test_cache_creation_tokens_excluded(self, tmp_path):
+        """get_usage_from_transcript excludes cache_creation_input_tokens from total."""
         mod = _load_stop_hook_mod()
         transcript = tmp_path / "transcript.jsonl"
         transcript.write_text(
             '{"usage": {"input_tokens": 100, "cache_creation_input_tokens": 200, "output_tokens": 50}}\n'
         )
         result = mod.get_usage_from_transcript(str(transcript))
-        assert result["total_tokens"] == 350
+        assert result["total_tokens"] == 150
 
-    def test_cache_read_tokens_included(self, tmp_path):
-        """get_usage_from_transcript includes cache_read_input_tokens."""
+    def test_cache_read_tokens_excluded(self, tmp_path):
+        """get_usage_from_transcript excludes cache_read_input_tokens from total."""
         mod = _load_stop_hook_mod()
         transcript = tmp_path / "transcript.jsonl"
         transcript.write_text(
             '{"usage": {"input_tokens": 100, "cache_read_input_tokens": 300, "output_tokens": 50}}\n'
         )
         result = mod.get_usage_from_transcript(str(transcript))
-        assert result["total_tokens"] == 450
+        assert result["total_tokens"] == 150
 
-    def test_all_four_fields_summed(self, tmp_path):
-        """get_usage_from_transcript sums all 4 fields matching display formula."""
+    def test_only_input_and_output_summed(self, tmp_path):
+        """get_usage_from_transcript sums only input_tokens + output_tokens."""
         mod = _load_stop_hook_mod()
         transcript = tmp_path / "transcript.jsonl"
         transcript.write_text(
@@ -724,7 +724,7 @@ class TestTokenCountingConsistency:
             '"cache_read_input_tokens": 300, "output_tokens": 400}}\n'
         )
         result = mod.get_usage_from_transcript(str(transcript))
-        assert result["total_tokens"] == 1000
+        assert result["total_tokens"] == 500
 
     def test_missing_cache_fields_default_zero(self, tmp_path):
         """Cache fields absent default to 0 (no KeyError)."""
@@ -736,8 +736,8 @@ class TestTokenCountingConsistency:
         result = mod.get_usage_from_transcript(str(transcript))
         assert result["total_tokens"] == 100
 
-    def test_nested_message_usage_four_fields(self, tmp_path):
-        """Cache tokens in nested message.usage are also summed."""
+    def test_nested_message_usage_input_output_only(self, tmp_path):
+        """Cache tokens in nested message.usage are excluded from total."""
         mod = _load_stop_hook_mod()
         transcript = tmp_path / "transcript.jsonl"
         transcript.write_text(
@@ -745,4 +745,4 @@ class TestTokenCountingConsistency:
             '"cache_read_input_tokens": 30, "output_tokens": 40}}}\n'
         )
         result = mod.get_usage_from_transcript(str(transcript))
-        assert result["total_tokens"] == 100
+        assert result["total_tokens"] == 50
