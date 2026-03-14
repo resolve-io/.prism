@@ -44,6 +44,26 @@ def _find_repo_root() -> Path:
     raise FileNotFoundError("repo root (.git) not found")
 
 
+def _find_git_hooks_dir(repo_root: Path) -> Path:
+    """Resolve the git hooks directory, handling both regular repos and worktrees.
+
+    In a regular repo, .git is a directory: return repo_root / ".git" / "hooks".
+    In a worktree, .git is a file — use git rev-parse --git-common-dir.
+    """
+    import subprocess as _sp
+    git_path = repo_root / ".git"
+    if git_path.is_dir():
+        return git_path / "hooks"
+    result = _sp.run(
+        ["git", "rev-parse", "--git-common-dir"],
+        capture_output=True, text=True, cwd=str(repo_root),
+    )
+    common_dir = result.stdout.strip()
+    if not common_dir:
+        raise FileNotFoundError("git rev-parse --git-common-dir returned nothing")
+    return Path(common_dir) / "hooks"
+
+
 def _find_plugin_root_script() -> Path:
     """Walk up to find setup_prism_loop.py (contains _find_plugin_root)."""
     current = Path(__file__).resolve().parent
@@ -153,7 +173,7 @@ class TestAC2_PreCommitHookInstalled:
         Expected: File exists at .git/hooks/pre-commit
         """
         repo_root = _find_repo_root()
-        hook = repo_root / ".git" / "hooks" / "pre-commit"
+        hook = _find_git_hooks_dir(repo_root) / "pre-commit"
         assert hook.exists(), (
             f".git/hooks/pre-commit not installed at {hook}\n"
             "Run: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit"
@@ -166,7 +186,7 @@ class TestAC2_PreCommitHookInstalled:
         Expected: File has executable bit set
         """
         repo_root = _find_repo_root()
-        hook = repo_root / ".git" / "hooks" / "pre-commit"
+        hook = _find_git_hooks_dir(repo_root) / "pre-commit"
         assert hook.exists(), (
             ".git/hooks/pre-commit not installed — cannot check executable bit"
         )
@@ -183,7 +203,7 @@ class TestAC2_PreCommitHookInstalled:
         Expected: Hook content references scripts/pre-commit
         """
         repo_root = _find_repo_root()
-        hook = repo_root / ".git" / "hooks" / "pre-commit"
+        hook = _find_git_hooks_dir(repo_root) / "pre-commit"
         assert hook.exists(), (
             ".git/hooks/pre-commit not installed — cannot check delegation"
         )
