@@ -41,6 +41,7 @@ from prism_stop_hook import (  # noqa: E402
     _write_instruction_file,
     cleanup,
     detect_story_file,
+    detect_skill_bypass,
 )
 
 
@@ -1454,3 +1455,156 @@ def test_detect_story_file_returns_empty_when_nothing_found(tmp_path, monkeypatc
     monkeypatch.chdir(tmp_path)
     result = detect_story_file()
     assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# detect_skill_bypass() tests
+# ---------------------------------------------------------------------------
+
+_SKILL_MD_WITH_REPLACES = """---
+name: test
+description: Run the project test suite
+replaces: npm test
+prism:
+  agent: qa
+  priority: 10
+---
+"""
+
+_SKILL_MD_NO_REPLACES = """---
+name: build
+description: Build the project
+prism:
+  agent: dev
+  priority: 20
+---
+"""
+
+
+def _write_transcript_with_bash(path: Path, commands: list, step_line_start: int = 0) -> None:
+    """Write a minimal JSONL transcript containing Bash tool_use blocks.
+
+    Each command is written as a separate line after `step_line_start` padding lines.
+    """
+    # Pad lines so commands appear after step_line_start
+    lines = []
+    for _ in range(step_line_start):
+        lines.append(json.dumps({"message": {"role": "user", "content": []}}))
+    for cmd in commands:
+        entry = {
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "id": "bash_1",
+                        "input": {"command": cmd},
+                    }
+                ],
+            }
+        }
+        lines.append(json.dumps(entry))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_detect_skill_bypass_empty_when_no_skills(tmp_path, monkeypatch):
+    """Returns empty list when no skills with replaces are discoverable."""
+    monkeypatch.chdir(tmp_path)
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript_with_bash(transcript, ["npm test"])
+    result = detect_skill_bypass(str(transcript), 0)
+    assert result == []
+
+
+def test_detect_skill_bypass_empty_when_no_transcript(tmp_path, monkeypatch):
+    """Returns empty list when transcript_path is empty string."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES, encoding="utf-8")
+    result = detect_skill_bypass("", 0)
+    assert result == []
+
+
+def test_detect_skill_bypass_empty_when_transcript_missing(tmp_path, monkeypatch):
+    """Returns empty list when transcript file does not exist."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES, encoding="utf-8")
+    result = detect_skill_bypass(str(tmp_path / "nonexistent.jsonl"), 0)
+    assert result == []
+
+
+def test_detect_skill_bypass_detects_matching_command(tmp_path, monkeypatch):
+    """Returns warning when agent ran a raw command that a skill replaces."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES, encoding="utf-8")
+
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript_with_bash(transcript, ["npm test --coverage"])
+
+    result = detect_skill_bypass(str(transcript), 0)
+    assert len(result) == 1
+    assert "npm test" in result[0]
+    assert "test" in result[0]  # skill name
+
+
+def test_detect_skill_bypass_no_match_when_command_differs(tmp_path, monkeypatch):
+    """Returns empty list when Bash commands do not match any replaces value."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES, encoding="utf-8")
+
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript_with_bash(transcript, ["pytest tests/"])
+
+    result = detect_skill_bypass(str(transcript), 0)
+    assert result == []
+
+
+def test_detect_skill_bypass_ignores_commands_before_step_line_start(tmp_path, monkeypatch):
+    """Commands before step_line_start are not checked for bypass."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES, encoding="utf-8")
+
+    transcript = tmp_path / "transcript.jsonl"
+    # Write npm test command before step_line_start=5
+    _write_transcript_with_bash(transcript, ["npm test"], step_line_start=0)
+    # step_line_start=2 puts the command before the threshold
+    result = detect_skill_bypass(str(transcript), 2)
+    assert result == []
+
+
+def test_detect_skill_bypass_deduplicates_same_skill(tmp_path, monkeypatch):
+    """Same skill bypassed multiple times produces only one warning."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES, encoding="utf-8")
+
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript_with_bash(transcript, ["npm test", "npm test --watch"])
+
+    result = detect_skill_bypass(str(transcript), 0)
+    assert len(result) == 1
+
+
+def test_detect_skill_bypass_ignores_skills_without_replaces(tmp_path, monkeypatch):
+    """Skills without replaces: field are not checked for bypass."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "build"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_NO_REPLACES, encoding="utf-8")
+
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript_with_bash(transcript, ["npm run build"])
+
+    result = detect_skill_bypass(str(transcript), 0)
+    assert result == []

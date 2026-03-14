@@ -34,6 +34,7 @@ from prism_loop_context import (
     resolve_handoff_file,
     parse_state,
     _parse_skill_frontmatter,
+    _format_discovered_skills,
     _load_handoff,
     discover_prism_skills,
 )
@@ -1389,3 +1390,97 @@ def test_skill_text_injected_for_non_lightweight_steps(tmp_path, monkeypatch):
         assert "## Available Skills" in instruction, (
             f"skill block must be injected for {step_id} (non-lightweight step)"
         )
+
+
+# --- Skill bypass enforcement: replaces field parsing and DO NOT language ---
+
+SKILL_MD_WITH_REPLACES = """---
+name: test
+description: Run the project test suite
+replaces: npm test
+prism:
+  agent: qa
+  priority: 10
+---
+
+# Test Skill
+"""
+
+SKILL_MD_WITHOUT_REPLACES = """---
+name: build
+description: Build the project
+prism:
+  agent: dev
+  priority: 20
+---
+
+# Build Skill
+"""
+
+
+def test_parse_skill_frontmatter_with_replaces():
+    """replaces: field is extracted from skill frontmatter."""
+    result = _parse_skill_frontmatter(SKILL_MD_WITH_REPLACES)
+    assert result is not None
+    assert result["replaces"] == "npm test"
+
+
+def test_parse_skill_frontmatter_no_replaces_defaults_none():
+    """replaces is None when the field is absent from frontmatter."""
+    result = _parse_skill_frontmatter(SKILL_MD_WITHOUT_REPLACES)
+    assert result is not None
+    assert result["replaces"] is None
+
+
+def test_format_discovered_skills_do_not_language_when_replaces_set():
+    """Skills with replaces: field show explicit DO NOT run language."""
+    skills = [{"name": "test", "description": "Run tests", "replaces": "npm test"}]
+    text = _format_discovered_skills(skills)
+    assert "DO NOT run `npm test` directly." in text
+
+
+def test_format_discovered_skills_no_do_not_when_replaces_absent():
+    """Skills without replaces: field do not show per-skill DO NOT line."""
+    skills = [{"name": "build", "description": "Build project", "replaces": None}]
+    text = _format_discovered_skills(skills)
+    assert "DO NOT run `" not in text
+
+
+def test_format_discovered_skills_header_prohibits_raw_commands():
+    """Header explicitly prohibits running equivalent shell commands directly."""
+    skills = [{"name": "test", "description": "Run tests", "replaces": None}]
+    text = _format_discovered_skills(skills)
+    assert "Do NOT run equivalent shell commands directly" in text
+
+
+def test_format_discovered_skills_filtered_header_prohibits_raw_commands():
+    """Filtered (Conductor-selected) header also prohibits running raw commands."""
+    skills = [{"name": "test", "description": "Run tests", "replaces": None}]
+    text = _format_discovered_skills(skills, is_filtered=True)
+    assert "Do NOT run equivalent shell commands directly" in text
+
+
+def test_format_discovered_skills_do_not_language_in_assembled_instruction(
+    tmp_path, monkeypatch
+):
+    """Assembled instruction includes DO NOT language for skills with replaces."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "test", SKILL_MD_WITH_REPLACES)
+
+    instruction = build_agent_instruction(
+        "write_failing_tests", "qa", "write-failing-tests",
+        "docs/stories/test.md", "", MOCK_RUNNER,
+    )
+    assert "DO NOT run `npm test` directly." in instruction
+
+
+def test_replaces_field_in_discovered_skill(tmp_path, monkeypatch):
+    """discover_prism_skills returns replaces field when present in SKILL.md."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills"
+    _create_skill(skills_dir, "test", SKILL_MD_WITH_REPLACES)
+
+    skills = discover_prism_skills()
+    assert len(skills) == 1
+    assert skills[0]["replaces"] == "npm test"

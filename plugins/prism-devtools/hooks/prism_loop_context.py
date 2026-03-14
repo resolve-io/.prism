@@ -261,11 +261,16 @@ def _parse_skill_frontmatter(content: str) -> dict | None:
     agent_match = re.search(r"^\s+agent:\s*(.+)$", fm_text, re.MULTILINE)
     priority_match = re.search(r"^\s+priority:\s*(\d+)", fm_text, re.MULTILINE)
 
+    # Optional top-level replaces: field — raw command this skill supersedes.
+    # When present, agents are explicitly told not to run that command directly.
+    replaces_match = re.search(r"^replaces:\s*(.+)$", fm_text, re.MULTILINE)
+
     return {
         "name": name_match.group(1).strip(),
         "description": description,
         "agent": agent_match.group(1).strip() if agent_match else None,
         "priority": int(priority_match.group(1)) if priority_match else 99,
+        "replaces": replaces_match.group(1).strip() if replaces_match else None,
     }
 
 
@@ -330,24 +335,31 @@ def _format_discovered_skills(skills: list, is_filtered: bool = False) -> str:
     When is_filtered=True (Conductor-selected subset), uses directive language
     that agents must act on. When False (full unfiltered list), uses the
     original MANDATORY wording.
+
+    For each skill with a replaces: field, an explicit DO NOT line is appended
+    so agents cannot run the equivalent raw command and bypass the skill.
     """
     if not skills:
         return ""
     if is_filtered:
         header = (
             "You MUST check and invoke these skills before completing your task. "
-            "These have been selected as relevant to this step:"
+            "These have been selected as relevant to this step. "
+            "Do NOT run equivalent shell commands directly — invoke the skill instead:"
         )
     else:
         header = (
             "MANDATORY: You MUST invoke relevant skills using the Skill tool before "
             "completing your task. For each skill below, if there is any chance it "
-            "applies to your current step, invoke it — do not skip this check:"
+            "applies to your current step, invoke it — do not skip this check. "
+            "Do NOT run equivalent shell commands directly:"
         )
     lines = ["## Available Skills", header]
     for s in skills:
         desc = f" - {s['description']}" if s["description"] else ""
-        lines.append(f"  - /{s['name']}{desc}")
+        replaces = s.get("replaces")
+        do_not = f" DO NOT run `{replaces}` directly." if replaces else ""
+        lines.append(f"  - /{s['name']}{desc}{do_not}")
     return "\n".join(lines)
 
 

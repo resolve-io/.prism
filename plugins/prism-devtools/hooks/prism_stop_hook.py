@@ -26,7 +26,11 @@ if sys.stdout.encoding != 'utf-8':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 try:
-    from prism_loop_context import build_agent_instruction, resolve_state_file
+    from prism_loop_context import (
+        build_agent_instruction,
+        resolve_state_file,
+        discover_prism_skills,
+    )
 
     # State file location — anchored to git root so CWD shifts don't lose the file.
     STATE_FILE = resolve_state_file()
@@ -1834,6 +1838,73 @@ def detect_story_file() -> str:
     return str(candidates[0][0])
 
 
+def detect_skill_bypass(
+    transcript_path: str, step_line_start: int, story_file: str = ""
+) -> list:
+    """Scan transcript Bash tool_use blocks for commands that bypass available skills.
+
+    Reads Bash tool_use blocks from step_line_start onward. For each skill that
+    declares a replaces: field in its frontmatter, checks whether the agent ran
+    the equivalent raw command directly instead of invoking the skill.
+
+    Returns a list of human-readable warning strings (one per bypassed skill,
+    deduplicated). Returns empty list when no bypasses are detected or when the
+    transcript is unavailable.
+    """
+    skills = discover_prism_skills(story_file)
+    bypass_rules = [(s["name"], s["replaces"]) for s in skills if s.get("replaces")]
+    if not bypass_rules or not transcript_path:
+        return []
+
+    bash_commands: list = []
+    try:
+        tp = Path(transcript_path).expanduser()
+        if not tp.exists():
+            return []
+        line_num = 0
+        with open(tp, encoding="utf-8", errors="replace") as f:
+            for raw_line in f:
+                raw_line = raw_line.strip()
+                if not raw_line:
+                    continue
+                line_num += 1
+                if line_num <= step_line_start:
+                    continue
+                try:
+                    entry = json.loads(raw_line)
+                except json.JSONDecodeError:
+                    continue
+                msg = entry.get("message", entry)
+                if not isinstance(msg, dict):
+                    continue
+                content = msg.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if (isinstance(block, dict)
+                            and block.get("type") == "tool_use"
+                            and block.get("name") == "Bash"):
+                        cmd = block.get("input", {}).get("command", "")
+                        if cmd:
+                            bash_commands.append(cmd)
+    except (IOError, OSError):
+        return []
+
+    warnings: list = []
+    seen: set = set()
+    for cmd in bash_commands:
+        for skill_name, replaces_cmd in bypass_rules:
+            if skill_name in seen:
+                continue
+            if replaces_cmd.strip() in cmd:
+                warnings.append(
+                    f"SKILL BYPASS: `{replaces_cmd}` was run directly. "
+                    f"Use `/{skill_name}` instead of running this command directly."
+                )
+                seen.add(skill_name)
+    return warnings
+
+
 def main():
     """Handle Stop event for PRISM workflow loop."""
     try:
@@ -2174,10 +2245,28 @@ def main():
     updated_content = update_state_file(content, updates)
     STATE_FILE.write_text(updated_content, encoding='utf-8')
 
+    # Check for skill bypasses in the step just completed.
+    # If the agent ran raw commands instead of invoking skills, warn so it
+    # self-corrects on the next step.  Best-effort — never raises.
+    bypass_warning_prefix = ""
+    try:
+        bypass_warnings = detect_skill_bypass(
+            transcript_path, step_line_start, state.get("story_file", "")
+        )
+        if bypass_warnings:
+            lines = ["[PRISM SKILL BYPASS WARNING]"]
+            lines.extend(bypass_warnings)
+            lines.append("Use the Skill tool for the above commands on the next step.")
+            lines.append("")
+            bypass_warning_prefix = "\n".join(lines) + "\n\n"
+    except Exception:
+        pass
+
     _write_instruction_file(instruction, STATE_FILE.parent.parent)
     print(json.dumps({
         "decision": "block",
         "reason": (
+            f"{bypass_warning_prefix}"
             f"[PRISM] Step {next_index + 1}/{len(WORKFLOW_STEPS)}: {next_step_id}. "
             "Your full instruction is at .prism/current_instruction.md — read it now and begin."
             f"{subagent_directive}"
