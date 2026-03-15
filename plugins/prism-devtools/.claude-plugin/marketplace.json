@@ -10,7 +10,7 @@
       "name": "prism-devtools",
       "description": "Comprehensive development toolkit with PRISM methodology agents, skills, TDD workflow coordination, Brain semantic search, CLI dashboard, and snapshot tooling",
       "source": "./",
-      "version": "3.14.0",
+      "version": "3.14.1",
       "author": {
         "name": "PRISM Development Team"
       },
