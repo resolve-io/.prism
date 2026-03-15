@@ -251,6 +251,7 @@ def _filtered_glob(root: Path, pattern: str, timeout: float = 10.0) -> list:
 
 
 _BYOS_TEST_NAME_RE = re.compile(r"(^|[-_])test(s?)([-_]|$)", re.IGNORECASE)
+_BYOS_LINT_NAME_RE = re.compile(r"(^|[-_])lint([-_]|$)", re.IGNORECASE)
 
 
 def _extract_byos_execute_command(skill_content: str) -> Optional[str]:
@@ -296,13 +297,47 @@ def _detect_byos_test_skill(cwd: Path) -> Optional[dict]:
     return None
 
 
+def _detect_byos_lint_skill(cwd: Path) -> Optional[str]:
+    """Check .claude/skills/ for a BYOS lint skill and extract its command.
+
+    Looks for skill directories whose name contains 'lint' as a word component
+    (e.g. run-lint, lint, lint-check, code-lint). Reads SKILL.md and extracts
+    the bash command from the ## Execute section.
+
+    Returns the command string or None if no matching skill is found.
+    """
+    skills_dir = cwd / ".claude" / "skills"
+    if not skills_dir.is_dir():
+        return None
+    for skill_dir in sorted(skills_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        if not _BYOS_LINT_NAME_RE.search(skill_dir.name):
+            continue
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        command = _extract_byos_execute_command(content)
+        if command:
+            return command
+    return None
+
+
 def detect_test_runner() -> dict:
     """Detect the test runner for the current project."""
     cwd = Path.cwd()
 
+    # Detect BYOS lint skill once — used for lint field across all paths
+    byos_lint_cmd = _detect_byos_lint_skill(cwd)
+
     # Check for BYOS test skill first — project-defined commands take priority
     byos_runner = _detect_byos_test_skill(cwd)
     if byos_runner:
+        byos_runner["lint"] = byos_lint_cmd
         return byos_runner
 
     # Check for Node.js project
@@ -313,13 +348,13 @@ def detect_test_runner() -> dict:
             pkg = json_mod.loads(package_json.read_text())
             scripts = pkg.get("scripts", {})
             if "test" in scripts:
-                return {"type": "npm", "command": "npm test", "lint": "npm run lint"}
+                return {"type": "npm", "command": "npm test", "lint": byos_lint_cmd}
         except Exception:
             pass
 
     # Check for Python project (use python -m for PATH compatibility on Windows)
     if (cwd / "pytest.ini").exists() or (cwd / "pyproject.toml").exists() or (cwd / "setup.py").exists():
-        return {"type": "pytest", "command": "python -m pytest", "lint": "python -m ruff check . || python -m pylint --recursive=y plugins/prism-devtools/tools/prism-cli/"}
+        return {"type": "pytest", "command": "python -m pytest", "lint": byos_lint_cmd}
 
     # Check for .NET project
     csproj_files = _filtered_glob(cwd, "**/*.csproj")
@@ -337,14 +372,14 @@ def detect_test_runner() -> dict:
                 break
             search_dir = parent
         test_target = str(sln_path) if sln_path else str(csproj_files[0])
-        return {"type": "dotnet", "command": f'dotnet test "{test_target}"', "lint": f'dotnet format --verify-no-changes "{test_target}"'}
+        return {"type": "dotnet", "command": f'dotnet test "{test_target}"', "lint": byos_lint_cmd}
 
     # Check for Go project
     if (cwd / "go.mod").exists():
-        return {"type": "go", "command": "go test ./...", "lint": "golangci-lint run"}
+        return {"type": "go", "command": "go test ./...", "lint": byos_lint_cmd}
 
     # Default fallback
-    return {"type": "unknown", "command": None, "lint": None}
+    return {"type": "unknown", "command": None, "lint": byos_lint_cmd}
 
 
 def _get_test_timeout(state: dict = None) -> int:

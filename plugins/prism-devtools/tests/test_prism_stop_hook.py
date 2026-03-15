@@ -32,6 +32,7 @@ from prism_stop_hook import (  # noqa: E402
     validate_step,
     detect_test_runner,
     _detect_byos_test_skill,
+    _detect_byos_lint_skill,
     _extract_byos_execute_command,
     _looks_like_test_output,
     _parse_test_output,
@@ -445,7 +446,7 @@ def test_detect_dotnet_command_has_quoted_path(tmp_path, monkeypatch):
     monkeypatch.chdir(spaced)
     result = detect_test_runner()
     assert '"' in result["command"], "Path should be quoted"
-    assert '"' in result["lint"], "Lint path should be quoted"
+    assert result["lint"] is None
     assert "App.sln" in result["command"]
 
 
@@ -668,6 +669,58 @@ def test_detect_byos_test_skill_no_skill_md(tmp_path, monkeypatch):
     assert result is None
 
 
+def _make_lint_skill(tmp_path: Path, skill_name: str, command: str) -> Path:
+    skill_dir = tmp_path / ".claude" / "skills" / skill_name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {skill_name}\ndescription: Run lint\n---\n\n## Execute\n\n```bash\n{command}\n```\n"
+    )
+    return skill_dir
+
+
+# ---------------------------------------------------------------------------
+# _detect_byos_lint_skill() tests
+# ---------------------------------------------------------------------------
+
+def test_detect_byos_lint_skill_lint(tmp_path):
+    _make_lint_skill(tmp_path, "lint", "bun run lint")
+    result = _detect_byos_lint_skill(tmp_path)
+    assert result == "bun run lint"
+
+
+def test_detect_byos_lint_skill_run_lint(tmp_path):
+    _make_lint_skill(tmp_path, "run-lint", "npm run lint")
+    result = _detect_byos_lint_skill(tmp_path)
+    assert result == "npm run lint"
+
+
+def test_detect_byos_lint_skill_lint_check(tmp_path):
+    _make_lint_skill(tmp_path, "lint-check", "ruff check .")
+    result = _detect_byos_lint_skill(tmp_path)
+    assert result == "ruff check ."
+
+
+def test_detect_byos_lint_skill_no_skills_dir(tmp_path):
+    result = _detect_byos_lint_skill(tmp_path)
+    assert result is None
+
+
+def test_detect_byos_lint_skill_non_lint_ignored(tmp_path):
+    _make_skill(tmp_path, "run-tests", "bun test")
+    result = _detect_byos_lint_skill(tmp_path)
+    assert result is None
+
+
+def test_detect_byos_lint_skill_missing_execute(tmp_path):
+    skill_dir = tmp_path / ".claude" / "skills" / "lint"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: lint\ndescription: Lint\n---\n\n## Usage\n\nRun lint manually.\n"
+    )
+    result = _detect_byos_lint_skill(tmp_path)
+    assert result is None
+
+
 # ---------------------------------------------------------------------------
 # detect_test_runner() BYOS priority tests
 # ---------------------------------------------------------------------------
@@ -702,6 +755,56 @@ def test_detect_test_runner_byos_lint_is_none(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _make_skill(tmp_path, "run-tests", "bun test")
     result = detect_test_runner()
+    assert result["lint"] is None
+
+
+def test_detect_test_runner_byos_lint_with_byos_test(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_skill(tmp_path, "run-tests", "bun test")
+    _make_lint_skill(tmp_path, "lint", "bun run lint")
+    result = detect_test_runner()
+    assert result["type"] == "byos"
+    assert result["lint"] == "bun run lint"
+
+
+def test_detect_test_runner_byos_lint_with_npm_fallback(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "package.json").write_text('{"scripts": {"test": "jest"}}')
+    _make_lint_skill(tmp_path, "run-lint", "eslint .")
+    result = detect_test_runner()
+    assert result["type"] == "npm"
+    assert result["lint"] == "eslint ."
+
+
+def test_detect_test_runner_no_byos_lint_returns_none(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "package.json").write_text('{"scripts": {"test": "jest"}}')
+    result = detect_test_runner()
+    assert result["type"] == "npm"
+    assert result["lint"] is None
+
+
+def test_detect_test_runner_pytest_no_hardcoded_lint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest]\n")
+    result = detect_test_runner()
+    assert result["type"] == "pytest"
+    assert result["lint"] is None
+
+
+def test_detect_test_runner_dotnet_no_hardcoded_lint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "App.csproj").write_text("")
+    result = detect_test_runner()
+    assert result["type"] == "dotnet"
+    assert result["lint"] is None
+
+
+def test_detect_test_runner_go_no_hardcoded_lint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "go.mod").write_text("module example.com/app\n")
+    result = detect_test_runner()
+    assert result["type"] == "go"
     assert result["lint"] is None
 
 
