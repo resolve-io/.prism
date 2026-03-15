@@ -268,52 +268,15 @@ def _extract_byos_execute_command(skill_content: str) -> Optional[str]:
     return command if command else None
 
 
-def _detect_byos_test_skill(cwd: Path) -> Optional[dict]:
-    """Check .claude/skills/ for a BYOS test skill and extract its command.
-
-    Looks for skill directories whose name contains 'test' as a word component
-    (e.g. run-tests, tests, test, integration-tests). Reads SKILL.md and extracts
-    the bash command from the ## Execute section.
-
-    Returns a runner dict or None if no matching skill is found.
-    """
+def _find_byos_skill_command(cwd: Path, name_re: "re.Pattern[str]") -> Optional[str]:
+    """Scan .claude/skills/ for a BYOS skill matching name_re; return its Execute command."""
     skills_dir = cwd / ".claude" / "skills"
     if not skills_dir.is_dir():
         return None
     for skill_dir in sorted(skills_dir.iterdir()):
         if not skill_dir.is_dir():
             continue
-        if not _BYOS_TEST_NAME_RE.search(skill_dir.name):
-            continue
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.is_file():
-            continue
-        try:
-            content = skill_md.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        command = _extract_byos_execute_command(content)
-        if command:
-            return {"type": "byos", "command": command, "lint": None}
-    return None
-
-
-def _detect_byos_lint_skill(cwd: Path) -> Optional[str]:
-    """Check .claude/skills/ for a BYOS lint skill and extract its command.
-
-    Looks for skill directories whose name contains 'lint' as a word component
-    (e.g. run-lint, lint, lint-check, code-lint). Reads SKILL.md and extracts
-    the bash command from the ## Execute section.
-
-    Returns the command string or None if no matching skill is found.
-    """
-    skills_dir = cwd / ".claude" / "skills"
-    if not skills_dir.is_dir():
-        return None
-    for skill_dir in sorted(skills_dir.iterdir()):
-        if not skill_dir.is_dir():
-            continue
-        if not _BYOS_LINT_NAME_RE.search(skill_dir.name):
+        if not name_re.search(skill_dir.name):
             continue
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.is_file():
@@ -326,6 +289,29 @@ def _detect_byos_lint_skill(cwd: Path) -> Optional[str]:
         if command:
             return command
     return None
+
+
+def _detect_byos_test_skill(cwd: Path) -> Optional[dict]:
+    """Check .claude/skills/ for a BYOS test skill and extract its command.
+
+    Looks for skill directories whose name contains 'test' as a word component
+    (e.g. run-tests, tests, test, integration-tests).
+
+    Returns a runner dict or None if no matching skill is found.
+    """
+    command = _find_byos_skill_command(cwd, _BYOS_TEST_NAME_RE)
+    return {"type": "byos", "command": command, "lint": None} if command else None
+
+
+def _detect_byos_lint_skill(cwd: Path) -> Optional[str]:
+    """Check .claude/skills/ for a BYOS lint skill and extract its command.
+
+    Looks for skill directories whose name contains 'lint' as a word component
+    (e.g. run-lint, lint, lint-check, code-lint).
+
+    Returns the command string or None if no matching skill is found.
+    """
+    return _find_byos_skill_command(cwd, _BYOS_LINT_NAME_RE)
 
 
 def detect_test_runner() -> dict:
@@ -579,7 +565,8 @@ def build_trace_matrix(story_file: str) -> list:
 
 def validate_step(step_id: str, validation_type: str, state: dict,
                   transcript_path: str = "", step_line_start: int = 0,
-                  step_skill_calls: int = 0) -> dict:
+                  step_skill_calls: int = 0,
+                  discovered_skills: Optional[list] = None) -> dict:
     """
     Validate that the current step is complete.
 
@@ -596,8 +583,11 @@ def validate_step(step_id: str, validation_type: str, state: dict,
     # Skill usage check: block if skills are available but none were invoked.
     # Enforces BYOS adoption — agents must use the Skill tool, not raw commands.
     if step_skill_calls == 0 and step_id not in LIGHTWEIGHT_STEPS:
-        story_file = state.get("story_file", "")
-        discovered = discover_prism_skills(story_file)
+        discovered = (
+            discovered_skills
+            if discovered_skills is not None
+            else discover_prism_skills(state.get("story_file", ""))
+        )
         if discovered:
             skill_list = ", ".join(f"/{s['name']}" for s in discovered[:5])
             return {
@@ -2047,7 +2037,8 @@ def detect_story_file() -> str:
 
 
 def detect_skill_bypass(
-    transcript_path: str, step_line_start: int, story_file: str = ""
+    transcript_path: str, step_line_start: int, story_file: str = "",
+    discovered_skills: Optional[list] = None,
 ) -> list:
     """Scan transcript Bash tool_use blocks for commands that bypass available skills.
 
@@ -2059,7 +2050,11 @@ def detect_skill_bypass(
     deduplicated). Returns empty list when no bypasses are detected or when the
     transcript is unavailable.
     """
-    skills = discover_prism_skills(story_file)
+    skills = (
+        discovered_skills
+        if discovered_skills is not None
+        else discover_prism_skills(story_file)
+    )
     bypass_rules = [(s["name"], s["replaces"]) for s in skills if s.get("replaces")]
     if not bypass_rules or not transcript_path:
         return []
@@ -2233,12 +2228,20 @@ def main():
         )
         sys.exit(0)
 
+    # Discover skills once — used by both validate_step and detect_skill_bypass.
+    discovered_skills = (
+        discover_prism_skills(state.get("story_file", ""))
+        if step_id not in LIGHTWEIGHT_STEPS
+        else []
+    )
+
     # VALIDATE current step before advancing
     gate_passed = 1  # default: no validation required = passed
     if validation:
         validation_result = validate_step(
             step_id, validation, state, transcript_path, step_line_start,
             step_skill_calls=step_skill_calls,
+            discovered_skills=discovered_skills,
         )
 
         if not validation_result["valid"]:
@@ -2324,7 +2327,8 @@ def main():
     if step_id not in LIGHTWEIGHT_STEPS:
         try:
             bypass_warnings = detect_skill_bypass(
-                transcript_path, step_line_start, state.get("story_file", "")
+                transcript_path, step_line_start, state.get("story_file", ""),
+                discovered_skills=discovered_skills,
             )
             if bypass_warnings:
                 bypass_lines = [

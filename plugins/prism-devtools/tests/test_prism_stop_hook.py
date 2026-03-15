@@ -1682,6 +1682,11 @@ prism:
   agent: qa
   priority: 10
 ---
+
+## Execute
+```bash
+npm test
+```
 """
 
 _SKILL_MD_NO_REPLACES = """---
@@ -2053,22 +2058,6 @@ _FAKE_USAGE_FOR_BYPASS = {
     "skill_names": ["test"],
 }
 
-_SKILL_MD_WITH_REPLACES_BYPASS = """---
-name: test
-description: Run the project test suite
-replaces: npm test
-prism:
-  agent: qa
-  priority: 10
----
-
-## Execute
-```bash
-npm test
-```
-"""
-
-
 def test_main_blocks_on_skill_bypass(tmp_path, monkeypatch, capsys):
     """main() blocks step advancement when a skill bypass is detected."""
     monkeypatch.chdir(tmp_path)
@@ -2076,7 +2065,7 @@ def test_main_blocks_on_skill_bypass(tmp_path, monkeypatch, capsys):
     # Create skill with replaces: npm test
     skills_dir = tmp_path / ".claude" / "skills" / "test"
     skills_dir.mkdir(parents=True)
-    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES_BYPASS, encoding="utf-8")
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES, encoding="utf-8")
 
     # implement_tasks is index 5 in WORKFLOW_STEPS
     state_file = _make_state_file_for_bypass(tmp_path, "implement_tasks", 5)
