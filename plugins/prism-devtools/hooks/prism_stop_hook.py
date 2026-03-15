@@ -30,6 +30,7 @@ try:
         build_agent_instruction,
         resolve_state_file,
         discover_prism_skills,
+        LIGHTWEIGHT_STEPS,
     )
 
     # State file location — anchored to git root so CWD shifts don't lose the file.
@@ -577,7 +578,8 @@ def build_trace_matrix(story_file: str) -> list:
 
 
 def validate_step(step_id: str, validation_type: str, state: dict,
-                  transcript_path: str = "", step_line_start: int = 0) -> dict:
+                  transcript_path: str = "", step_line_start: int = 0,
+                  step_skill_calls: int = 0) -> dict:
     """
     Validate that the current step is complete.
 
@@ -590,6 +592,25 @@ def validate_step(step_id: str, validation_type: str, state: dict,
     """
     if not validation_type:
         return {"valid": True, "message": "No validation required", "continue_instruction": None}
+
+    # Skill usage check: block if skills are available but none were invoked.
+    # Enforces BYOS adoption — agents must use the Skill tool, not raw commands.
+    if step_skill_calls == 0 and step_id not in LIGHTWEIGHT_STEPS:
+        story_file = state.get("story_file", "")
+        discovered = discover_prism_skills(story_file)
+        if discovered:
+            skill_list = ", ".join(f"/{s['name']}" for s in discovered[:5])
+            return {
+                "valid": False,
+                "message": f"No skills invoked on step {step_id}: skills available but not used.",
+                "continue_instruction": (
+                    f"SKILL USAGE REQUIRED\n\n"
+                    f"Available skills: {skill_list}\n\n"
+                    f"You MUST invoke relevant skills using the Skill tool before completing "
+                    f"this step. Re-do this step and use the Skill tool for each skill that "
+                    f"applies.\nDo NOT run equivalent shell commands directly."
+                ),
+            }
 
     runner = detect_test_runner()
 
@@ -2216,7 +2237,8 @@ def main():
     gate_passed = 1  # default: no validation required = passed
     if validation:
         validation_result = validate_step(
-            step_id, validation, state, transcript_path, step_line_start
+            step_id, validation, state, transcript_path, step_line_start,
+            step_skill_calls=step_skill_calls,
         )
 
         if not validation_result["valid"]:
@@ -2295,6 +2317,32 @@ def main():
             cleared_content = update_state_file(content, {"step_failure_counts": json.dumps(cleared_counts, separators=(',', ':'))})
             STATE_FILE.write_text(cleared_content, encoding='utf-8')
             content = cleared_content
+
+    # Check for skill bypasses — block current step if agent ran raw commands
+    # instead of invoking available skills. Enforces BYOS adoption at the point
+    # of step completion rather than deferring to an advisory warning on the next step.
+    if step_id not in LIGHTWEIGHT_STEPS:
+        try:
+            bypass_warnings = detect_skill_bypass(
+                transcript_path, step_line_start, state.get("story_file", "")
+            )
+            if bypass_warnings:
+                bypass_lines = [
+                    "SKILL BYPASS DETECTED — re-do this step using the Skill tool.\n"
+                ]
+                bypass_lines.extend(bypass_warnings)
+                bypass_lines.append(
+                    "\nIMPORTANT: STOP HERE. You must use the Skill tool for the "
+                    "commands listed above, not raw Bash. Re-do this step invoking "
+                    "skills via the Skill tool before stopping again."
+                )
+                print(json.dumps({
+                    "decision": "block",
+                    "reason": f"[PRISM - {step_id}] " + "\n".join(bypass_lines),
+                }))
+                sys.exit(0)
+        except Exception:
+            pass
 
     # Find next step
     # Check for sub-agent spawn directive from validation result
@@ -2470,28 +2518,10 @@ def main():
     updated_content = update_state_file(content, updates)
     STATE_FILE.write_text(updated_content, encoding='utf-8')
 
-    # Check for skill bypasses in the step just completed.
-    # If the agent ran raw commands instead of invoking skills, warn so it
-    # self-corrects on the next step.  Best-effort — never raises.
-    bypass_warning_prefix = ""
-    try:
-        bypass_warnings = detect_skill_bypass(
-            transcript_path, step_line_start, state.get("story_file", "")
-        )
-        if bypass_warnings:
-            lines = ["[PRISM SKILL BYPASS WARNING]"]
-            lines.extend(bypass_warnings)
-            lines.append("Use the Skill tool for the above commands on the next step.")
-            lines.append("")
-            bypass_warning_prefix = "\n".join(lines) + "\n\n"
-    except Exception:
-        pass
-
     _write_instruction_file(instruction, STATE_FILE.parent.parent)
     print(json.dumps({
         "decision": "block",
         "reason": (
-            f"{bypass_warning_prefix}"
             f"[PRISM] Step {next_index + 1}/{len(WORKFLOW_STEPS)}: {next_step_id}. "
             "Your full instruction is at .prism/current_instruction.md — read it now and begin."
             f"{subagent_directive}"

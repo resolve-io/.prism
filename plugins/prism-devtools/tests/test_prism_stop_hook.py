@@ -503,7 +503,7 @@ def _run_main_with_mocks(monkeypatch, tmp_path, state_file, validate_result):
     monkeypatch.setattr(_psh, "is_same_session", lambda *_a: True)
     monkeypatch.setattr(_psh, "is_workflow_stale", lambda *_a: False)
     monkeypatch.setattr(_psh, "_record_session_outcome", lambda *_a: None)
-    monkeypatch.setattr(_psh, "validate_step", lambda *_a: validate_result)
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a, **_k: validate_result)
 
     captured = []
 
@@ -1915,3 +1915,250 @@ def test_get_circuit_breaker_state_returns_empty_on_invalid_json():
     state = {"step_failure_counts": "not-json{{{"}
     result = _get_circuit_breaker_state(state)
     assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# validate_step: skill usage enforcement (Part B)
+# ---------------------------------------------------------------------------
+
+_SKILL_MD_BASIC = """---
+name: test
+description: Run the project test suite
+prism:
+  agent: qa
+  priority: 10
+---
+"""
+
+
+def test_validate_step_blocks_when_skills_available_but_not_invoked(tmp_path, monkeypatch):
+    """validate_step returns invalid when skills exist but step_skill_calls==0."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_BASIC, encoding="utf-8")
+
+    story = tmp_path / "story.md"
+    story.write_text("## Acceptance Criteria\n\nAC-1: Feature X\n")
+
+    result = validate_step(
+        "implement_tasks", "green",
+        {"story_file": str(story)},
+        step_skill_calls=0,
+    )
+    assert result["valid"] is False
+    assert "SKILL USAGE REQUIRED" in result["continue_instruction"]
+    assert "/test" in result["continue_instruction"]
+
+
+def test_validate_step_passes_when_skills_invoked(tmp_path, monkeypatch):
+    """validate_step does not block on skill check when step_skill_calls > 0."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_BASIC, encoding="utf-8")
+
+    # Provide a transcript with a passing test result so green validation succeeds.
+    entries = [
+        _bash_tool_use("id1", "bun test"),
+        _bash_tool_result("id1", "All tests passed\n5 passed in 0.1s"),
+    ]
+    transcript = _make_transcript(tmp_path, entries)
+
+    with patch("prism_stop_hook.run_tests") as mock_run:
+        result = validate_step(
+            "implement_tasks", "green",
+            {"story_file": ""},
+            transcript_path=transcript,
+            step_line_start=0,
+            step_skill_calls=1,
+        )
+    # Skill check passes; result depends on test transcript (green validation).
+    # The important assertion is that skill check did NOT block.
+    assert "SKILL USAGE REQUIRED" not in (result.get("continue_instruction") or "")
+
+
+def test_validate_step_skill_check_skipped_for_lightweight_steps(tmp_path, monkeypatch):
+    """Skill usage check is skipped for LIGHTWEIGHT_STEPS (review_previous_notes)."""
+    monkeypatch.chdir(tmp_path)
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_BASIC, encoding="utf-8")
+
+    # review_previous_notes has no validation type so returns valid immediately.
+    result = validate_step(
+        "review_previous_notes", None,
+        {},
+        step_skill_calls=0,
+    )
+    assert result["valid"] is True
+
+
+def test_validate_step_skill_check_skipped_when_no_skills(tmp_path, monkeypatch):
+    """Skill usage check does not block when no skills are discoverable."""
+    monkeypatch.chdir(tmp_path)
+    # No .claude/skills/ directory — discover_prism_skills returns []
+
+    entries = [
+        _bash_tool_use("id1", "bun test"),
+        _bash_tool_result("id1", "All tests passed\n3 passed"),
+    ]
+    transcript = _make_transcript(tmp_path, entries)
+
+    with patch("prism_stop_hook.run_tests") as mock_run:
+        result = validate_step(
+            "implement_tasks", "green",
+            {"story_file": ""},
+            transcript_path=transcript,
+            step_line_start=0,
+            step_skill_calls=0,
+        )
+    # No skills available → skill check skipped → falls through to green validation
+    assert "SKILL USAGE REQUIRED" not in (result.get("continue_instruction") or "")
+
+
+# ---------------------------------------------------------------------------
+# detect_skill_bypass: blocking behaviour in main() (Part C)
+# ---------------------------------------------------------------------------
+
+
+def _make_state_file_for_bypass(tmp_path, step_id, step_index):
+    """Create a minimal active state file for bypass tests."""
+    state_content = f"""---
+active: true
+current_step: {step_id}
+current_step_index: {step_index}
+story_file: ""
+prompt: test prompt
+session_id: bypass-test-session
+started_at: 2024-01-01T00:00:00
+last_activity: 2024-01-01T00:00:00
+step_started_at: 2024-01-01T00:00:00
+step_tokens_start: 0
+step_transcript_line: 0
+---
+"""
+    state_file = tmp_path / ".claude" / "prism-loop.local.md"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(state_content, encoding="utf-8")
+    return state_file
+
+
+_FAKE_USAGE_FOR_BYPASS = {
+    "total_tokens": 100,
+    "model": "claude-test",
+    "total_lines": 10,
+    "tool_calls": 5,
+    "skill_calls": 1,
+    "skill_names": ["test"],
+}
+
+_SKILL_MD_WITH_REPLACES_BYPASS = """---
+name: test
+description: Run the project test suite
+replaces: npm test
+prism:
+  agent: qa
+  priority: 10
+---
+
+## Execute
+```bash
+npm test
+```
+"""
+
+
+def test_main_blocks_on_skill_bypass(tmp_path, monkeypatch, capsys):
+    """main() blocks step advancement when a skill bypass is detected."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create skill with replaces: npm test
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_WITH_REPLACES_BYPASS, encoding="utf-8")
+
+    # implement_tasks is index 5 in WORKFLOW_STEPS
+    state_file = _make_state_file_for_bypass(tmp_path, "implement_tasks", 5)
+
+    # Transcript: agent ran npm test directly (bypassing /test skill)
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript_with_bash(transcript, ["npm test"], step_line_start=0)
+
+    stdin_data = json.dumps({
+        "session_id": "bypass-test-session",
+        "transcript_path": str(transcript),
+    })
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO(stdin_data))
+    monkeypatch.setattr(_psh, "STATE_FILE", state_file)
+    monkeypatch.setattr(_psh, "get_usage_from_transcript", lambda *_a, **_k: _FAKE_USAGE_FOR_BYPASS)
+    monkeypatch.setattr(_psh, "is_same_session", lambda *_a: True)
+    monkeypatch.setattr(_psh, "is_workflow_stale", lambda *_a: False)
+    monkeypatch.setattr(_psh, "_record_session_outcome", lambda *_a: None)
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a, **_k: {
+        "valid": True, "message": "ok", "continue_instruction": None
+    })
+    monkeypatch.setattr(_psh, "_auto_observe_stage", lambda *_a, **_k: None)
+    monkeypatch.setattr(_psh, "_write_step_handoff", lambda *_a, **_k: None)
+    monkeypatch.setattr(_psh, "_write_instruction_file", lambda *_a, **_k: None)
+
+    with pytest.raises(SystemExit):
+        _psh.main()
+
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert data["decision"] == "block"
+    assert "SKILL BYPASS DETECTED" in data["reason"]
+    assert "npm test" in data["reason"]
+
+
+def test_main_no_bypass_block_when_no_skills(tmp_path, monkeypatch, capsys):
+    """main() does not block on bypass check when no skills have replaces:."""
+    monkeypatch.chdir(tmp_path)
+
+    # Skill without replaces: field
+    skills_dir = tmp_path / ".claude" / "skills" / "test"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(_SKILL_MD_BASIC, encoding="utf-8")
+
+    state_file = _make_state_file_for_bypass(tmp_path, "implement_tasks", 5)
+
+    transcript = tmp_path / "transcript.jsonl"
+    _write_transcript_with_bash(transcript, ["npm test"], step_line_start=0)
+
+    stdin_data = json.dumps({
+        "session_id": "bypass-test-session",
+        "transcript_path": str(transcript),
+    })
+
+    fake_conductor = MagicMock()
+    fake_conductor.record_outcome = MagicMock()
+    fake_conductor.last_had_brain_context = 0
+    fake_conductor.incremental_reindex = MagicMock()
+    fake_conductor.build_agent_instruction = MagicMock(return_value="next instruction")
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO(stdin_data))
+    monkeypatch.setattr(_psh, "STATE_FILE", state_file)
+    monkeypatch.setattr(_psh, "get_usage_from_transcript", lambda *_a, **_k: _FAKE_USAGE_FOR_BYPASS)
+    monkeypatch.setattr(_psh, "is_same_session", lambda *_a: True)
+    monkeypatch.setattr(_psh, "is_workflow_stale", lambda *_a: False)
+    monkeypatch.setattr(_psh, "_record_session_outcome", lambda *_a: None)
+    monkeypatch.setattr(_psh, "validate_step", lambda *_a, **_k: {
+        "valid": True, "message": "ok", "continue_instruction": None
+    })
+    monkeypatch.setattr(_psh, "_auto_observe_stage", lambda *_a, **_k: None)
+    monkeypatch.setattr(_psh, "_write_step_handoff", lambda *_a, **_k: None)
+    monkeypatch.setattr(_psh, "_write_instruction_file", lambda *_a, **_k: None)
+
+    fake_module = MagicMock()
+    fake_module.Conductor.return_value = fake_conductor
+
+    with patch.dict(sys.modules, {"conductor_engine": fake_module}):
+        with pytest.raises(SystemExit):
+            _psh.main()
+
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    # Should advance to next step, not block on bypass
+    assert "SKILL BYPASS DETECTED" not in data.get("reason", "")

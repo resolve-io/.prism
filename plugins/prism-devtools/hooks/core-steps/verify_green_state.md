@@ -15,7 +15,7 @@ IMPORTANT: See Available Skills listed above. For verification:
 Steps:
 1. Run all tests (unit, integration, e2e)
 2. Verify all tests PASS
-3. Run linting: {{lint_cmd}}
+3. Invoke /lint skill (if available) or run linting checks
 4. Run type checks (if applicable)
 5. Verify build succeeds
 6. Confirm all ACs have passing test coverage

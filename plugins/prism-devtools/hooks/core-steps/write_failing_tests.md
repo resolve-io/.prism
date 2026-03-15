@@ -52,7 +52,7 @@ Steps:
 3. Read existing tests to understand patterns
 4. Extend existing files if found, create new if needed
 5. Write one failing test per AC with traceability header and clear assertion
-6. Run: {{test_cmd}} - verify FAIL with assertion errors (not syntax/import)
+6. Invoke /test skill to verify FAIL with assertion errors (not syntax/import)
 7. Update story with test-to-AC mappings
 
 CRITICAL: Tests must FAIL cleanly (assertion failures, not errors).
