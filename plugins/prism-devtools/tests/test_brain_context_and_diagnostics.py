@@ -283,6 +283,7 @@ def test_build_agent_instruction_includes_brain_context_when_available(
     mock_brain.outcome_count.return_value = 0
     mock_brain.best_prompt.return_value = "sm/default"
     mock_brain.get_prompt.return_value = ""
+    mock_brain.get_skill_scores.return_value = {}
 
     story = tmp_path / "story.md"
     story.write_text("test story for e2e verification")
@@ -636,6 +637,7 @@ def test_system_context_conductor_passes_step_id(tmp_path, monkeypatch):
     mock_brain.outcome_count.return_value = 0
     mock_brain.best_prompt.return_value = "sm/default"
     mock_brain.get_prompt.return_value = ""
+    mock_brain.get_skill_scores.return_value = {}
 
     story = tmp_path / "story.md"
     story.write_text("test story")

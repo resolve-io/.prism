@@ -359,7 +359,8 @@ def test_green_full_blocks_on_security_findings(tmp_path, monkeypatch):
     with patch("prism_stop_hook.run_tests", return_value=_TESTS_PASS):
         with patch("prism_stop_hook.run_lint", return_value=_LINT_PASS):
             with patch("prism_stop_hook.run_security_scan", return_value=findings_result):
-                result = validate_step("verify_green_state", "green_full", {"story_file": str(story)})
+                with patch("prism_stop_hook.discover_prism_skills", return_value=[]):
+                    result = validate_step("verify_green_state", "green_full", {"story_file": str(story)})
 
     assert not result["valid"]
     assert "Security" in result["message"] or "security" in result["continue_instruction"].lower()
@@ -377,7 +378,8 @@ def test_green_full_blocks_on_broken_trace_chain(tmp_path, monkeypatch):
     with patch("prism_stop_hook.run_tests", return_value=_TESTS_PASS):
         with patch("prism_stop_hook.run_lint", return_value=_LINT_PASS):
             with patch("prism_stop_hook.run_security_scan", return_value=clean_scan):
-                result = validate_step("verify_green_state", "green_full", {"story_file": str(story)})
+                with patch("prism_stop_hook.discover_prism_skills", return_value=[]):
+                    result = validate_step("verify_green_state", "green_full", {"story_file": str(story)})
 
     assert not result["valid"]
     assert "AC-2" in result["message"] or "AC-2" in result["continue_instruction"]
@@ -394,7 +396,8 @@ def test_green_full_passes_when_all_clean(tmp_path, monkeypatch):
     with patch("prism_stop_hook.run_tests", return_value=_TESTS_PASS):
         with patch("prism_stop_hook.run_lint", return_value=_LINT_PASS):
             with patch("prism_stop_hook.run_security_scan", return_value=clean_scan):
-                result = validate_step("verify_green_state", "green_full", {"story_file": str(story)})
+                with patch("prism_stop_hook.discover_prism_skills", return_value=[]):
+                    result = validate_step("verify_green_state", "green_full", {"story_file": str(story)})
 
     assert result["valid"]
     assert "security" in result["message"].lower() or "trace" in result["message"].lower()
@@ -1070,12 +1073,13 @@ def test_validate_step_red_uses_transcript_when_available(tmp_path, monkeypatch)
     transcript = _make_transcript(tmp_path, entries)
 
     with patch("prism_stop_hook.run_tests") as mock_run:
-        result = validate_step(
-            "write_failing_tests", "red_with_trace",
-            {"story_file": str(story)},
-            transcript_path=transcript,
-            step_line_start=0,
-        )
+        with patch("prism_stop_hook.discover_prism_skills", return_value=[]):
+            result = validate_step(
+                "write_failing_tests", "red_with_trace",
+                {"story_file": str(story)},
+                transcript_path=transcript,
+                step_line_start=0,
+            )
 
     # run_tests should NOT have been called (transcript was conclusive)
     mock_run.assert_not_called()
@@ -1095,12 +1099,13 @@ def test_validate_step_green_falls_back_when_transcript_inconclusive(tmp_path, m
 
     run_tests_result = {"success": True, "output": "3 passed", "error": "", "returncode": 0}
     with patch("prism_stop_hook.run_tests", return_value=run_tests_result) as mock_run:
-        result = validate_step(
-            "implement_tasks", "green",
-            {},
-            transcript_path=transcript,
-            step_line_start=0,
-        )
+        with patch("prism_stop_hook.discover_prism_skills", return_value=[]):
+            result = validate_step(
+                "implement_tasks", "green",
+                {},
+                transcript_path=transcript,
+                step_line_start=0,
+            )
 
     mock_run.assert_called_once()
     assert result["valid"] is True
@@ -2002,7 +2007,7 @@ def test_validate_step_skill_check_skipped_for_lightweight_steps(tmp_path, monke
 def test_validate_step_skill_check_skipped_when_no_skills(tmp_path, monkeypatch):
     """Skill usage check does not block when no skills are discoverable."""
     monkeypatch.chdir(tmp_path)
-    # No .claude/skills/ directory — discover_prism_skills returns []
+    # No skills discoverable → discover_prism_skills returns []
 
     entries = [
         _bash_tool_use("id1", "bun test"),
@@ -2011,13 +2016,14 @@ def test_validate_step_skill_check_skipped_when_no_skills(tmp_path, monkeypatch)
     transcript = _make_transcript(tmp_path, entries)
 
     with patch("prism_stop_hook.run_tests") as mock_run:
-        result = validate_step(
-            "implement_tasks", "green",
-            {"story_file": ""},
-            transcript_path=transcript,
-            step_line_start=0,
-            step_skill_calls=0,
-        )
+        with patch("prism_stop_hook.discover_prism_skills", return_value=[]):
+            result = validate_step(
+                "implement_tasks", "green",
+                {"story_file": ""},
+                transcript_path=transcript,
+                step_line_start=0,
+                step_skill_calls=0,
+            )
     # No skills available → skill check skipped → falls through to green validation
     assert "SKILL USAGE REQUIRED" not in (result.get("continue_instruction") or "")
 

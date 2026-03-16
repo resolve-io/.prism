@@ -9,6 +9,7 @@ agents to load persona files or invoke skills to complete workflow steps.
 Used by: prism_stop_hook.py, prism_approve.py, prism_reject.py, setup_prism_loop.py
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -286,7 +287,7 @@ def _repo_root_from_story(story_file: str) -> Path | None:
     return None
 
 
-def discover_prism_skills(story_file: str = "") -> list:
+def discover_prism_skills(story_file: str = "", _home_dir: "Path | None" = None) -> list:
     """
     Discover all skills from .claude/skills/*/SKILL.md directories.
 
@@ -294,24 +295,44 @@ def discover_prism_skills(story_file: str = "") -> list:
     included. No special metadata required — the agent decides which
     skills fit the task. Returns ALL skills sorted by priority.
 
-    Scans story-repo, project-local, and user-global directories.
-    Deduplicates so the same directory is not scanned twice.
+    Scans story-repo, project-local, user-global, CLAUDE_PLUGIN_ROOT,
+    and all installed plugin cache directories.
+    Deduplicates by directory path and by skill name so multiple cached
+    plugin versions do not produce duplicate skill entries.
+
+    _home_dir: override for Path.home() — used in tests for isolation.
     """
+    home = _home_dir if _home_dir is not None else Path.home()
     results = []
     scan_dirs = []
     story_root = _repo_root_from_story(story_file)
     if story_root:
         scan_dirs.append(story_root / ".claude" / "skills")
     scan_dirs.append(Path.cwd() / ".claude" / "skills")
-    scan_dirs.append(Path.home() / ".claude" / "skills")
+    scan_dirs.append(home / ".claude" / "skills")
 
-    seen: set[Path] = set()
+    # Add CLAUDE_PLUGIN_ROOT/skills/ if set (hook runtime injects this env var)
+    plugin_root_env = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
+    if plugin_root_env:
+        scan_dirs.append(Path(plugin_root_env) / "skills")
+
+    # Add all installed plugin skill directories from the Claude plugin cache
+    plugins_cache = home / ".claude" / "plugins" / "cache"
+    try:
+        for skills_dir in plugins_cache.glob("*/*/*/skills"):
+            if skills_dir.is_dir():
+                scan_dirs.append(skills_dir)
+    except (IOError, OSError):
+        pass
+
+    seen_dirs: set[Path] = set()
+    seen_names: set[str] = set()
     for skills_dir in scan_dirs:
         try:
             resolved = skills_dir.resolve()
-            if resolved in seen:
+            if resolved in seen_dirs:
                 continue
-            seen.add(resolved)
+            seen_dirs.add(resolved)
             if not resolved.is_dir():
                 continue
             for skill_file in resolved.glob("*/SKILL.md"):
@@ -319,7 +340,10 @@ def discover_prism_skills(story_file: str = "") -> list:
                     content = skill_file.read_text(encoding="utf-8")
                     meta = _parse_skill_frontmatter(content)
                     if meta:
-                        results.append(meta)
+                        name = meta["name"]
+                        if name not in seen_names:
+                            seen_names.add(name)
+                            results.append(meta)
                 except (IOError, OSError):
                     continue
         except (IOError, OSError):

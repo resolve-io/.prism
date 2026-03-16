@@ -44,6 +44,7 @@ def _make_mock_brain_with_results(result_count: int = 3) -> MagicMock:
     mock_brain.outcome_count.return_value = 0
     mock_brain.best_prompt.return_value = "sm/default"
     mock_brain.get_prompt.return_value = ""
+    mock_brain.get_skill_scores.return_value = {}
     return mock_brain
 
 
@@ -58,6 +59,7 @@ def _make_mock_brain_no_results() -> MagicMock:
     mock_brain.outcome_count.return_value = 0
     mock_brain.best_prompt.return_value = "sm/default"
     mock_brain.get_prompt.return_value = ""
+    mock_brain.get_skill_scores.return_value = {}
     return mock_brain
 
 
@@ -234,6 +236,7 @@ def test_ac10_last_had_brain_context_zero_when_system_context_raises(tmp_path, m
     mock_brain.outcome_count.return_value = 0
     mock_brain.best_prompt.return_value = "sm/default"
     mock_brain.get_prompt.return_value = ""
+    mock_brain.get_skill_scores.return_value = {}
 
     story = tmp_path / "story.md"
     story.write_text("test story")
