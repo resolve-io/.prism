@@ -603,6 +603,8 @@ class Brain:
                 files_read INTEGER DEFAULT 0,
                 files_modified INTEGER DEFAULT 0,
                 skills_invoked INTEGER DEFAULT 0,
+                skills_available INTEGER DEFAULT 0,
+                adoption_rate REAL DEFAULT NULL,
                 timestamp TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS skill_usage (
@@ -635,6 +637,18 @@ class Brain:
             self._scores.commit()
         except Exception:
             pass  # Column already exists
+        # Migration: add skills_available and adoption_rate to session_outcomes
+        for _col, _defn in (
+            ("skills_available", "INTEGER DEFAULT 0"),
+            ("adoption_rate", "REAL DEFAULT NULL"),
+        ):
+            try:
+                self._scores.execute(
+                    f"ALTER TABLE session_outcomes ADD COLUMN {_col} {_defn}"
+                )
+                self._scores.commit()
+            except Exception:
+                pass  # Column already exists
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -2282,13 +2296,17 @@ class Brain:
         files_read: int,
         files_modified: int,
         skills_invoked: int,
+        skills_available: int = 0,
+        adoption_rate: Optional[float] = None,
     ) -> None:
         """Upsert session-level outcome metrics into session_outcomes table."""
         self._scores.execute(
             "INSERT OR REPLACE INTO session_outcomes "
-            "(session_id, duration_s, tokens_used, files_read, files_modified, skills_invoked, timestamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
-            (session_id, duration_s, tokens_used, files_read, files_modified, skills_invoked),
+            "(session_id, duration_s, tokens_used, files_read, files_modified, "
+            "skills_invoked, skills_available, adoption_rate, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (session_id, duration_s, tokens_used, files_read, files_modified,
+             skills_invoked, skills_available, adoption_rate),
         )
         self._scores.commit()
 

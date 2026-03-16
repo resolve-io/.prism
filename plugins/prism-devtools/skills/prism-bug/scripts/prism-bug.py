@@ -266,11 +266,28 @@ def collect_brain_status() -> str:
             result_count = brain.last_result_count
         except Exception as exc:
             result_count = f"error: {exc}"
-        return "\n".join([
+        lines = [
             "**Brain init:** success",
             f"**Doc count:** {count}",
             f"**system_context() result count:** {result_count}",
-        ])
+        ]
+        # Show adoption_rate from recent session_outcomes
+        try:
+            rows = brain._scores.execute(
+                "SELECT session_id, skills_invoked, skills_available, adoption_rate "
+                "FROM session_outcomes ORDER BY timestamp DESC LIMIT 5"
+            ).fetchall()
+            if rows:
+                lines.append("\n**Recent session adoption rates:**")
+                lines.append("| Session | Invoked | Available | Rate |")
+                lines.append("|---------|---------|-----------|------|")
+                for row in rows:
+                    sid, si, sa, ar = row
+                    ar_str = f"{ar:.0%}" if ar is not None else "—"
+                    lines.append(f"| `{str(sid)[-8:]}` | {si} | {sa} | {ar_str} |")
+        except Exception:
+            pass
+        return "\n".join(lines)
     except Exception as exc:
         return f"**Brain init:** FAILED — `{exc}`"
 
@@ -402,7 +419,7 @@ def collect_hook_progress(transcript_path: Path | None) -> str:
 
 
 def collect_step_history_analysis(state_content: str) -> str:
-    """Parse step_history from state frontmatter and summarize bq/s per step."""
+    """Parse step_history from state frontmatter and summarize bq/s/adoption per step."""
     match = re.search(r'step_history:\s*(\[.*?\])', state_content, re.DOTALL)
     if not match:
         return "_No step_history found in state file._"
@@ -412,13 +429,18 @@ def collect_step_history_analysis(state_content: str) -> str:
         return f"_Could not parse step_history JSON: {exc}_"
     if not history:
         return "_step_history is empty._"
-    rows = ["| Step | Brain Queries (bq) | Skill Calls (s) |",
-            "|------|--------------------|-----------------|"]
+    rows = [
+        "| Step | Brain Queries (bq) | Skill Calls (s) | Skills Avail (sa) | Adoption Rate |",
+        "|------|--------------------|-----------------|--------------------|---------------|",
+    ]
     for entry in history:
         step = entry.get("i", "?")
         bq = entry.get("bq", 0)
         s = entry.get("s", 0)
-        rows.append(f"| `{step}` | {bq} | {s} |")
+        sa = entry.get("sa", "—")
+        ar = entry.get("ar")
+        ar_str = f"{ar:.0%}" if ar is not None else "—"
+        rows.append(f"| `{step}` | {bq} | {s} | {sa} | {ar_str} |")
     return "\n".join(rows)
 
 

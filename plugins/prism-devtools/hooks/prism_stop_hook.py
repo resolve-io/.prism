@@ -1615,6 +1615,19 @@ def _record_session_outcome(input_data: dict) -> None:
             return
         transcript_path = input_data.get("transcript_path", "")
         metrics = get_session_metrics_from_transcript(transcript_path)
+        # Compute session-level adoption_rate from available skills.
+        try:
+            import io as _io
+            import contextlib
+            _buf = _io.StringIO()
+            with contextlib.redirect_stderr(_buf):
+                _skills = discover_prism_skills()
+            _sa = len(_skills)
+        except Exception:
+            _sa = 0
+        _session_adoption_rate: Optional[float] = (
+            round(metrics["skills_invoked"] / _sa, 2) if _sa > 0 else None
+        )
         from brain_engine import Brain
         brain = Brain()
         brain.record_session_outcome(
@@ -1624,6 +1637,8 @@ def _record_session_outcome(input_data: dict) -> None:
             files_read=metrics["files_read"],
             files_modified=metrics["files_modified"],
             skills_invoked=metrics["skills_invoked"],
+            skills_available=_sa,
+            adoption_rate=_session_adoption_rate,
         )
     except Exception:
         pass  # Never interrupt Claude's stop behavior
@@ -2235,6 +2250,12 @@ def main():
         else []
     )
 
+    # Compute per-step adoption_rate: skills_invoked / skills_available.
+    skills_available = len(discovered_skills)
+    adoption_rate: Optional[float] = (
+        round(step_skill_calls / skills_available, 2) if skills_available > 0 else None
+    )
+
     # VALIDATE current step before advancing
     gate_passed = 1  # default: no validation required = passed
     if validation:
@@ -2439,6 +2460,8 @@ def main():
             "t": step_toks_used,
             "s": step_skill_calls,
             "tc": step_tool_calls,
+            "sa": skills_available,
+            "ar": adoption_rate,
             "bq": 0,
         })
         updates["step_history"] = history
@@ -2515,6 +2538,8 @@ def main():
         "t": step_toks_used,
         "s": step_skill_calls,
         "tc": step_tool_calls,
+        "sa": skills_available,
+        "ar": adoption_rate,
         "bq": brain_queries,
     })
     updates["step_history"] = history
