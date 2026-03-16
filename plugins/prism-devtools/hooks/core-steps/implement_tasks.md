@@ -11,15 +11,16 @@ TDD GREEN PHASE: Make Failing Tests Pass
 4. THEN Glob/Grep for implementation files to modify
 
 ## Skills
-IMPORTANT: See Available Skills listed above. For GREEN phase:
-- Run /test to verify tests pass after each implementation step
-- Use /checkin to commit working changes
+IMPORTANT: Before running tests or committing manually, check Available Skills above and invoke the matching skill — skills know your project's test runner configuration and commit conventions so you iterate faster without hunting down commands.
+For GREEN phase:
+- **Invoke /test** after each implementation step — the skill runs your full test suite with the right flags and parses results; running tests manually risks missing config or misreading output.
+- **Invoke /checkin** to commit working changes — the skill enforces this project's commit message format and staging conventions automatically.
 
 Steps:
 1. Read failing test output to understand what needs implementing
 2. Glob/Grep for implementation files to modify
 3. Write MINIMAL code to make the next test pass
-4. Invoke /test skill - check progress
+4. Invoke /test skill — before running tests manually, check Available Skills above; the /test skill knows your project's test runner and will surface failures with context
 5. Iterate until ALL tests pass
 6. Refactor while keeping tests green
 

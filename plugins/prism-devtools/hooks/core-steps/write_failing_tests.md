@@ -11,8 +11,9 @@ TDD RED PHASE: Write Failing Tests
 4. Read existing tests to understand patterns
 
 ## Skills
-IMPORTANT: See Available Skills listed above. For RED phase:
-- Use /test to run and confirm tests fail cleanly
+IMPORTANT: Before running tests manually, check Available Skills above and invoke the matching skill — it knows your project's test runner, command flags, and output patterns so you don't have to guess.
+For RED phase:
+- **Invoke /test** to run and confirm tests fail cleanly. The skill knows exactly how to invoke your test runner and will parse fail/pass output for you — running tests manually risks using wrong flags or missing config.
 
 Trace Convention (REQUIRED - workflow blocks without this):
   Map each test to its AC. If any AC lacks a mapped test, workflow blocks
@@ -52,7 +53,7 @@ Steps:
 3. Read existing tests to understand patterns
 4. Extend existing files if found, create new if needed
 5. Write one failing test per AC with traceability header and clear assertion
-6. Invoke /test skill to verify FAIL with assertion errors (not syntax/import)
+6. Invoke /test skill to verify FAIL — before running tests manually, check Available Skills above; the /test skill knows your project test configuration and will confirm assertion failures (not syntax/import errors)
 7. Update story with test-to-AC mappings
 
 CRITICAL: Tests must FAIL cleanly (assertion failures, not errors).

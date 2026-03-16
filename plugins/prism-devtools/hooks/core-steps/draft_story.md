@@ -10,7 +10,7 @@ STORY DRAFTING: Create Next Story
 3. THEN Glob for epic and architecture docs as fallback
 
 ## Skills
-IMPORTANT: See Available Skills listed above — invoke any relevant skill before drafting manually.
+IMPORTANT: Before drafting manually, check Available Skills above and invoke any relevant skill — skills encode project-specific story formats, AC patterns, and acceptance criteria conventions that general drafting won't apply automatically. Invoking a skill first saves rework.
 
 Steps:
 1. Glob for epic and architecture docs: docs/*.md, docs/epics/*.md
