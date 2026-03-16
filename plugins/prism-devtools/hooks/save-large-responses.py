@@ -11,7 +11,6 @@ Based on Cursor's dynamic context discovery principle:
 
 import sys
 import io
-import os
 import json
 from pathlib import Path
 from datetime import datetime
@@ -88,20 +87,19 @@ def cleanup_old_responses(max_files: int = 50):
 
 
 def main():
-    # Get tool information from environment
-    tool_name = os.environ.get('TOOL_NAME', '')
+    # Get tool information from stdin JSON (Claude Code PostToolUse protocol)
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, ValueError):
+        sys.exit(0)
+
+    tool_name = input_data.get('tool_name', '')
 
     # Check if we should monitor this tool
     if not should_monitor_tool(tool_name):
         sys.exit(0)
 
-    # Try to get response content from stdin (PostToolUse receives tool output)
-    try:
-        input_data = json.load(sys.stdin)
-        response_content = input_data.get('tool_output', '') or input_data.get('result', '')
-    except (json.JSONDecodeError, KeyError):
-        # No valid input, nothing to do
-        sys.exit(0)
+    response_content = input_data.get('tool_result', '') or ''
 
     if not response_content:
         sys.exit(0)

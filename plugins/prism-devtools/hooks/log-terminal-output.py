@@ -11,7 +11,6 @@ Based on Cursor's context management principle:
 
 import sys
 import io
-import os
 import json
 from pathlib import Path
 from datetime import datetime
@@ -114,8 +113,14 @@ def cleanup_old_logs():
 
 
 def main():
-    # Get command from environment
-    command = os.environ.get('TOOL_PARAMS_command', '')
+    # Get tool data from stdin JSON (Claude Code PostToolUse protocol)
+    try:
+        input_data = json.load(sys.stdin)
+    except (json.JSONDecodeError, ValueError):
+        sys.exit(0)
+
+    tool_input = input_data.get('tool_input', {})
+    command = tool_input.get('command', '') if isinstance(tool_input, dict) else ''
 
     if not command:
         sys.exit(0)
@@ -124,13 +129,9 @@ def main():
     if not should_log_command(command):
         sys.exit(0)
 
-    # Try to get output from PostToolUse stdin
-    try:
-        input_data = json.load(sys.stdin)
-        stdout = input_data.get('stdout', '') or input_data.get('tool_output', '') or ''
-        stderr = input_data.get('stderr', '') or ''
-    except (json.JSONDecodeError, KeyError):
-        sys.exit(0)
+    tool_result = input_data.get('tool_result', '') or ''
+    stdout = tool_result
+    stderr = ''
 
     # Only log if there's significant output
     total_lines = count_lines(stdout) + count_lines(stderr)

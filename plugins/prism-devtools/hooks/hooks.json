@@ -83,6 +83,26 @@
             "description": "Trigger Brain incremental reindex on file edits (30s debounce)"
           }
         ]
+      },
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/save-large-responses.py",
+            "description": "Save large tool responses (>50 lines) to files to reduce context bloat"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/log-terminal-output.py",
+            "description": "Log terminal command outputs to files for later grep searching"
+          }
+        ]
       }
     ],
     "SubagentStart": [
