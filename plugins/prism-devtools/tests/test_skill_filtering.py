@@ -15,8 +15,6 @@ Acceptance criteria:
 import sys
 from pathlib import Path
 
-import pytest
-
 HOOKS_DIR = Path(__file__).resolve().parent.parent / "hooks"
 sys.path.insert(0, str(HOOKS_DIR))
 
@@ -269,3 +267,174 @@ def test_cold_start_unknown_step_falls_back_to_first_n():
     result = c.select_relevant_skills("unknown_step", "dev", all_skills)
     assert len(result) <= 5
     assert result == all_skills[:len(result)]
+
+
+# ---------------------------------------------------------------------------
+# AC-9: Brain.seed_skill_usage() pre-populates skill_usage at natural steps
+# ---------------------------------------------------------------------------
+
+def test_ac9_seed_skill_usage_populates_table(tmp_path):
+    """seed_skill_usage inserts one row per skill mapped to its natural step."""
+    from brain_engine import Brain
+
+    brain_dir = tmp_path / "brain"
+    brain_dir.mkdir()
+    brain = Brain(
+        brain_db=str(brain_dir / "brain.db"),
+        graph_db=str(brain_dir / "graph.db"),
+        scores_db=str(brain_dir / "scores.db"),
+    )
+
+    skills = [
+        _skill("build-tool", "Build helper", priority=25),    # build phase
+        _skill("test-checker", "Check tests", priority=35),   # verify phase
+        _skill("story-maker", "Draft stories", priority=10),  # top_level phase
+    ]
+    count = brain.seed_skill_usage(skills)
+    assert count == 3
+
+    scores = brain.get_skill_scores()
+    assert scores.get("build-tool") == 1
+    assert scores.get("test-checker") == 1
+    assert scores.get("story-maker") == 1
+
+
+def test_ac9_seed_maps_phases_to_correct_steps(tmp_path):
+    """seed_skill_usage maps priority ranges to the correct canonical steps."""
+    from brain_engine import Brain
+
+    brain_dir = tmp_path / "brain"
+    brain_dir.mkdir()
+    brain = Brain(
+        brain_db=str(brain_dir / "brain.db"),
+        graph_db=str(brain_dir / "graph.db"),
+        scores_db=str(brain_dir / "scores.db"),
+    )
+
+    skills = [
+        _skill("build-skill", priority=20),   # build → implement_tasks
+        _skill("verify-skill", priority=30),  # verify → write_failing_tests
+        _skill("top-skill", priority=10),     # top_level → draft_story
+    ]
+    brain.seed_skill_usage(skills)
+
+    build_scores = brain.get_skill_scores_for_step("implement_tasks")
+    assert build_scores.get("build-skill") == 1
+
+    verify_scores = brain.get_skill_scores_for_step("write_failing_tests")
+    assert verify_scores.get("verify-skill") == 1
+
+    top_scores = brain.get_skill_scores_for_step("draft_story")
+    assert top_scores.get("top-skill") == 1
+
+
+def test_ac9_seed_empty_skills_returns_zero(tmp_path):
+    """seed_skill_usage with empty list inserts nothing and returns 0."""
+    from brain_engine import Brain
+
+    brain_dir = tmp_path / "brain"
+    brain_dir.mkdir()
+    brain = Brain(
+        brain_db=str(brain_dir / "brain.db"),
+        graph_db=str(brain_dir / "graph.db"),
+        scores_db=str(brain_dir / "scores.db"),
+    )
+
+    count = brain.seed_skill_usage([])
+    assert count == 0
+    assert brain.get_skill_scores() == {}
+
+
+# ---------------------------------------------------------------------------
+# AC-10: Cold-start seeding called from select_relevant_skills when table empty
+# ---------------------------------------------------------------------------
+
+def test_ac10_cold_start_seeds_when_table_empty(tmp_path):
+    """select_relevant_skills seeds skill_usage when Brain table is empty."""
+    from brain_engine import Brain
+    from conductor_engine import Conductor
+
+    brain_dir = tmp_path / "brain"
+    brain_dir.mkdir()
+    brain = Brain(
+        brain_db=str(brain_dir / "brain.db"),
+        graph_db=str(brain_dir / "graph.db"),
+        scores_db=str(brain_dir / "scores.db"),
+    )
+
+    c = object.__new__(Conductor)
+    c._brain = brain
+    c._brain_available = True
+    c.last_had_brain_context = 0
+    c.last_prompt_id = ""
+
+    all_skills = [
+        _skill("build-tool", priority=25),
+        _skill("test-checker", priority=35),
+    ]
+
+    # Table is empty before call
+    assert brain.get_skill_scores() == {}
+
+    c.select_relevant_skills("implement_tasks", "dev", all_skills)
+
+    # Table is populated after cold-start seeding
+    scores = brain.get_skill_scores()
+    assert "build-tool" in scores
+    assert "test-checker" in scores
+
+
+def test_ac10_no_double_seed_when_table_has_data(tmp_path):
+    """select_relevant_skills does NOT seed again when skill_usage already has data."""
+    from brain_engine import Brain
+    from conductor_engine import Conductor
+
+    brain_dir = tmp_path / "brain"
+    brain_dir.mkdir()
+    brain = Brain(
+        brain_db=str(brain_dir / "brain.db"),
+        graph_db=str(brain_dir / "graph.db"),
+        scores_db=str(brain_dir / "scores.db"),
+    )
+    # Pre-populate usage data
+    brain.record_skill_usage("sess-1", "build-tool", "implement_tasks")
+
+    c = object.__new__(Conductor)
+    c._brain = brain
+    c._brain_available = True
+    c.last_had_brain_context = 0
+    c.last_prompt_id = ""
+
+    all_skills = [_skill("build-tool", priority=25)]
+    c.select_relevant_skills("implement_tasks", "dev", all_skills)
+
+    # Only the original record exists (no seeded __seed__ rows added)
+    rows = brain._scores.execute(
+        "SELECT COUNT(*) AS cnt FROM skill_usage WHERE session_id = '__seed__'"
+    ).fetchone()
+    assert rows["cnt"] == 0
+
+
+# ---------------------------------------------------------------------------
+# AC-11: Global score fallback capped at 5
+# ---------------------------------------------------------------------------
+
+def test_ac11_global_score_capped_at_5():
+    """_score_skill caps brain usage contribution at 5, preventing global counts from dominating."""
+    from conductor_engine import _score_skill
+
+    # Skill with 100 uses globally — should be capped at 5
+    high_usage = {"name": "popular-skill", "priority": 99}
+    usage_scores = {"popular-skill": 100}
+    score = _score_skill(high_usage, "implement_tasks", "dev", usage_scores)
+
+    # Phase mismatch (priority 99 = top_level, step is build) gets +2 for top_level
+    # Brain contribution should be capped at 5, not 100
+    assert score <= 20, f"Score {score} too high — global cap not applied"
+
+    # Verify cap: direct check that 100 usage doesn't produce score > cap + other bonuses
+    no_brain_score = _score_skill(high_usage, "implement_tasks", "dev", None)
+    capped_score = _score_skill(high_usage, "implement_tasks", "dev", usage_scores)
+    assert capped_score - no_brain_score <= 5, (
+        f"Brain contribution {capped_score - no_brain_score} exceeds cap of 5"
+    )

@@ -132,10 +132,10 @@ def _score_skill(skill: dict, step_id: str, agent: str,
         if any(kw in name or kw in desc for kw in keywords):
             score += 3.0
 
-    # Layer 3: Brain usage (additive)
+    # Layer 3: Brain usage (additive, capped to prevent global counts dominating phase match)
     if usage_scores:
         skill_name = skill.get("name", "")
-        score += usage_scores.get(skill_name, 0)
+        score += min(usage_scores.get(skill_name, 0), 5)
 
     # Layer 4: priority tiebreak (lower priority = slightly higher score)
     p = skill.get("priority", 99)
@@ -401,6 +401,10 @@ class Conductor:
                     has_step_data = True
                 else:
                     global_scores = self._brain.get_skill_scores()
+                    if not global_scores and all_skills:
+                        # Cold-start: seed skill_usage with phase-mapped records
+                        self._brain.seed_skill_usage(all_skills)
+                        global_scores = self._brain.get_skill_scores()
                     if global_scores:
                         usage_scores = global_scores
             except Exception:

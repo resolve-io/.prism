@@ -2333,6 +2333,58 @@ class Brain:
         )
         self._scores.commit()
 
+    def seed_skill_usage(self, skills: list) -> int:
+        """Pre-populate skill_usage with one seeded record per skill at its natural step.
+
+        Used for cold-start bootstrapping when skill_usage is empty and discovered
+        skills exist. Maps each skill's priority to its canonical phase step.
+        Uses sentinel session_id '__seed__' so seeded rows are distinguishable.
+
+        Returns the number of rows inserted.
+        """
+        _PHASE_CANONICAL_STEP = {
+            "build":     "implement_tasks",
+            "verify":    "write_failing_tests",
+            "ship":      "implement_tasks",
+            "operate":   "implement_tasks",
+            "top_level": "draft_story",
+        }
+
+        def _skill_phase(skill: dict) -> str:
+            p = skill.get("priority", 99)
+            if isinstance(p, str):
+                try:
+                    p = int(p)
+                except (ValueError, TypeError):
+                    p = 99
+            if 20 <= p <= 29:
+                return "build"
+            if 30 <= p <= 39:
+                return "verify"
+            if 40 <= p <= 49:
+                return "ship"
+            if 50 <= p <= 59:
+                return "operate"
+            return "top_level"
+
+        count = 0
+        ts = datetime.now(timezone.utc).isoformat()
+        for skill in skills:
+            name = skill.get("name", "")
+            if not name:
+                continue
+            phase = _skill_phase(skill)
+            step_id = _PHASE_CANONICAL_STEP.get(phase, "draft_story")
+            self._scores.execute(
+                "INSERT INTO skill_usage (session_id, skill_name, step_id, timestamp) "
+                "VALUES (?, ?, ?, ?)",
+                ("__seed__", name, step_id, ts),
+            )
+            count += 1
+        if count:
+            self._scores.commit()
+        return count
+
     def get_skill_scores(self) -> dict:
         """Return usage frequency per skill from the skill_usage table.
 
