@@ -730,7 +730,7 @@ class CrossReferenceValidator:
                 target_path = link.target[1:]
             elif link.target.startswith('./') or link.target.startswith('../'):
                 # Resolve relative path
-                resolved = (current_dir / link.target).resolve()
+                resolved = (self.root_path / current_dir / link.target).resolve()
                 try:
                     target_path = str(resolved.relative_to(self.root_path.resolve()))
                 except ValueError:

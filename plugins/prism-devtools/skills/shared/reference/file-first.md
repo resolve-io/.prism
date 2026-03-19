@@ -33,7 +33,7 @@
 
 Run analyzer to identify project type and key files:
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts/analyze_codebase.py" "$(pwd)"
+python "../../file-first/scripts/analyze_codebase.py" "$(pwd)"
 ```
 
 ## Project Type → Key Files

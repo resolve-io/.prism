@@ -117,5 +117,4 @@ Glob: "**/test_*.py" or "**/*_test.py"
 
 ## Related Skills
 
-- **jira** - Fetch ticket context to combine with file-first codebase analysis
 - **document-project** - Create documentation from file-first analysis

@@ -33,7 +33,7 @@ Claude Code features build on each other in layers:
 ├─────────────────────────────────────┤
 │  CLAUDE.md (Memory)                 │  ← PRISM: Methodology context
 ├─────────────────────────────────────┤
-│  MCP (External Systems)             │  ← Optional: Jira, GitHub, etc.
+│  MCP (External Systems)             │  ← Optional: Atlassian, GitHub, etc.
 └─────────────────────────────────────┘
 ```
 
@@ -212,18 +212,17 @@ Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 
 **What it is:** Universal protocol for connecting external tools and data sources to Claude Code.
 
-**How PRISM uses it:** Optional Jira integration for fetching issue context:
+**How PRISM uses it:** Atlassian MCP server provides native Jira and Confluence access:
 
 ```bash
-# Agents auto-detect issue keys
-/dev PROJ-123              # Fetches story from Jira
-/architect PLAT-456        # Fetches epic from Jira
-/support BUG-789           # Fetches bug details
+# Use Atlassian MCP tools directly
+mcp__claude_ai_Atlassian__getJiraIssue      # Fetch issue details
+mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql  # Search with JQL
 ```
 
-**Setup:** See [`utils/jira-integration.md`](../../../utils/jira-integration.md)
+**Setup:** Connect the Atlassian MCP server via `/mcp` — authentication is handled natively.
 
-**Key insight:** MCP connects external systems. Each server adds tools/resources/prompts as slash commands (e.g., `/mcp__github__create-issue`).
+**Key insight:** MCP connects external systems. Each server adds tools/resources/prompts (e.g., `mcp__claude_ai_Atlassian__getJiraIssue`).
 
 **Learn more:** [Official MCP docs](https://modelcontextprotocol.io/), [Claude Code MCP guide](https://docs.claude.com/claude-code/mcp)
 
@@ -239,7 +238,7 @@ Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 | Enforce process rules | Hook | `enforce-story-context.py` |
 | Context-aware automation | Skill | `dev` skill for TDD workflow |
 | Share configuration | Plugin | PRISM plugin distribution |
-| External API access | MCP | Jira integration |
+| External API access | MCP | Atlassian MCP server |
 
 ---
 

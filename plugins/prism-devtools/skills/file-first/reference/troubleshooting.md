@@ -282,7 +282,7 @@ Files found but relationships unclear.
 4. **Run from correct directory**
    ```bash
    # Run from skills/file-first/scripts/
-   cd "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts"
+   cd "../../file-first/scripts"
    python analyze_codebase.py /path/to/repo
    ```
 

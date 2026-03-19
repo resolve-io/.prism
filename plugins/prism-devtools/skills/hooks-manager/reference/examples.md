@@ -2,7 +2,7 @@
 
 Pre-built hook patterns for common use cases. All examples are production-ready and security-reviewed.
 
-**Configuration Format Note:** All JSON examples below show the complete `hooks.json` structure. For plugin hooks (like PRISM), use `${CLAUDE_PLUGIN_ROOT}` in paths. For user-level hooks, use absolute paths.
+**Configuration Format Note:** All JSON examples below show the complete `hooks.json` structure. For plugin hooks (like PRISM), use `${CLAUDE_PLUGIN_ROOT}` in hooks.json and SKILL.md (the plugin loader substitutes it). For user-level hooks, use absolute paths. Note: `${CLAUDE_PLUGIN_ROOT}` is NOT substituted in reference/*.md files (loaded via Read tool) — use relative paths there instead.
 
 ## Quick Reference
 

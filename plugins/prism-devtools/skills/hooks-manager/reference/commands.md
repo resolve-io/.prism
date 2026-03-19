@@ -29,7 +29,7 @@ PRISM uses plugin-level hooks configured in `hooks/hooks.json` at the plugin roo
 ```
 
 **Critical Requirements:**
-- ✅ Use `${CLAUDE_PLUGIN_ROOT}` for all plugin paths (not relative paths)
+- ✅ Use `${CLAUDE_PLUGIN_ROOT}` in hooks.json and SKILL.md (plugin loader substitutes it); use relative paths in reference/*.md files (loaded via Read tool, no substitution)
 - ✅ Nest hooks under event names as keys
 - ✅ Each matcher gets its own object with a `hooks` array
 - ✅ Each hook needs `type: "command"` property
@@ -264,7 +264,7 @@ What would you like to edit?
 
 **Direct Edit**:
 ```
-*edit-hook my-validation --command "python3 hooks/new-validator.py"
+*edit-hook my-validation --command "python hooks/new-validator.py"
 *edit-hook my-validation --matcher "Edit|Write"
 *edit-hook my-validation --disable
 ```

@@ -29,11 +29,11 @@ E2E integration-focused NFR validation targeting the core four: security, perfor
 ```yaml
 required:
   - story_id: '{epic}.{story}' # e.g., "1.3"
-  - story_path: `../core-config.yaml` for the `devStoryLocation`
+  - story_path: `${CLAUDE_PLUGIN_ROOT}/core-config.yaml` for the `devStoryLocation`
 
 optional:
-  - architecture_refs: `../core-config.yaml` for the `architecture.architectureFile`
-  - technical_preferences: `../core-config.yaml` for the `technicalPreferences`
+  - architecture_refs: `${CLAUDE_PLUGIN_ROOT}/core-config.yaml` for the `architecture.architectureFile`
+  - technical_preferences: `${CLAUDE_PLUGIN_ROOT}/core-config.yaml` for the `technicalPreferences`
   - acceptance_criteria: From story file
 ```
 

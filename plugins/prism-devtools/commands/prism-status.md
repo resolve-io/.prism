@@ -9,7 +9,7 @@ Check current PRISM workflow state.
 ## Execute
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_status.py"
+python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_status.py"
 ```
 
 ## Output
