@@ -100,7 +100,10 @@ def is_valid_file_path(path: str) -> bool:
     """Check if string looks like a valid file path reference."""
     if not path or len(path) < 2:
         return False
-    if any(c in path for c in ['(', ')', '{', '}', '=', ';', ',']):
+    # Allow relative paths but reject template vars like ${...}
+    if '${' in path:
+        return False
+    if any(c in path for c in ['(', ')', '=', ';', ',']):
         return False
     if '/' not in path and '\\' not in path and '.' not in path:
         return False
@@ -155,6 +158,56 @@ def extract_references(content: str, file_path: Path) -> list:
                     'text': ref_name,
                     'path': ref_path
                 })
+
+    # Second pass: scan code blocks in reference docs for broken ${CLAUDE_PLUGIN_ROOT}.
+    # ${CLAUDE_PLUGIN_ROOT} is substituted in SKILL.md/commands by the plugin loader,
+    # but NOT in reference/*.md files (loaded via Read tool, no substitution).
+    is_reference_doc = bool(re.search(r'[\\/]reference[\\/]', str(file_path)))
+    is_skill_dir = bool(re.search(r'[\\/]skills[\\/][^\\/]+[\\/]', str(file_path)))
+    if is_skill_dir and is_reference_doc:
+        in_fence = False
+        in_json_fence = False
+        for line_num, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith('```'):
+                if in_fence:
+                    in_fence = False
+                    in_json_fence = False
+                else:
+                    in_fence = True
+                    # Skip JSON code blocks (hooks.json examples where ${CLAUDE_PLUGIN_ROOT} is valid)
+                    in_json_fence = bool(re.match(r'^```\s*jsonc?\s*$', stripped))
+                continue
+            if not in_fence:
+                continue
+
+            # Flag ${CLAUDE_PLUGIN_ROOT} in reference docs (broken there)
+            if not in_json_fence and '${CLAUDE_PLUGIN_ROOT}' in line:
+                refs.append({
+                    'file': str(file_path),
+                    'line': line_num,
+                    'text': '${CLAUDE_PLUGIN_ROOT}',
+                    'path': '${CLAUDE_PLUGIN_ROOT}'
+                })
+                continue
+
+            # Extract relative script paths (../../scripts/foo.py)
+            for match in re.finditer(r'(\.\./[^\s"\']+\.\w+)', line):
+                rel_path = match.group(1).strip('"\'')
+                start = match.start()
+                if start > 0 and line[start - 1] == '.':
+                    continue
+                if '*' in rel_path or '?' in rel_path:
+                    continue
+                if rel_path.endswith('.env'):
+                    continue
+                if is_valid_file_path(rel_path):
+                    refs.append({
+                        'file': str(file_path),
+                        'line': line_num,
+                        'text': rel_path,
+                        'path': rel_path
+                    })
 
     return refs
 
