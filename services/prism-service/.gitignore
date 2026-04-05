@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Data files (volume-mounted at runtime)
+data/
+.prism/
+
+# IDE
+.vscode/
+.idea/
