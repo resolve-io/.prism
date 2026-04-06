@@ -2015,14 +2015,18 @@ class Brain:
 # ---------------------------------------------------------------------------
 
 def _cli_source_dirs() -> list[str]:
-    """Return source directories to index, mirroring brain_bootstrap logic."""
+    """Return source directories to index, mirroring brain_bootstrap logic.
+
+    NOTE: Legacy CLI-only function. Not used in MCP service mode — documents
+    are indexed via the brain_index_doc MCP tool instead.
+    """
     sources: list[str] = []
     cwd = Path.cwd()
-    plugin_root = Path(__file__).resolve().parent.parent
+    engine_root = Path(__file__).resolve().parent.parent  # legacy: was plugin_root
     docs_dir = cwd / "docs"
     if docs_dir.exists():
         sources.append(str(docs_dir))
-    core_steps = plugin_root / "hooks" / "core-steps"
+    core_steps = engine_root / "hooks" / "core-steps"
     if core_steps.exists():
         sources.append(str(core_steps))
     for src_dir in ("src", "lib", "scripts", "plugins", "hooks"):

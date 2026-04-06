@@ -1,1 +1,1 @@
-# Engines package — adapted from PRISM plugin hooks
+# Engines package — core PRISM search and orchestration engines

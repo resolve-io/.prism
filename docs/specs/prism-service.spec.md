@@ -6,13 +6,13 @@
 
 ## 1. Problem Statement
 
-PRISM's plugin-based distribution creates friction: users must install hooks, manage Python dependencies, wire plugin paths, and each Claude Code session starts cold with no memory of prior sessions. Cross-session knowledge lives in flat files that no human can easily browse, search, or audit. Task tracking is invisible to humans — only the agent knows "what's next."
+PRISM's previous distribution model creates friction: local dependency management, manual wiring, and each Claude Code session starts cold with no memory of prior sessions. Cross-session knowledge lives in flat files that no human can easily browse, search, or audit. Task tracking is invisible to humans — only the agent knows "what's next."
 
 **This service extracts PRISM's intelligence into a standalone container** that:
 - Persists and serves knowledge, memory, tasks, and workflow state
 - Gives humans a web dashboard to investigate everything the agent knows
 - Gives Claude Code MCP tools to read/write the same data
-- Starts with `docker compose up` — no plugin installation required
+- Starts with `docker compose up` — no local installation required
 
 ---
 
@@ -283,7 +283,7 @@ CREATE TABLE task_history (
 | **Claude Code MCP SSE** | Must use SSE transport (not stdio) since service runs as a separate process |
 | **Existing engine API** | Brain and Conductor engine interfaces must not change — service wraps them, does not rewrite them |
 | **Cross-platform Docker** | Must work on Windows (WSL2), macOS (Docker Desktop), Linux |
-| **Plugin coexistence** | Service can run alongside the existing plugin. They share the same data files via volume mounts. |
+| **Backward compatible** | Existing Mulch expertise files can be ingested into Brain via MCP tools. |
 
 ---
 
