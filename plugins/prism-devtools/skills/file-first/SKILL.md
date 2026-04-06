@@ -16,4 +16,4 @@ Read source files directly. No RAG, no vector databases, no pre-loaded summaries
 4. Cite file:line when referencing code
 5. Iterate: search again if needed
 
-[Full instructions](./instructions.md)
+[Full instructions](./reference/instructions.md)

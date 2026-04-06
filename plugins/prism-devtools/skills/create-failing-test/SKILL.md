@@ -12,4 +12,4 @@ Document a reproducible failing test case with evidence, steps, assertions, and 
 4. Define assertions (expected vs actual behavior)
 5. Package test specification for Dev/QA handoff
 
-→ Full instructions: [instructions.md](./instructions.md)
+→ Full instructions: [instructions.md](./reference/instructions.md)

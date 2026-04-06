@@ -81,15 +81,15 @@ The skill detects issue keys matching pattern `[A-Z]+-\d+` in conversation:
 
 ## Templates
 
-- **[Story Template](./templates/story-template.md)** — Standard story structure (User Story, AC, Technical Details, Design, Assumptions, Test Cases)
+- **[Story Template](../templates/story-template.md)** — Standard story structure (User Story, AC, Technical Details, Design, Assumptions, Test Cases)
 
 ## Reference Documentation
 
-- **[Quick Reference](./reference/README.md)** — Setup guide, examples
-- **[API Reference](./reference/api-reference.md)** — Jira REST API details
-- **[Authentication](./reference/authentication.md)** — Security and credentials
-- **[Error Handling](./reference/error-handling.md)** — Troubleshooting guide
-- **[Extraction Format](./reference/extraction-format.md)** — Issue formatting
+- **[Quick Reference](./README.md)** — Setup guide, examples
+- **[API Reference](./api-reference.md)** — Jira REST API details
+- **[Authentication](./authentication.md)** — Security and credentials
+- **[Error Handling](./error-handling.md)** — Troubleshooting guide
+- **[Extraction Format](./extraction-format.md)** — Issue formatting
 
 ## Troubleshooting
 

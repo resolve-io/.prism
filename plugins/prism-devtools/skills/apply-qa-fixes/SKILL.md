@@ -13,4 +13,4 @@ Implement fixes based on QA results (gate and assessments) for a story; apply co
 5. Update allowed story sections (Dev Agent Record, File List, Change Log)
 6. Set status to "Ready for Review" or "Ready for Done"
 
-→ Full instructions: [instructions.md](./instructions.md)
+→ Full instructions: [instructions.md](./reference/instructions.md)

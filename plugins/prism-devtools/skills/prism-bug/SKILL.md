@@ -16,4 +16,4 @@ Captures full session context (state, transcript, hooks, git) and files a struct
 3. Uploads full transcript to a GitHub Gist
 4. Creates a structured GitHub issue with all captured context
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

@@ -15,4 +15,4 @@ Analyzes and documents any codebase into comprehensive AI-ready reference docume
 5. Create master index at `docs/project/index.md`
 6. Validate and finalize
 
-See [instructions.md](./instructions.md) for workflow details and scan level guidance.
+See [instructions.md](./reference/instructions.md) for workflow details and scan level guidance.

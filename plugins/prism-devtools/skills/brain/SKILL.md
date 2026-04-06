@@ -15,4 +15,4 @@ Search code, docs, mulch expertise, and metrics using hybrid 3-index search (BM2
 3. **Graph**: `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" graph "<entity>"` to trace dependencies
 4. **Status/Rebuild**: `status` for health check; `rebuild` when index feels stale
 
-See [full reference](./instructions.md) for all commands, automatic query rules, and query patterns.
+See [full reference](./reference/instructions.md) for all commands, automatic query rules, and query patterns.

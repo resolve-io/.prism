@@ -598,6 +598,16 @@ BEGIN NOW with Step 1. Do not ask the user for permission — execute the steps.
             task = task_svc.update(arguments["id"], **update_kwargs)
             if task is None:
                 return [TextContent(type="text", text=_json({"error": f"Task {arguments['id']} not found"}))]
+
+            # Learning loop: correlate task outcome with recalled memories
+            new_status = arguments.get("status", "")
+            if new_status in ("done", "blocked"):
+                outcome = "positive" if new_status == "done" else "negative"
+                try:
+                    memory_svc.record_outcome(arguments["id"], outcome)
+                except Exception:
+                    pass  # best-effort — don't break task updates
+
             return [TextContent(type="text", text=_json(task))]
 
         # ------------------------------------------------------------------

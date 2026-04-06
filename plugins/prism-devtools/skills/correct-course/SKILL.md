@@ -16,4 +16,4 @@ Structured response to change triggers using PSP/TSP measurement and PRISM princ
 4. Generate sprint change proposal with metrics and options (absorb/defer/swap/descope)
 5. Update estimation history and communicate adjustments to the team
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

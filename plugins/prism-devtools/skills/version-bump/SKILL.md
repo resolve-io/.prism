@@ -19,4 +19,4 @@ Bumps `plugin.json` version, updates `CHANGELOG.md`, and creates a git tag for p
 4. Review the new CHANGELOG section and fill in details about what changed
 5. Ask the user if they want to push
 
-See [instructions.md](./instructions.md) for semver rules and key files.
+See [instructions.md](./reference/instructions.md) for semver rules and key files.

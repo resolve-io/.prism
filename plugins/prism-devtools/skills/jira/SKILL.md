@@ -16,4 +16,4 @@ Fetch issues, search with JQL, and plan stories using templates.
 3. **Plan story**: Read `./templates/story-template.md`, search context, fill and output
 4. **Auth**: Set `JIRA_EMAIL` and `JIRA_API_TOKEN` env vars or `.env` file
 
-See [full reference](./instructions.md) for JQL patterns, auth, error handling, and agent workflows.
+See [full reference](./reference/instructions.md) for JQL patterns, auth, error handling, and agent workflows.

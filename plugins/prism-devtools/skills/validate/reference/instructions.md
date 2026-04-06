@@ -93,7 +93,7 @@ python3 validate-refs.py --include-archive
 
 ### Output
 
-Returns JSON to stdout. See [output format](./reference/output-format.md) for schema.
+Returns JSON to stdout. See [output format](./output-format.md) for schema.
 
 **Example:**
 ```json

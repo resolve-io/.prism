@@ -16,4 +16,4 @@ Groups related stories into a cohesive unit with risk analysis, integration mapp
 4. Decompose into stories (1-2 day vertical slices) and apply PROBE estimation
 5. Populate epic template; optionally create individual story files
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

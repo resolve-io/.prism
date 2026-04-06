@@ -12,4 +12,4 @@ Use automated browser testing to reproduce customer issues, capture evidence, an
 4. Capture evidence (screenshots, console, network)
 5. Document validation result (confirmed/not-reproducible)
 
-→ Full instructions: [instructions.md](./instructions.md)
+→ Full instructions: [instructions.md](./reference/instructions.md)

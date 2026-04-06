@@ -9,7 +9,6 @@ Auto-activating agent capabilities for PRISM workflows.
 | [create-epic](./create-epic/SKILL.md) | Create epic definitions |
 | [create-next-story](./create-next-story/SKILL.md) | Generate next story |
 | [story-decomposition](./story-decomposition/SKILL.md) | Break down epics |
-| [resize-story](./resize-story/SKILL.md) | Adjust story scope |
 | [review-story](./review-story/SKILL.md) | Validate story quality |
 | [validate-issue](./validate-issue/SKILL.md) | Verify issue structure |
 
@@ -37,8 +36,7 @@ Auto-activating agent capabilities for PRISM workflows.
 
 | Skill | Purpose |
 |-------|---------|
-| [probe-estimation](./probe-estimation/SKILL.md) | PROBE size estimation |
-| [calibrate-sizing](./calibrate-sizing/SKILL.md) | Calibrate estimates |
+| [story-sizing](./story-sizing/SKILL.md) | PROBE estimation and calibration |
 
 ## Architecture
 
@@ -47,14 +45,12 @@ Auto-activating agent capabilities for PRISM workflows.
 | [initialize-architecture](./initialize-architecture/SKILL.md) | Set up architecture |
 | [nfr-assess](./nfr-assess/SKILL.md) | NFR assessment |
 | [strangler-pattern](./strangler-pattern/SKILL.md) | Strangler pattern |
-| [strangler-pattern-guide](./strangler-pattern-guide/SKILL.md) | Migration guide |
 
 ## Integrations
 
 | Skill | Purpose |
 |-------|---------|
 | [jira](./jira/SKILL.md) | Jira integration |
-| [fetch-jira-issue](./fetch-jira-issue/SKILL.md) | Fetch Jira issues |
 
 ## Tooling
 
@@ -71,7 +67,6 @@ Auto-activating agent capabilities for PRISM workflows.
 |-------|---------|
 | [document-project](./document-project/SKILL.md) | Project documentation |
 | [init-context](./init-context/SKILL.md) | Initialize context |
-| [initialize-project-memory](./initialize-project-memory/SKILL.md) | Set up memory |
 | [sdlc-handoff](./sdlc-handoff/SKILL.md) | SDLC handoff |
 | [investigate-root-cause](./investigate-root-cause/SKILL.md) | Root cause analysis |
 

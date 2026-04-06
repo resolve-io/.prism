@@ -14,4 +14,4 @@ Complete a PRISM session intentionally — records metrics, prints a report card
 3. If uncommitted changes are reported, offer to `git add` and `git commit` them
 4. Confirm session is closed and state is archived
 
-See [instructions.md](./instructions.md) for full details.
+See [instructions.md](./reference/instructions.md) for full details.

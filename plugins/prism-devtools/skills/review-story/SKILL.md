@@ -16,4 +16,4 @@ Adaptive, risk-aware QA review that creates a gate file and updates the story's 
 4. Refactor code where safe and appropriate; document all changes
 5. Create gate file (PASS/CONCERNS/FAIL) and update story QA Results section
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

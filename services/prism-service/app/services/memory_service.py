@@ -1,10 +1,11 @@
-"""Memory service — manages mulch expertise JSONL files."""
+"""Memory service — manages mulch expertise JSONL files with learning loop."""
 
 from __future__ import annotations
 
 import json
 import os
 import secrets
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -12,16 +13,41 @@ from typing import Optional
 from app.models.memory import ExpertiseEntry
 
 
+_CREATE_RECALL_LOG_SQL = """
+CREATE TABLE IF NOT EXISTS recall_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id TEXT NOT NULL,
+    entry_domain TEXT DEFAULT '',
+    query TEXT DEFAULT '',
+    recalled_at TEXT NOT NULL,
+    task_id TEXT DEFAULT '',
+    outcome TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_recall_log_task ON recall_log(task_id);
+CREATE INDEX IF NOT EXISTS idx_recall_log_entry ON recall_log(entry_id);
+"""
+
+
 class MemoryService:
     """Reads and writes expertise entries stored as JSONL files in mulch.
 
     Each domain has its own ``{domain}.jsonl`` file under the expertise
     subdirectory of MULCH_DIR.
+
+    The recall_log (SQLite) tracks which entries were recalled during which
+    tasks, enabling automatic effectiveness scoring from task outcomes.
     """
 
-    def __init__(self, mulch_dir: str) -> None:
+    def __init__(self, mulch_dir: str, task_svc: object = None) -> None:
         self._dir = Path(mulch_dir) / "expertise"
         self._dir.mkdir(parents=True, exist_ok=True)
+        self._task_svc = task_svc
+
+        # Recall log DB — operational data, separate from expertise JSONL
+        recall_db_path = Path(mulch_dir) / "recall_log.db"
+        self._recall_db = sqlite3.connect(str(recall_db_path), check_same_thread=False)
+        self._recall_db.execute("PRAGMA journal_mode=WAL")
+        self._recall_db.executescript(_CREATE_RECALL_LOG_SQL)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -57,6 +83,8 @@ class MemoryService:
             invalid_at=data.get("invalid_at", ""),
             importance=data.get("importance", 5),
             memory_type=data.get("memory_type", "semantic"),
+            generation=data.get("generation", 1),
+            effectiveness=data.get("effectiveness", 0.0),
         )
 
     @staticmethod
@@ -79,6 +107,8 @@ class MemoryService:
             "invalid_at": entry.invalid_at,
             "importance": entry.importance,
             "memory_type": entry.memory_type,
+            "generation": entry.generation,
+            "effectiveness": entry.effectiveness,
         }
 
     def _read_entries(self, domain: str) -> list[ExpertiseEntry]:
@@ -160,9 +190,11 @@ class MemoryService:
                     break
 
         # Invalidate the old entry (don't delete — preserve history)
+        next_generation = 1
         if superseded:
             superseded.invalid_at = now
             superseded.status = "archived"
+            next_generation = superseded.generation + 1
 
         # Create new entry with valid_at
         entry = ExpertiseEntry(
@@ -177,6 +209,7 @@ class MemoryService:
             valid_at=now,
             importance=importance,
             memory_type=memory_type,
+            generation=next_generation,
         )
         entries.append(entry)
         self._write_entries(domain, entries)
@@ -248,13 +281,18 @@ class MemoryService:
         if domain:
             results = [e for e in results if e.domain == domain]
 
-        # Sort by importance descending, then recall_count
-        results.sort(key=lambda e: (e.importance, e.recall_count), reverse=True)
+        # Sort by importance + effectiveness blend, then recall_count
+        results.sort(
+            key=lambda e: (e.importance + e.effectiveness * 2, e.recall_count),
+            reverse=True,
+        )
 
-        # Update recall stats
+        # Update recall stats + log for learning loop
         now = datetime.now(timezone.utc).isoformat()
+        current_task_id = self._get_current_task_id()
         for entry in results[:limit]:
             self._record_recall_stat(entry, now)
+            self._log_recall(entry, query, now, current_task_id)
 
         return results[:limit]
 
@@ -383,6 +421,123 @@ class MemoryService:
                 entries[i] = entry
                 self._write_entries(domain, entries)
                 return
+
+    # ------------------------------------------------------------------
+    # Learning loop — recall logging and outcome correlation
+    # ------------------------------------------------------------------
+
+    def _get_current_task_id(self) -> str:
+        """Find the in_progress task ID from task_svc, if available."""
+        if self._task_svc is None:
+            return ""
+        try:
+            in_progress = self._task_svc.list(status="in_progress")
+            if in_progress:
+                return in_progress[0].id
+        except Exception:
+            pass
+        return ""
+
+    def _log_recall(
+        self, entry: ExpertiseEntry, query: str, now: str, task_id: str,
+    ) -> None:
+        """Log a recall event for later outcome correlation."""
+        try:
+            self._recall_db.execute(
+                "INSERT INTO recall_log (entry_id, entry_domain, query, recalled_at, task_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (entry.id, entry.domain, query, now, task_id),
+            )
+            self._recall_db.commit()
+        except Exception:
+            pass
+
+    def record_outcome(self, task_id: str, outcome: str) -> int:
+        """Record task outcome against all recalls for that task.
+
+        Called when a task transitions to done (positive) or blocked (negative).
+        Updates recall_log rows and recalculates effectiveness on affected entries.
+        Returns count of recall_log rows updated.
+        """
+        if not task_id:
+            return 0
+
+        # Update all recall_log rows for this task
+        cur = self._recall_db.execute(
+            "UPDATE recall_log SET outcome = ? WHERE task_id = ? AND outcome = ''",
+            (outcome, task_id),
+        )
+        self._recall_db.commit()
+        updated = cur.rowcount
+
+        if updated == 0:
+            return 0
+
+        # Get distinct entry IDs affected
+        rows = self._recall_db.execute(
+            "SELECT DISTINCT entry_id FROM recall_log WHERE task_id = ?",
+            (task_id,),
+        ).fetchall()
+
+        # Recalculate effectiveness for each affected entry
+        for (entry_id,) in rows:
+            self._recalculate_effectiveness(entry_id)
+
+        return updated
+
+    def _recalculate_effectiveness(self, entry_id: str) -> None:
+        """Recalculate effectiveness score for an entry from its recall_log.
+
+        Score = (positive_count - negative_count) / total_with_outcome
+        Range: -1.0 to +1.0. Entries with no outcomes stay at 0.0.
+        """
+        rows = self._recall_db.execute(
+            "SELECT outcome, COUNT(*) FROM recall_log "
+            "WHERE entry_id = ? AND outcome != '' GROUP BY outcome",
+            (entry_id,),
+        ).fetchall()
+
+        if not rows:
+            return
+
+        counts = {outcome: count for outcome, count in rows}
+        positive = counts.get("positive", 0)
+        negative = counts.get("negative", 0)
+        total = positive + negative
+
+        if total == 0:
+            return
+
+        score = (positive - negative) / total
+
+        # Persist to the JSONL entry
+        entry = self.get_entry(entry_id)
+        if entry:
+            self.update_entry(entry_id, effectiveness=round(score, 3))
+
+    def get_effectiveness_scores(self) -> dict[str, dict]:
+        """Aggregate effectiveness data for governance.
+
+        Returns {entry_id: {positive: N, negative: N, total: N, score: float}}
+        for entries that have at least one outcome.
+        """
+        rows = self._recall_db.execute(
+            "SELECT entry_id, outcome, COUNT(*) FROM recall_log "
+            "WHERE outcome != '' GROUP BY entry_id, outcome"
+        ).fetchall()
+
+        scores: dict[str, dict] = {}
+        for entry_id, outcome, count in rows:
+            if entry_id not in scores:
+                scores[entry_id] = {"positive": 0, "negative": 0}
+            scores[entry_id][outcome] = count
+
+        for entry_id, data in scores.items():
+            total = data["positive"] + data["negative"]
+            data["total"] = total
+            data["score"] = round((data["positive"] - data["negative"]) / total, 3) if total else 0.0
+
+        return scores
 
     def domain_stats(self) -> dict:
         """Return entry counts per domain and archived totals."""

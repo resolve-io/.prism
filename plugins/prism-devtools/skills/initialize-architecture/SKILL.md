@@ -15,4 +15,4 @@ Creates complete architecture documentation from templates in `docs/architecture
 5. Create master `README.md` index
 6. Validate files and show next steps
 
-See [instructions.md](./instructions.md) for templates and document details.
+See [instructions.md](./reference/instructions.md) for templates and document details.

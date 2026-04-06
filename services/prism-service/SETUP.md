@@ -13,14 +13,14 @@ That's it. Two ports come up:
 
 ## 2. Connect Claude Code to PRISM
 
-In your project, add this to `.claude/settings.json`:
+In your project root, create `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "prism": {
-      "type": "sse",
-      "url": "http://localhost:8081/sse?project=my-project-slug"
+      "type": "url",
+      "url": "http://localhost:8081/mcp?project=my-project-slug"
     }
   }
 }
@@ -91,14 +91,14 @@ Use the project selector dropdown in the nav bar to switch between projects.
 
 ## 6. Connecting from another machine
 
-Change the MCP URL to point to the host running the container:
+Change the URL in `.mcp.json` to point to the host running the container:
 
 ```json
 {
   "mcpServers": {
     "prism": {
-      "type": "sse",
-      "url": "http://192.168.1.100:8081/sse?project=my-project"
+      "type": "url",
+      "url": "http://192.168.1.100:8081/mcp?project=my-project"
     }
   }
 }
@@ -113,8 +113,8 @@ docker compose logs
 
 **MCP not connecting?**
 ```bash
-curl http://localhost:8081/sse
-# Should return: event: endpoint
+curl -X POST http://localhost:8081/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+# Should return a JSON-RPC response with server capabilities
 ```
 
 **Brain search returns 0 results?**

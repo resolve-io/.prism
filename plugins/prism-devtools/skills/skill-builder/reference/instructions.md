@@ -37,7 +37,7 @@ version: 1.0.0
 **Key rules**:
 1. SKILL.md is a **table of contents**, not a comprehensive manual
 2. **ALL reference .md files MUST be in `/reference/` folder** (not root!)
-3. Link to them as `./reference/filename.md` from SKILL.md
+3. Link to them as `./filename.md` from SKILL.md
 4. Move details to Level 3 files that Claude loads only when referenced
 
 **Critical Structure:**
@@ -55,8 +55,8 @@ skill-name/
 ### Building Your First Skill (Recommended)
 
 1. **Read the 3-level table above** (30 seconds)
-2. **Scan the template**: [Quick Reference](./reference/quick-reference.md) (3 min)
-3. **Follow the process**: [Skill Creation Process](./reference/skill-creation-process.md) (3-5 hours)
+2. **Scan the template**: [Quick Reference](./quick-reference.md) (3 min)
+3. **Follow the process**: [Skill Creation Process](./skill-creation-process.md) (3-5 hours)
    - Phase 1: Planning (30 min)
    - Phase 2: Structure (15 min)
    - Phase 3: Implementation (2-4 hours) with full `incident-triage` example
@@ -69,16 +69,16 @@ skill-name/
 
 Need a template or checklist right now?
 
-→ [Quick Reference](./reference/quick-reference.md) - Templates, checklists, common pitfalls
+→ [Quick Reference](./quick-reference.md) - Templates, checklists, common pitfalls
 
 ### Learn the Patterns (Deep Dive)
 
 Want to understand the architectural patterns?
 
-1. [Philosophy](./reference/philosophy.md) - Why these patterns matter (10 min)
-2. [Progressive Disclosure](./reference/progressive-disclosure.md) - Reveal info gradually (~1.4k tokens)
-3. [Dynamic Manifests](./reference/dynamic-manifests.md) - Runtime capability discovery (~1.9k tokens)
-4. [Deferred Loading](./reference/deferred-loading.md) - Lazy initialization (~2.2k tokens)
+1. [Philosophy](./philosophy.md) - Why these patterns matter (10 min)
+2. [Progressive Disclosure](./progressive-disclosure.md) - Reveal info gradually (~1.4k tokens)
+3. [Dynamic Manifests](./dynamic-manifests.md) - Runtime capability discovery (~1.9k tokens)
+4. [Deferred Loading](./deferred-loading.md) - Lazy initialization (~2.2k tokens)
 
 ## Inputs
 
@@ -132,26 +132,26 @@ skill-name/
 
 All detailed content lives in bundled files (Level 3):
 
-- **[Quick Reference](./reference/quick-reference.md)** (~1k tokens) - Templates, checklists, metadata examples
-- **[Philosophy](./reference/philosophy.md)** (~700 tokens) - Why patterns matter, learning paths
-- **[Skill Creation Process](./reference/skill-creation-process.md)** (~5.5k tokens) - Complete step-by-step guide
-- **[Progressive Disclosure](./reference/progressive-disclosure.md)** (~1.4k tokens) - Pattern deep dive
-- **[Dynamic Manifests](./reference/dynamic-manifests.md)** (~1.9k tokens) - Runtime discovery pattern
-- **[Deferred Loading](./reference/deferred-loading.md)** (~2.2k tokens) - Lazy loading pattern
+- **[Quick Reference](./quick-reference.md)** (~1k tokens) - Templates, checklists, metadata examples
+- **[Philosophy](./philosophy.md)** (~700 tokens) - Why patterns matter, learning paths
+- **[Skill Creation Process](./skill-creation-process.md)** (~5.5k tokens) - Complete step-by-step guide
+- **[Progressive Disclosure](./progressive-disclosure.md)** (~1.4k tokens) - Pattern deep dive
+- **[Dynamic Manifests](./dynamic-manifests.md)** (~1.9k tokens) - Runtime discovery pattern
+- **[Deferred Loading](./deferred-loading.md)** (~2.2k tokens) - Lazy loading pattern
 
 ## Common Questions
 
 **Q: Where do I start?**
-A: Read the [3-level table](#core-principle-the-3-level-pattern) above, then follow [Skill Creation Process](./reference/skill-creation-process.md)
+A: Read the [3-level table](#core-principle-the-3-level-pattern) above, then follow [Skill Creation Process](./skill-creation-process.md)
 
 **Q: My SKILL.md is too long. What do I do?**
 A: Move details to `reference/*.md` files (Level 3). Keep SKILL.md body <2k tokens.
 
 **Q: How do I make my skill trigger correctly?**
-A: Use specific keywords in the description (Level 1 metadata). See [Quick Reference](./reference/quick-reference.md#metadata-best-practices)
+A: Use specific keywords in the description (Level 1 metadata). See [Quick Reference](./quick-reference.md#metadata-best-practices)
 
 **Q: Can I see a complete working example?**
-A: Yes! See the `incident-triage` example in [Skill Creation Process](./reference/skill-creation-process.md)
+A: Yes! See the `incident-triage` example in [Skill Creation Process](./skill-creation-process.md)
 
 ## Guardrails
 
@@ -201,7 +201,7 @@ The validator checks:
 - ✓ Path format (forward slashes)
 - ✓ Referenced files exist
 
-See: [Validation Script](./scripts/validate-skill.js)
+See: [Validation Script](../scripts/validate-skill.js)
 
 ## Testing
 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "prism": {
+      "type": "url",
+      "url": "http://localhost:8081/mcp?project=prism-self-test"
+    }
+  }
+}

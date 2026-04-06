@@ -17,4 +17,4 @@ Deep investigation to find the root cause of a validated customer issue using co
 5. Identify root cause with file/line location and impact assessment
 6. Document findings: root cause report + recommended fix approach
 
-[Full instructions](./instructions.md)
+[Full instructions](./reference/instructions.md)

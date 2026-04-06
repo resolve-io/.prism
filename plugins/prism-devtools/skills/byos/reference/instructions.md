@@ -57,9 +57,9 @@ Shows all project-level skills with their agent assignments.
 
 ## Reference Documentation
 
-- **[Getting Started](./reference/getting-started.md)** - Step-by-step guide for creating your first project skill
-- **[Skill Template](./reference/skill-template.md)** - Copy-paste ready SKILL.md template with all fields
-- **[Examples](./reference/examples.md)** - Real-world project skill examples with agent assignment
+- **[Getting Started](./getting-started.md)** - Step-by-step guide for creating your first project skill
+- **[Skill Template](./skill-template.md)** - Copy-paste ready SKILL.md template with all fields
+- **[Examples](./examples.md)** - Real-world project skill examples with agent assignment
 
 ## Guardrails
 

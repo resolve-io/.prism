@@ -64,7 +64,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" analytics
 
 ## Architecture
 
-See [Brain Architecture](./reference/brain-architecture.md) for:
+See [Brain Architecture](./brain-architecture.md) for:
 - Three-index search design (BM25 + Vector + GraphRAG)
 - Persistence model (brain.db vs scores.db)
 - Ingestion pipeline and source types

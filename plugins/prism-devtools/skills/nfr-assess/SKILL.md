@@ -15,4 +15,4 @@ Validates NFRs (security, performance, reliability, maintainability) via E2E int
 5. Generate gate YAML block for `nfr_validation`
 6. Save markdown report to `qa.qaLocation/assessments/{story}-nfr-{date}.md`
 
-See [instructions.md](./instructions.md) for assessment criteria and output formats.
+See [instructions.md](./reference/instructions.md) for assessment criteria and output formats.

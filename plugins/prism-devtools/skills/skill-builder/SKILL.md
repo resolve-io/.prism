@@ -15,4 +15,4 @@ Guide for creating skills with 3-level loading, token budgets, and reference str
 4. Validate structure with validate-skill.js and check token budgets
 5. Test by triggering with matching keywords from skill description
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

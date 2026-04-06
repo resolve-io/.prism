@@ -181,5 +181,5 @@ Key details: endpoint `http://localhost:52928/api/Auth/token`, token field is `t
 
 ## Reference Documents
 
-- [Validation Checklist](./reference/strangler-migration-checklist.md)
-- [Migration Orchestration YAML](./reference/strangler-pattern-migration.yaml)
+- [Validation Checklist](./strangler-migration-checklist.md)
+- [Migration Orchestration YAML](./strangler-pattern-migration.yaml)

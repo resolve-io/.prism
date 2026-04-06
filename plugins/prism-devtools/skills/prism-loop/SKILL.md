@@ -17,4 +17,4 @@ TDD-driven orchestration: SM plans → QA writes failing tests → gate → DEV 
 4. DEV agent implements tasks until all tests pass (TDD GREEN)
 5. QA verifies green state; approve at `green_gate` to complete
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

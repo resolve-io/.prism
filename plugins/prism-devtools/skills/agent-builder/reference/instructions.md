@@ -82,7 +82,7 @@ Be specific about:
 | `tools` | Comma-separated tool list | All tools inherited |
 | `model` | Model alias (sonnet/opus/haiku) or 'inherit' | Inherits from main |
 
-**See**: [Configuration Reference](./reference/configuration-guide.md)
+**See**: [Configuration Reference](./configuration-guide.md)
 
 ## Agent Structure
 
@@ -116,7 +116,7 @@ Writes SQL queries, performs analysis, generates reports
 
 **Triggers**: Data questions, BigQuery tasks
 
-**See**: [Agent Examples](./reference/agent-examples.md)
+**See**: [Agent Examples](./agent-examples.md)
 
 ## Best Practices
 
@@ -126,7 +126,7 @@ Writes SQL queries, performs analysis, generates reports
 4. **Limit Tools**: Only grant necessary permissions
 5. **Version Control**: Commit project agents for team collaboration
 
-**Full Guide**: [Best Practices](./reference/best-practices.md)
+**Full Guide**: [Best Practices](./best-practices.md)
 
 ## Available Tools
 
@@ -155,10 +155,10 @@ This skill helps you create:
 
 ## Advanced Topics
 
-- [Configuration Guide](./reference/configuration-guide.md) - Complete field reference
-- [Agent Examples](./reference/agent-examples.md) - Real-world templates
-- [Best Practices](./reference/best-practices.md) - Design patterns
-- [Troubleshooting](./reference/troubleshooting.md) - Common issues
+- [Configuration Guide](./configuration-guide.md) - Complete field reference
+- [Agent Examples](./agent-examples.md) - Real-world templates
+- [Best Practices](./best-practices.md) - Design patterns
+- [Troubleshooting](./troubleshooting.md) - Common issues
 
 ## Triggers
 
@@ -191,7 +191,7 @@ Verify:
 
 ## Reference Documentation
 
-- **[PRISM Agent Strategy](./reference/prism-agent-strategy.md)** - Artifact-centric agent design patterns for PRISM workflows
+- **[PRISM Agent Strategy](./prism-agent-strategy.md)** - Artifact-centric agent design patterns for PRISM workflows
 
 ---
 

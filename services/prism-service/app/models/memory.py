@@ -30,6 +30,23 @@ class ExpertiseEntry:
     importance: int = 5  # 1-10 scale, caller provides at write time
     memory_type: str = "semantic"  # semantic | episodic | procedural
 
+    # Learning loop (MetaClaw-inspired)
+    generation: int = 1  # increments when entry supersedes another
+    effectiveness: float = 0.0  # -1.0 (hurts) to +1.0 (helps), from task outcome correlation
+
+
+@dataclass
+class RecallLogEntry:
+    """A record of a memory entry being recalled during a task."""
+
+    id: int = 0
+    entry_id: str = ""
+    entry_domain: str = ""
+    query: str = ""
+    recalled_at: str = ""
+    task_id: str = ""  # in_progress task at time of recall
+    outcome: str = ""  # positive | negative | "" (pending)
+
 
 @dataclass
 class HealthReport:
@@ -41,3 +58,7 @@ class HealthReport:
     stuck_tasks: int = 0
     domains_near_cap: list[str] = field(default_factory=list)
     last_governance_run: str = ""
+
+    # Learning loop stats
+    ineffective_flagged: int = 0
+    effective_boosted: int = 0

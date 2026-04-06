@@ -12,4 +12,4 @@ Map story requirements to E2E integration test cases for comprehensive end-to-en
 4. Calculate coverage percentage
 5. Identify and document any coverage gaps
 
-→ Full instructions: [instructions.md](./instructions.md)
+→ Full instructions: [instructions.md](./reference/instructions.md)

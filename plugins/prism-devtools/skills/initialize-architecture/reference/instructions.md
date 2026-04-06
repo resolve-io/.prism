@@ -77,4 +77,4 @@ All documents start as Draft and progress through:
 
 ## Reference
 
-- **[Document Templates](./reference/document-templates.md)** - Detailed templates for each document type
+- **[Document Templates](./document-templates.md)** - Detailed templates for each document type

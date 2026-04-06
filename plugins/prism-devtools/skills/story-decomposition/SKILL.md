@@ -15,4 +15,4 @@ Breaks large stories into 1-3 day slices by identifying architectural, functiona
 4. Apply PROBE estimation; split stories >24h, combine stories <4h
 5. Sequence stories by dependencies and generate decomposition report
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

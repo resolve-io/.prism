@@ -15,4 +15,4 @@ Manage Claude Code lifecycle hooks for deterministic workflow automation.
 4. Test with sample input using *test-hook and validate with *validate-config
 5. Deploy and verify integration with PRISM workflow
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

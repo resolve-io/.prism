@@ -186,7 +186,7 @@ Improve story sizing accuracy by analyzing historical estimation data.
 
 ### Reference
 
-For detailed YAML examples of all structures, see [./reference/probe-methodology.md](./reference/probe-methodology.md).
+For detailed YAML examples of all structures, see [./probe-methodology.md](./probe-methodology.md).
 
 ### 1. Gather Historical Data
 
@@ -236,7 +236,7 @@ Markdown report including:
 - Updated Sizing Guide
 - Recommendations and Next Steps
 
-See [./reference/probe-methodology.md](./reference/probe-methodology.md) for the full report template.
+See [./probe-methodology.md](./probe-methodology.md) for the full report template.
 
 ### Calibrate Success Criteria
 

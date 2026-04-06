@@ -16,4 +16,4 @@ Generate a development task document describing WHAT to fix and WHY, for the Dev
 4. Add risk assessment and sprint planning metadata
 5. Package handoff notes with links to evidence for Dev agent
 
-[Full instructions](./instructions.md)
+[Full instructions](./reference/instructions.md)

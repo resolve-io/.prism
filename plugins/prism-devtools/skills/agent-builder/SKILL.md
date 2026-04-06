@@ -15,4 +15,4 @@ Build reusable agents with focused expertise, scoped tool access, and project or
 4. Write focused system prompt with specific instructions and constraints
 5. Test automatic and explicit invocation; commit project agents to version control
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

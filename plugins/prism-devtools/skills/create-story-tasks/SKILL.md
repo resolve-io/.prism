@@ -16,4 +16,4 @@ Breaks a user story into specific, actionable development tasks organized in log
 4. Create a task document for each task with PROBE estimate and dependencies
 5. Update the parent story document with a task index table
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

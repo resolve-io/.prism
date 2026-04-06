@@ -12,4 +12,4 @@ Create comprehensive E2E integration test scenarios with complete user journey v
 4. Create test scenarios with Given-When-Then documentation
 5. Generate test specification document
 
-→ Full instructions: [instructions.md](./instructions.md)
+→ Full instructions: [instructions.md](./reference/instructions.md)

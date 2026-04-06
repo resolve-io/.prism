@@ -76,4 +76,4 @@ The script commits and pushes automatically. After it runs:
 
 ## Reference
 
-- [Semver guide](./reference/semver-guide.md)
+- [Semver guide](./semver-guide.md)

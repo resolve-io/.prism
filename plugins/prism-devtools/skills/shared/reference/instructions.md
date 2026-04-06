@@ -17,11 +17,11 @@ This directory contains shared reference documentation used across multiple PRIS
 
 ## Reference Documentation
 
-- **[Best Practices](./reference/best-practices.md)** - PRISM principles and development guidelines
-- **[File-First](./reference/file-first.md)** - Read source files directly, not summaries
-- **[Commands](./reference/commands.md)** - Common command patterns across skills
-- **[Dependencies](./reference/dependencies.md)** - Skill dependencies and file structures
-- **[Examples](./reference/examples.md)** - Real-world usage examples
+- **[Best Practices](./best-practices.md)** - PRISM principles and development guidelines
+- **[File-First](./file-first.md)** - Read source files directly, not summaries
+- **[Commands](./commands.md)** - Common command patterns across skills
+- **[Dependencies](./dependencies.md)** - Skill dependencies and file structures
+- **[Examples](./examples.md)** - Real-world usage examples
 
 ## Note
 

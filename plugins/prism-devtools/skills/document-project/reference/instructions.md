@@ -30,7 +30,7 @@ Guides you through building comprehensive project documentation:
 
 ## Workflow Overview
 
-The workflow follows 10 sequential steps. For detailed instructions, see [Workflow Steps Reference](./reference/workflow-steps.md).
+The workflow follows 10 sequential steps. For detailed instructions, see [Workflow Steps Reference](./workflow-steps.md).
 
 | Step | Name | Purpose |
 |------|------|---------|
@@ -91,4 +91,4 @@ Core files generated (as applicable):
 
 ## Reference Documentation
 
-- **[Workflow Steps](./reference/workflow-steps.md)** - Detailed step-by-step instructions
+- **[Workflow Steps](./workflow-steps.md)** - Detailed step-by-step instructions

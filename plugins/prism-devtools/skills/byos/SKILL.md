@@ -14,4 +14,4 @@ Manages project-level PRISM skills: scaffold new skills, validate structure, and
 3. **List**: `/byos list`
 4. Follow 3-level pattern: thin SKILL.md + body (<2k tokens) + `reference/` files
 
-See [instructions.md](./instructions.md) for skill structure, frontmatter fields, and PRISM discovery.
+See [instructions.md](./reference/instructions.md) for skill structure, frontmatter fields, and PRISM discovery.

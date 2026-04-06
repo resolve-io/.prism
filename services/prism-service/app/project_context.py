@@ -64,6 +64,7 @@ class ProjectContext:
             from app.services.memory_service import MemoryService
             self._memory_svc = MemoryService(
                 mulch_dir=str(self._data_dir / "mulch"),
+                task_svc=self.task_svc,
             )
         return self._memory_svc
 

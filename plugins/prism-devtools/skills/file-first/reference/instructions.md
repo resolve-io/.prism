@@ -40,10 +40,10 @@ Returns: project type, key files, suggested read order.
 
 Load these **only when needed** (progressive disclosure):
 
-- **[Philosophy](./reference/philosophy.md)** - Why file-first > RAG
-- **[Target Repo Patterns](./reference/target-repo-patterns.md)** - Project type detection
-- **[Context Loading Strategy](./reference/context-loading-strategy.md)** - Efficient loading
-- **[Troubleshooting](./reference/troubleshooting.md)** - Common issues
+- **[Philosophy](./philosophy.md)** - Why file-first > RAG
+- **[Target Repo Patterns](./target-repo-patterns.md)** - Project type detection
+- **[Context Loading Strategy](./context-loading-strategy.md)** - Efficient loading
+- **[Troubleshooting](./troubleshooting.md)** - Common issues
 
 ## Scripts
 

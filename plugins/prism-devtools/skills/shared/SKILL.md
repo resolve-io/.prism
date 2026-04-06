@@ -16,4 +16,4 @@ Reference library used by other PRISM skills. Not a standalone skill — a share
 3. [Dependencies](./reference/dependencies.md) — Skill dependencies and file structures
 4. [Examples](./reference/examples.md) — Real-world usage examples
 
-For detailed documentation, see [instructions.md](instructions.md).
+For detailed documentation, see [instructions.md](reference/instructions.md).

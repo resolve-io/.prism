@@ -17,4 +17,4 @@ Identifies the next sequential story, gathers architecture context, applies PROB
 5. Populate story template with full technical context and source references
 6. Run `execute-checklist` with story-draft-checklist and present summary
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

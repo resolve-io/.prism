@@ -15,4 +15,4 @@ Set up the .context/ folder structure with PRISM context modules, CLAUDE.md, and
 4. Create or update CLAUDE.md with context references
 5. Create .prism-installed marker and verify all 7 context modules are present
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

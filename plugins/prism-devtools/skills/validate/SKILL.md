@@ -14,4 +14,4 @@ Run PRISM documentation and plugin structural quality gates.
 2. **Links only**: `python3 "${CLAUDE_PLUGIN_ROOT}/skills/validate/scripts/validate-refs.py"` (broken markdown refs, JSON output)
 3. **Plugin wiring**: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate-plugin.py"` (hooks, skills, agents, cross-refs)
 
-See [full reference](./instructions.md) for check details, output format, and exit codes.
+See [full reference](./reference/instructions.md) for check details, output format, and exit codes.

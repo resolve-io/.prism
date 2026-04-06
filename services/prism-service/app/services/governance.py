@@ -57,6 +57,10 @@ class GovernanceEngine:
         report.stuck_tasks = self._flag_stuck_tasks()
         report.domains_near_cap = self._domains_near_cap()
 
+        # Learning loop rules
+        report.ineffective_flagged = self._decay_ineffective()
+        report.effective_boosted = self._boost_effective()
+
         self._cached_report = report
         return report
 
@@ -270,6 +274,76 @@ class GovernanceEngine:
                 stuck += 1
 
         return stuck
+
+    # ------------------------------------------------------------------
+    # Rule: decay ineffective memories (learning loop)
+    # ------------------------------------------------------------------
+
+    def _decay_ineffective(self) -> int:
+        """Flag or archive entries that correlate with task failures.
+
+        Entries with effectiveness < -0.3 (recalled 3+ times, mostly during
+        failed tasks) are flagged needs_review. Below -0.6, archived outright.
+        More surgical than time-based decay — targets entries that actively hurt.
+        """
+        flagged = 0
+        try:
+            scores = self._memory.get_effectiveness_scores()
+        except Exception:
+            return 0
+
+        for entry_id, data in scores.items():
+            if data["total"] < 3:
+                continue  # not enough signal yet
+            score = data["score"]
+            entry = self._memory.get_entry(entry_id)
+            if entry is None or entry.status != "active":
+                continue
+
+            if score <= -0.6:
+                self._memory.update_entry(entry_id, status="archived")
+                flagged += 1
+            elif score <= -0.3:
+                self._memory.update_entry(entry_id, status="needs_review")
+                flagged += 1
+
+        return flagged
+
+    # ------------------------------------------------------------------
+    # Rule: boost effective memories (learning loop)
+    # ------------------------------------------------------------------
+
+    def _boost_effective(self) -> int:
+        """Boost importance of entries that reliably correlate with success.
+
+        Entries with effectiveness > 0.5 get importance bumped up (capped at 10).
+        Proven-useful entries surface more prominently in future recalls.
+        """
+        boosted = 0
+        try:
+            scores = self._memory.get_effectiveness_scores()
+        except Exception:
+            return 0
+
+        for entry_id, data in scores.items():
+            if data["total"] < 3:
+                continue
+            score = data["score"]
+            if score <= 0.5:
+                continue
+
+            entry = self._memory.get_entry(entry_id)
+            if entry is None or entry.status != "active":
+                continue
+
+            # Bump importance: +1 for >0.5, +2 for >0.8, capped at 10
+            bump = 2 if score > 0.8 else 1
+            new_importance = min(10, entry.importance + bump)
+            if new_importance != entry.importance:
+                self._memory.update_entry(entry_id, importance=new_importance)
+                boosted += 1
+
+        return boosted
 
     # ------------------------------------------------------------------
     # Helper: domains near cap

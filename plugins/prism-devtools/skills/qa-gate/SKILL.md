@@ -12,4 +12,4 @@ Create or update a quality gate decision file for a story based on review findin
 4. Include status_reason and any top_issues
 5. Set reviewer and timestamp
 
-→ Full instructions: [instructions.md](./instructions.md)
+→ Full instructions: [instructions.md](./reference/instructions.md)

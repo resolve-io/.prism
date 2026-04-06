@@ -13,4 +13,4 @@ Score, analyze, and generate prompt variants based on PRISM execution outcomes.
 3. Run /conductor generate <persona> <step> to create a new competing variant
 4. Monitor outcomes as variants compete via epsilon-greedy exploration
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

@@ -49,7 +49,7 @@ Manage Claude Code hooks for deterministic workflow automation.
 - **2**: Blocking error (stderr fed to Claude or shown to user)
 - **Other**: Non-blocking error (stderr shown to user)
 
-→ [Complete Event Types Reference](./reference/event-types.md) - Detailed documentation with examples
+→ [Complete Event Types Reference](./event-types.md) - Detailed documentation with examples
 
 ## Plugin Hooks Configuration
 
@@ -75,7 +75,7 @@ Manage Claude Code hooks for deterministic workflow automation.
 
 **Critical:** Use `${CLAUDE_PLUGIN_ROOT}` for all plugin paths (not relative paths)
 
-→ [Complete Configuration Reference](./reference/commands.md#configuration-format) for full schema
+→ [Complete Configuration Reference](./commands.md#configuration-format) for full schema
 
 ## Quick Start
 
@@ -92,15 +92,15 @@ Manage Claude Code hooks for deterministic workflow automation.
 
 Need a command or pattern right now?
 
-→ [Commands Reference](./reference/commands.md) - All 15 commands with examples
-→ [Examples Library](./reference/examples.md) - 13 pre-built hook patterns
+→ [Commands Reference](./commands.md) - All 15 commands with examples
+→ [Examples Library](./examples.md) - 13 pre-built hook patterns
 
 ### Learn Hook System (Deep Dive)
 
 Want to understand hook architecture?
 
-→ [Event Types Reference](./reference/event-types.md) - Complete event documentation
-→ [Security Best Practices](./reference/security.md) - Hook security guide
+→ [Event Types Reference](./event-types.md) - Complete event documentation
+→ [Security Best Practices](./security.md) - Hook security guide
 
 ## Available Commands
 
@@ -111,7 +111,7 @@ Want to understand hook architecture?
 | **Examples** | `hook-examples`, `event-types`, `install-example {name}` |
 | **Sharing** | `export-hooks`, `import-hooks {file}` |
 
-→ [Full Command Reference](./reference/commands.md) for detailed usage
+→ [Full Command Reference](./commands.md) for detailed usage
 
 ## Hook Examples Library
 
@@ -123,7 +123,7 @@ Quick access to 13 pre-built patterns:
 - **Notifications**: desktop-alerts, slack-integration, completion-notifier
 - **PRISM**: story-context-enforcer
 
-→ [Complete Examples](./reference/examples.md) with full implementations
+→ [Complete Examples](./examples.md) with full implementations
 
 ## Integration with PRISM
 
@@ -144,10 +144,10 @@ The hooks-manager skill enables automation for:
 
 All detailed content lives in reference files (progressive disclosure):
 
-- **[Commands Reference](./reference/commands.md)** (~4.5k tokens) - Complete command documentation
-- **[Event Types](./reference/event-types.md)** (~4.6k tokens) - All 9 events with examples
-- **[Examples Library](./reference/examples.md)** (~4.2k tokens) - 13 pre-built patterns
-- **[Security Guide](./reference/security.md)** - Security checklist and best practices
+- **[Commands Reference](./commands.md)** (~4.5k tokens) - Complete command documentation
+- **[Event Types](./event-types.md)** (~4.6k tokens) - All 9 events with examples
+- **[Examples Library](./examples.md)** (~4.2k tokens) - 13 pre-built patterns
+- **[Security Guide](./security.md)** - Security checklist and best practices
 
 ## Common Questions
 
@@ -155,10 +155,10 @@ All detailed content lives in reference files (progressive disclosure):
 A: Run `*hook-examples` to browse patterns, then `*create-hook` for guided setup
 
 **Q: Which event should I use?**
-A: See [Event Types Reference](./reference/event-types.md) for complete guide
+A: See [Event Types Reference](./event-types.md) for complete guide
 
 **Q: Can I see working examples?**
-A: Yes! Run `*hook-examples` or see [Examples Library](./reference/examples.md)
+A: Yes! Run `*hook-examples` or see [Examples Library](./examples.md)
 
 **Q: How do I test before deployment?**
 A: Use `*test-hook [name]` to validate with sample input

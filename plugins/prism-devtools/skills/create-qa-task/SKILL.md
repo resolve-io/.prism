@@ -12,4 +12,4 @@ Generate a test specification document for the QA agent to implement based on va
 4. Specify test data and environment requirements
 5. Package for QA agent handoff
 
-→ Full instructions: [instructions.md](./instructions.md)
+→ Full instructions: [instructions.md](./reference/instructions.md)

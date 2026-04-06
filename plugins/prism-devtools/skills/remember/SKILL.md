@@ -14,4 +14,4 @@ Classifies the observation by domain and type, then calls `mulch record` to pers
 2. Script classifies domain (hooks, brain, cli, byos, etc.) and type (convention, pattern, failure, decision)
 3. Calls `mulch record` to write a structured expertise record available in future sessions
 
-For detailed instructions, see [instructions.md](instructions.md).
+For detailed instructions, see [instructions.md](reference/instructions.md).

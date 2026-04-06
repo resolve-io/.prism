@@ -25,7 +25,7 @@ with existing variants.
 
 ## Architecture
 
-See [Conductor Architecture](./reference/conductor-architecture.md) for:
+See [Conductor Architecture](./conductor-architecture.md) for:
 - Epsilon-greedy exploration/exploitation strategy
 - PSP-based scoring formula
 - Prompt variant storage and retirement

@@ -15,4 +15,4 @@ Generates probability × impact risk matrix for a story with E2E-focused mitigat
 5. Output gate YAML `risk_summary` block
 6. Save markdown report to `qa.qaLocation/assessments/{story}-risk-{date}.md`
 
-See [instructions.md](./instructions.md) for risk categories, scoring, and output formats.
+See [instructions.md](./reference/instructions.md) for risk categories, scoring, and output formats.
