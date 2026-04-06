@@ -13,7 +13,7 @@ Stop the currently active PRISM workflow loop.
 ## Execute
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/cancel_prism_loop.py"
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/cancel_prism_loop.py"
 ```
 
 Report the result to the user.

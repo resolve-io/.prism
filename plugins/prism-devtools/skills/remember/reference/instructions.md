@@ -46,7 +46,7 @@ More examples:
 ```
 /prism-devtools:remember brain auto-bootstraps when docs table is empty
 /prism-devtools:remember decided to use WAL mode for all SQLite databases
-/prism-devtools:remember snapshot header shows version from plugin.json
+/prism-devtools:remember snapshot header shows version from pyproject.toml
 /prism-devtools:remember hook crashed with ImportError on missing dependency
 ```
 
@@ -57,7 +57,7 @@ More examples:
 MANDATORY: You MUST run this command immediately when invoked. Pass the full observation text as $ARGUMENTS.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/remember/scripts/remember.py" $ARGUMENTS
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/remember/scripts/remember.py" $ARGUMENTS
 ```
 
 The script outputs the `mulch record` result. On success, the observation is persisted

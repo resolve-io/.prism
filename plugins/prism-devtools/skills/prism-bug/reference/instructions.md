@@ -27,7 +27,7 @@ Capture full session diagnostics and submit a structured GitHub issue for post-m
 7. Scans transcript for system-role hook events (errors, lifecycle messages)
 8. Captures validation errors and gate results from `artifacts/qa/gates/*.yml`
 9. Collects git context (branch, recent commits, dirty files)
-10. Reads the plugin version from `plugin.json`
+10. Reads the PRISM version from `pyproject.toml`
 11. Uploads full transcript to a GitHub Gist for reference
 12. Creates a GitHub Issue in `siegeon/.prism` with structured markdown containing all context
 
@@ -60,14 +60,14 @@ The description becomes the issue title prefix.
 | Conductor status | Init success/failure, `_brain_available`, `last_prompt_id` |
 | Skill discovery | Paths scanned, skills found with descriptions, total count |
 | Session-start hook | stdout/stderr from running `session-start.py` |
-| Plugin cache path | `CLAUDE_PLUGIN_ROOT` value — cache vs live source detection |
+| PRISM root | Resolved `PRISM_DEVTOOLS_ROOT` path |
 | Test runner | Detected type, test command, lint command |
 | Transcript | Last ~50 tool calls (name + input summary, errors) |
 | Hook progress events | `hook_progress` events extracted from transcript |
 | Transcript system events | System-role messages containing 'hook' (errors, lifecycle events) |
 | Gate results | `artifacts/qa/gates/*.yml` if present |
 | Git context | Branch, last 5 commits, dirty files |
-| Plugin version | From `.claude-plugin/plugin.json` |
+| PRISM version | From `pyproject.toml` |
 
 ## Guardrails
 
@@ -81,7 +81,7 @@ The description becomes the issue title prefix.
 ### /prism-bug [description]
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/prism-bug/scripts/prism-bug.py" $ARGUMENTS
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-bug/scripts/prism-bug.py" $ARGUMENTS
 ```
 
 Captures diagnostics and submits a GitHub issue. Outputs the issue URL on success.

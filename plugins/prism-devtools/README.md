@@ -2,7 +2,7 @@
 
 **Version 3.9.0** - Compaction Resilience + Stop Hook Hardening
 
-A comprehensive Claude Code plugin that accelerates LLM-powered development with consistency, measurement, and quality gates.
+A comprehensive MCP server that accelerates LLM-powered development with consistency, measurement, and quality gates.
 
 ## How to Use PRISM
 
@@ -62,10 +62,10 @@ PRISM is a software engineering methodology that combines proven practices into 
 
 **In Practice:** PRISM provides workflows, automation, agent personas, and quality gates that enforce these principles automatically.
 
-> **Important:** PRISM is a Claude Code plugin system, not a web application.
+> **Important:** PRISM is an MCP server for Claude Code, not a web application.
 >
 > **What PRISM is built with:**
-> - Claude Code features: Skills, sub-agents, hooks, workflows, slash commands
+> - MCP server with Claude Code integration: Skills, sub-agents, hooks, workflows, slash commands
 > - [Core Development Workflow](docs/reference/workflows/core-development-cycle.md): Story Master → Dev → QA → Peer
 > - Python automation, YAML configs, Markdown templates
 >
@@ -232,39 +232,28 @@ PRISM follows secure development practices:
 
 ## Installation
 
-**Via Marketplace (Recommended):**
-```bash
-# Add the PRISM marketplace
-/plugin marketplace add resolve-io/.prism
+**Via MCP (Recommended):**
 
-# Install the plugin
-/plugin install prism-devtools
+Add the PRISM MCP server to your project's `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "prism": {
+      "type": "url",
+      "url": "http://localhost:8081/mcp/?project=your-project"
+    }
+  }
+}
 ```
 
 **Local Development (Team Members):**
 ```bash
-# 1. Clone the repo
+# Clone the repo
 git clone https://github.com/resolve-io/.prism.git
 cd .prism
 
-# 2. Add as local marketplace (must use ./ prefix - absolute paths don't work)
-/plugin marketplace add .
-
-# 3. Install the plugin
-/plugin install prism-devtools@prism
-```
-
-**Switching between local and GitHub:**
-```bash
-/plugin marketplace remove prism
-/plugin marketplace add .                   # Local
-/plugin marketplace add resolve-io/.prism  # GitHub
-```
-
-**After making local changes:**
-```bash
-/plugin uninstall prism-devtools
-/plugin install prism-devtools@prism
+# Start the MCP server
+docker compose up -d
 ```
 
 ---

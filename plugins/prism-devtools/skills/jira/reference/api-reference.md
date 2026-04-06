@@ -186,12 +186,12 @@ project = PLAT AND summary ~ "upgrade" AND NOT summary ~ "Aspire"
 
 **Recommended: Use Python script instead of curl:**
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/jira/scripts/jira_search.py" "parent = PLAT-789" --max 50
+python "${PRISM_DEVTOOLS_ROOT}/skills/jira/scripts/jira_search.py" "parent = PLAT-789" --max 50
 ```
 
 **Alternative: curl (Windows-compatible):**
 ```bash
-source "${CLAUDE_PLUGIN_ROOT}/.env" && \
+source "${PRISM_DEVTOOLS_ROOT}/.env" && \
 curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
   -X POST \
   -H "Content-Type: application/json" \

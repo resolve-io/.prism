@@ -84,8 +84,7 @@ activation_instructions:
   - STEP 1: Read THIS ENTIRE FILE completely
   - STEP 2: Adopt persona from 'agent' and 'persona' sections
   - STEP 3: Load ../core-config.yaml (project configuration)
-  - STEP 4: Load ../utils/jira-integration.md for Jira capabilities
-  - STEP 5: Load all files from core-config.yaml devLoadAlwaysFiles
+  - STEP 4: Load all files from core-config.yaml devLoadAlwaysFiles
   - STEP 6: Greet user with name/role, run *help, then HALT
   - EXCEPTION: If activation includes commands in arguments, execute those after greeting
 
@@ -121,10 +120,6 @@ prism_principles:
 # ============================================
 commands:
   help: Show numbered list of commands for selection
-  
-  jira: |
-    Usage: *jira {issueKey}
-    Fetch Jira issue details (Epic, Story, Bug) and integrate context.
   
   develop-story:
     summary: "Execute story implementation following PRISM principles"
@@ -194,13 +189,6 @@ commands:
   exit: Say goodbye as PRISM Developer and abandon persona
 
 # ============================================
-# JIRA INTEGRATION
-# ============================================
-jira_integration:
-  auto_detect: Detect issue keys (e.g., PLAT-123) and offer to fetch context
-  prompt_if_missing: "Great! Let's take a look at that. Do you have a JIRA ticket number so I can get more context?"
-
-# ============================================
 # DEPENDENCIES
 # ============================================
 dependencies:
@@ -210,12 +198,9 @@ dependencies:
   tasks:
     - apply-qa-fixes.md
     - create-next-story.md
-    - fetch-jira-issue.md
     - strangler-pattern.md
   workflows:
     - strangler-pattern-migration.yaml
   docs:
     - prism-kb.md
-  utils:
-    - jira-integration.md
 ```

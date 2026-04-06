@@ -295,10 +295,8 @@ def discover_prism_skills(story_file: str = "", _home_dir: "Path | None" = None)
     included. No special metadata required — the agent decides which
     skills fit the task. Returns ALL skills sorted by priority.
 
-    Scans story-repo, project-local, user-global, CLAUDE_PLUGIN_ROOT,
-    and all installed plugin cache directories.
-    Deduplicates by directory path and by skill name so multiple cached
-    plugin versions do not produce duplicate skill entries.
+    Scans story-repo, project-local, and user-global skill directories.
+    Deduplicates by directory path and by skill name.
 
     _home_dir: override for Path.home() — used in tests for isolation.
     """
@@ -310,20 +308,6 @@ def discover_prism_skills(story_file: str = "", _home_dir: "Path | None" = None)
         scan_dirs.append(story_root / ".claude" / "skills")
     scan_dirs.append(Path.cwd() / ".claude" / "skills")
     scan_dirs.append(home / ".claude" / "skills")
-
-    # Add CLAUDE_PLUGIN_ROOT/skills/ if set (hook runtime injects this env var)
-    plugin_root_env = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
-    if plugin_root_env:
-        scan_dirs.append(Path(plugin_root_env) / "skills")
-
-    # Add all installed plugin skill directories from the Claude plugin cache
-    plugins_cache = home / ".claude" / "plugins" / "cache"
-    try:
-        for skills_dir in plugins_cache.glob("*/*/*/skills"):
-            if skills_dir.is_dir():
-                scan_dirs.append(skills_dir)
-    except (IOError, OSError):
-        pass
 
     seen_dirs: set[Path] = set()
     seen_names: set[str] = set()

@@ -9,7 +9,7 @@ Approve the current PRISM workflow gate and advance to next phase.
 ## Execute
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_approve.py"
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_approve.py"
 ```
 
 ## Behavior

@@ -281,6 +281,16 @@ class MemoryService:
         if domain:
             results = [e for e in results if e.domain == domain]
 
+        # Domain fallback: if we still have fewer results than requested,
+        # supplement with remaining active entries from the domain file
+        if domain and len(results) < limit:
+            seen_ids = {e.id for e in results}
+            extras = [
+                e for e in self._read_entries(domain)
+                if e.status == "active" and not e.invalid_at and e.id not in seen_ids
+            ]
+            results.extend(extras)
+
         # Sort by importance + effectiveness blend, then recall_count
         results.sort(
             key=lambda e: (e.importance + e.effectiveness * 2, e.recall_count),
@@ -299,16 +309,27 @@ class MemoryService:
     def _brain_recall(
         self, query: str, domain: Optional[str], limit: int,
     ) -> list[ExpertiseEntry]:
-        """Search via Brain FTS5 for expertise-domain docs, then hydrate."""
+        """Search via Brain FTS5 for expertise-domain docs, then hydrate.
+
+        Converts query words to OR-joined tokens for FTS5 so that
+        partial-match queries like "never avoid do not" find entries
+        containing ANY of those words rather than requiring ALL.
+        """
         import re
-        match = re.search(r'projects/([^/]+)/', str(self._dir))
+        match = re.search(r'projects[/\\]([^/\\]+)[/\\]', str(self._dir))
         if not match:
             return []
         project_id = match.group(1)
 
+        # Convert query to OR-joined FTS5 tokens for broader matching
+        words = re.sub(r"[^\w\s]", " ", query).split()
+        or_query = " OR ".join(w for w in words if len(w) > 2)
+        if not or_query:
+            or_query = query
+
         from app.project_context import get_project
         ctx = get_project(project_id)
-        hits = ctx.brain_svc.search(query, domain="expertise", limit=limit)
+        hits = ctx.brain_svc.search(or_query, domain="expertise", limit=limit)
 
         # Hydrate: match Brain doc_ids back to JSONL entries
         entry_map = {}
@@ -329,9 +350,15 @@ class MemoryService:
     def _keyword_recall(
         self, query: str, domain: Optional[str], limit: int,
     ) -> list[ExpertiseEntry]:
-        """Fallback keyword-overlap search."""
-        query_words = set(query.lower().split())
-        if not query_words:
+        """Fallback keyword-overlap + substring search.
+
+        Combines word-set overlap with substring matching so that
+        short descriptions still match relevant queries.  Name tokens
+        are weighted 2x because they're usually the most distinctive.
+        """
+        query_lower = query.lower()
+        query_words = set(query_lower.split())
+        if not query_words and not query_lower.strip():
             return []
 
         candidates = self._read_entries(domain) if domain else self._all_entries()
@@ -339,11 +366,25 @@ class MemoryService:
 
         scored: list[tuple[float, ExpertiseEntry]] = []
         for entry in candidates:
-            text = f"{entry.name} {entry.description}".lower()
-            text_words = set(text.split())
-            overlap = len(query_words & text_words)
-            if overlap > 0:
-                scored.append((overlap, entry))
+            # Include type, domain, and name in searchable text
+            name_text = entry.name.replace("-", " ").replace("/", " ").lower()
+            desc_text = entry.description.lower()
+            full_text = f"{name_text} {desc_text} {entry.type} {entry.domain}"
+            text_words = set(full_text.split())
+
+            # Word overlap (name tokens weighted 2x)
+            name_words = set(name_text.split())
+            name_overlap = len(query_words & name_words) * 2
+            desc_overlap = len(query_words & text_words)
+            score = name_overlap + desc_overlap
+
+            # Substring matching for multi-word phrases and short texts
+            for qw in query_words:
+                if len(qw) > 2 and qw in full_text and qw not in text_words:
+                    score += 0.5  # partial substring match
+
+            if score > 0:
+                scored.append((score, entry))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [e for _, e in scored[:limit]]

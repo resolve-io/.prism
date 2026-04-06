@@ -1,15 +1,14 @@
 ---
 name: version-bump
 description: >
-  Bump plugin version, update CHANGELOG, and create git tag for prism-devtools releases.
+  Bump version, update CHANGELOG, and create git tag for prism-devtools releases.
   Use when: user says "bump version", "release", "tag release", "version bump",
-  "cut a release", "what version", "update version", or needs to publish changes
-  to downstream plugin users.
+  "cut a release", "what version", "update version", or needs to publish changes.
 version: 1.0.0
 disable-model-invocation: true
 ---
 
-Bumps `plugin.json` version, updates `CHANGELOG.md`, and creates a git tag for prism-devtools.
+Bumps `pyproject.toml` version, updates `CHANGELOG.md`, and creates a git tag for prism-devtools.
 
 ## Steps
 

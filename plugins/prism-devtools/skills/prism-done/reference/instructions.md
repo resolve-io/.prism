@@ -7,7 +7,7 @@ Provides a clean session ending with metrics capture, report card, commit offer,
 Run the completion script, passing session ID and transcript path:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/prism-done/scripts/prism-done.py" \
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-done/scripts/prism-done.py" \
   --session-id "${CLAUDE_SESSION_ID}"
 ```
 

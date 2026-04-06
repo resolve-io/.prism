@@ -528,7 +528,7 @@ FileNotFoundError: [Errno 2] No such file or directory: '/tmp/jira_results.json'
 
 **Solution:** Source the .env file before curl:
 ```bash
-source "${CLAUDE_PLUGIN_ROOT}/.env" && \
+source "${PRISM_DEVTOOLS_ROOT}/.env" && \
 curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" ...
 ```
 

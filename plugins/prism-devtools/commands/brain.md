@@ -18,7 +18,7 @@ Interact with the Brain knowledge index for the current project.
 ## Execute
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py" $ARGUMENTS
+python3 "${PRISM_DEVTOOLS_ROOT}/hooks/brain_engine.py" $ARGUMENTS
 ```
 
 ## Commands

@@ -31,7 +31,7 @@ version: 1.1.0
 ## Quick Project Detection
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/file-first/scripts/analyze_codebase.py" "$(pwd)"
+python "${PRISM_DEVTOOLS_ROOT}/skills/file-first/scripts/analyze_codebase.py" "$(pwd)"
 ```
 
 Returns: project type, key files, suggested read order.

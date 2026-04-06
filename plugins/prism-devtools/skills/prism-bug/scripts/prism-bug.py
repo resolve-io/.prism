@@ -30,40 +30,12 @@ def run(cmd: list[str], check: bool = False) -> tuple[int, str, str]:
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
-_PLUGIN_JSON_REL = Path(".claude-plugin") / "plugin.json"
+def _prism_root() -> Path:
+    """Resolve the prism-devtools root directory.
 
-
-def _walk_up_to_plugin_root(start: Path) -> Path | None:
-    """Walk up from *start* until .claude-plugin/plugin.json is found."""
-    p = start.resolve()
-    while p != p.parent:
-        if (p / _PLUGIN_JSON_REL).is_file():
-            return p
-        p = p.parent
-    return None
-
-
-def _plugin_root() -> Path:
-    """Resolve CLAUDE_PLUGIN_ROOT with self-healing for the update cache bug.
-
-    ``claude plugin update`` can cache the entire marketplace repo root
-    instead of the ``plugins/prism-devtools/`` subdirectory.  When that
-    happens CLAUDE_PLUGIN_ROOT points at the repo root and every relative
-    path (tools/, hooks/, .claude-plugin/) breaks.  We probe for the
-    nested path and use it when the direct path lacks plugin.json.
+    Uses __file__-based resolution: this script lives at
+    skills/prism-bug/scripts/prism-bug.py, so root is 3 levels up.
     """
-    env_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    if env_root:
-        candidate = Path(env_root)
-        if (candidate / _PLUGIN_JSON_REL).is_file():
-            return candidate
-        nested = candidate / "plugins" / "prism-devtools"
-        if (nested / _PLUGIN_JSON_REL).is_file():
-            return nested
-    # Walk up from this script to find plugin root dynamically
-    found = _walk_up_to_plugin_root(Path(__file__).resolve().parent)
-    if found:
-        return found
     return Path(__file__).resolve().parent.parent.parent
 
 
@@ -71,11 +43,11 @@ _HOOKS_IN_PATH = False
 
 
 def _add_hooks_to_path() -> bool:
-    """Add plugin hooks directory to sys.path for importing brain_engine etc."""
+    """Add hooks directory to sys.path for importing brain_engine etc."""
     global _HOOKS_IN_PATH
     if _HOOKS_IN_PATH:
         return True
-    hooks_dir = _plugin_root() / "hooks"
+    hooks_dir = _prism_root() / "hooks"
     if hooks_dir.is_dir():
         sys.path.insert(0, str(hooks_dir))
         _HOOKS_IN_PATH = True
@@ -96,14 +68,16 @@ def collect_state() -> str:
         return f"_Error reading state file: {exc}_"
 
 
-def collect_plugin_version() -> str:
-    """Read plugin version from plugin.json."""
+def collect_prism_version() -> str:
+    """Read PRISM version from pyproject.toml or return unknown."""
     try:
-        plugin_root = _plugin_root()
-        plugin_json = plugin_root / ".claude-plugin" / "plugin.json"
-        if plugin_json.exists():
-            data = json.loads(plugin_json.read_text(encoding="utf-8"))
-            return data.get("version", "unknown")
+        pyproject = _prism_root().parent.parent / "pyproject.toml"
+        if pyproject.exists():
+            content = pyproject.read_text(encoding="utf-8")
+            import re as _re
+            m = _re.search(r'version\s*=\s*"([^"]+)"', content)
+            if m:
+                return m.group(1)
     except Exception:
         pass
     return "unknown"
@@ -333,7 +307,7 @@ def collect_skill_discovery() -> str:
 
 def collect_session_start_output() -> str:
     """Run session-start.py and capture its stdout (systemMessage output)."""
-    session_start = _plugin_root() / "hooks" / "session-start.py"
+    session_start = _prism_root() / "hooks" / "session-start.py"
     if not session_start.exists():
         return f"_session-start.py not found at `{session_start}`_"
     try:
@@ -356,19 +330,10 @@ def collect_session_start_output() -> str:
         return f"_Error running session-start.py: {exc}_"
 
 
-def collect_plugin_cache_path() -> str:
-    """Report CLAUDE_PLUGIN_ROOT env var and whether running from cache or source."""
-    env_val = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
-    resolved = str(_plugin_root())
-    lines = [
-        f"**CLAUDE_PLUGIN_ROOT:** `{env_val or '(not set)'}`",
-        f"**Resolved plugin root:** `{resolved}`",
-    ]
-    if env_val and "cache" in env_val.lower():
-        lines.append("⚠ Running from **plugin cache** (not live source).")
-    elif env_val:
-        lines.append("✓ Running from **live source** (not cache).")
-    return "\n".join(lines)
+def collect_prism_root_info() -> str:
+    """Report the resolved PRISM root directory."""
+    resolved = str(_prism_root())
+    return f"**PRISM root:** `{resolved}`"
 
 
 def collect_test_runner() -> str:
@@ -552,7 +517,7 @@ def collect_sfr_status() -> str:
         lines.append(f"**Conductor (epsilon):** FAILED — `{exc}`")
 
     # --- Agent defs: do they declare skills: [sfr-variant, brain-context]? ---
-    agent_defs_dir = _plugin_root() / "agents"
+    agent_defs_dir = _prism_root() / "agents"
     agents_with_skills: list[str] = []
     if agent_defs_dir.is_dir():
         for agent_file in sorted(agent_defs_dir.glob("*.md")):
@@ -600,7 +565,7 @@ def collect_platform_diagnostics() -> str:
 
 def collect_hooks_json_content() -> str:
     """Include the actual hooks.json commands in the report."""
-    hooks_json_path = _plugin_root() / "hooks" / "hooks.json"
+    hooks_json_path = _prism_root() / "hooks" / "hooks.json"
     if not hooks_json_path.exists():
         return f"_hooks.json not found at `{hooks_json_path}`_"
     try:
@@ -621,8 +586,7 @@ def _extract_hook_script_paths(hooks_json_path: Path) -> list[str]:
         for entry in event_hooks:
             for hook in entry.get("hooks", []):
                 cmd = hook.get("command", "")
-                # Pattern: sh ${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.sh <script>
-                # or: python3 <script>
+                # Pattern: python3 <path>/hooks/<script>.py
                 # Extract the last path-like argument
                 parts = cmd.split()
                 for part in reversed(parts):
@@ -634,18 +598,18 @@ def _extract_hook_script_paths(hooks_json_path: Path) -> list[str]:
 
 def collect_hook_script_verification() -> str:
     """For each command in hooks.json, verify the referenced script path exists."""
-    hooks_json_path = _plugin_root() / "hooks" / "hooks.json"
+    hooks_json_path = _prism_root() / "hooks" / "hooks.json"
     if not hooks_json_path.exists():
         return f"_hooks.json not found at `{hooks_json_path}`_"
 
-    plugin_root = _plugin_root()
+    prism_root = _prism_root()
     scripts = _extract_hook_script_paths(hooks_json_path)
     if not scripts:
         return "_No script paths found in hooks.json commands._"
 
     lines = []
     for script_template in scripts:
-        resolved = script_template.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
+        resolved = script_template.replace("${PRISM_DEVTOOLS_ROOT}", str(prism_root))
         path = Path(resolved)
         exists = path.exists()
         status = "✓ exists" if exists else "✗ MISSING"
@@ -655,7 +619,7 @@ def collect_hook_script_verification() -> str:
 
 def collect_hook_execution_test() -> str:
     """Try running the session-start hook, report exit code and stderr."""
-    plugin_root = _plugin_root()
+    plugin_root = _prism_root()
     run_hook_sh = plugin_root / "hooks" / "run-hook.sh"
     session_start = plugin_root / "hooks" / "session-start.py"
 
@@ -926,7 +890,7 @@ def create_issue(title: str, body: str) -> str | None:
 def build_report(
     description: str,
     version: str,
-    plugin_cache: str,
+    prism_root_info: str,
     platform_diag: str,
     hooks_json: str,
     hook_script_check: str,
@@ -958,7 +922,7 @@ def build_report(
     return f"""## PRISM Bug Report
 
 **Description:** {description}
-**Plugin version:** `{version}`
+**PRISM version:** `{version}`
 **Transcript:** `{transcript_name}`
 
 ---
@@ -969,9 +933,9 @@ def build_report(
 
 ---
 
-## Plugin Cache Path
+## PRISM Root
 
-{plugin_cache}
+{prism_root_info}
 
 ---
 
@@ -1107,14 +1071,14 @@ def main() -> None:
     description = " ".join(args)
     print(f"Collecting diagnostics for: {description}")
 
-    version = collect_plugin_version()
-    print(f"  Plugin version: {version}")
+    version = collect_prism_version()
+    print(f"  PRISM version: {version}")
 
     print("  Collecting platform diagnostics...")
     platform_diag = collect_platform_diagnostics()
 
-    plugin_cache = collect_plugin_cache_path()
-    print(f"  Plugin root: {_plugin_root()}")
+    prism_root_info = collect_prism_root_info()
+    print(f"  PRISM root: {_prism_root()}")
 
     print("  Reading hooks.json...")
     hooks_json = collect_hooks_json_content()
@@ -1174,7 +1138,7 @@ def main() -> None:
     body = build_report(
         description=description,
         version=version,
-        plugin_cache=plugin_cache,
+        prism_root_info=prism_root_info,
         platform_diag=platform_diag,
         hooks_json=hooks_json,
         hook_script_check=hook_script_check,

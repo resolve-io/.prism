@@ -27,24 +27,20 @@ from pathlib import Path
 # Configuration
 JIRA_BASE_URL = "https://resolvesys.atlassian.net"
 
-def _find_plugin_root() -> Path:
-    """Walk up from __file__ to find the plugin root (contains core-config.yaml)."""
+def _find_prism_root() -> Path:
+    """Walk up from __file__ to find the prism root (contains core-config.yaml)."""
     current = Path(__file__).resolve().parent
     while current != current.parent:
         if (current / "core-config.yaml").exists():
             return current
         current = current.parent
-    raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
+    raise FileNotFoundError("Could not find prism root (no core-config.yaml in any ancestor)")
 
 try:
-    _PLUGIN_ROOT = _find_plugin_root()
+    _PRISM_ROOT = _find_prism_root()
 except FileNotFoundError:
-    _env_root = os.environ.get('CLAUDE_PLUGIN_ROOT', '')
-    if _env_root:
-        _PLUGIN_ROOT = Path(_env_root)
-    else:
-        raise
-ENV_FILE_PATH = _PLUGIN_ROOT / '.env'
+    raise
+ENV_FILE_PATH = _PRISM_ROOT / '.env'
 DEFAULT_FIELDS = ["key", "summary", "status", "issuetype", "assignee", "priority", "parent"]
 
 

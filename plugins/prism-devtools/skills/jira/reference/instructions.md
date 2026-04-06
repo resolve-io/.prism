@@ -17,13 +17,13 @@ Read-only Jira integration using Python scripts for reliable issue fetching and 
 ### Fetch Single Issue
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/jira/scripts/jira_fetch.py" PLAT-123
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/jira/scripts/jira_fetch.py" PLAT-123
 ```
 
 ### Search Issues with JQL
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/jira/scripts/jira_search.py" "project = PLAT AND type = Story"
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/jira/scripts/jira_search.py" "project = PLAT AND type = Story"
 ```
 
 ### Common Search Patterns
@@ -128,7 +128,7 @@ jira:
 ### Step 3: Fetch Issue
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/jira/scripts/jira_fetch.py" PLAT-123
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/jira/scripts/jira_fetch.py" PLAT-123
 ```
 
 Or via REST API directly:

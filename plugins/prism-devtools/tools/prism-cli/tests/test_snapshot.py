@@ -295,104 +295,10 @@ last_activity: "2025-01-01T00:00:00.000000"
         assert "STALE" in output
 
 
-    def test_version_in_header(self, work_dir: Path):
-        """Snapshot header includes version from plugin.json."""
-        import re
+    def test_header_present(self, work_dir: Path):
+        """Snapshot header includes PRISM Dashboard Snapshot title."""
         output = render_snapshot(work_dir)
-        # Should show either "v<semver>" or just "PRISM Dashboard Snapshot" if no plugin.json
-        # The canonical plugin.json exists relative to the CLI tool, so version should appear
-        assert re.search(r"PRISM Dashboard Snapshot( v\d+\.\d+\.\d+)?", output), (
-            f"Expected version pattern in header, got:\n{output}"
-        )
-
-    def test_version_fallback_no_plugin_json(self, tmp_path: Path):
-        """Snapshot renders without crashing when plugin.json is absent."""
-        import snapshot as _snap
-        orig = _snap._PLUGIN_VERSION
-        try:
-            _snap._PLUGIN_VERSION = ""
-            state_dir = tmp_path / ".claude"
-            state_dir.mkdir()
-            from datetime import datetime, timedelta
-            now = datetime.now()
-            state_content = f'''---
-active: true
-current_step: implement_tasks
-current_step_index: 5
-started_at: "{(now - timedelta(minutes=5)).isoformat()}"
-last_activity: "{(now - timedelta(seconds=10)).isoformat()}"
----
-'''
-            (state_dir / "prism-loop.local.md").write_text(state_content, encoding="utf-8")
-            output = render_snapshot(tmp_path)
-            assert "PRISM Dashboard Snapshot" in output
-            assert " v" not in output.split("\n")[1]
-        finally:
-            _snap._PLUGIN_VERSION = orig
-
-    def test_version_prefers_claude_plugin_root_env(self, tmp_path: Path):
-        """read_plugin_version uses CLAUDE_PLUGIN_ROOT when set, not __file__-relative path."""
-        import parsing as _parsing
-
-        # Create a fake plugin root with a different version
-        fake_root = tmp_path / "fake_plugin"
-        fake_plugin_dir = fake_root / ".claude-plugin"
-        fake_plugin_dir.mkdir(parents=True)
-        (fake_plugin_dir / "plugin.json").write_text(
-            '{"version": "99.0.0"}', encoding="utf-8"
-        )
-
-        orig_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
-        try:
-            os.environ["CLAUDE_PLUGIN_ROOT"] = str(fake_root)
-            version = _parsing.read_plugin_version()
-            assert version == "99.0.0", (
-                f"Expected version from CLAUDE_PLUGIN_ROOT, got: {version!r}"
-            )
-        finally:
-            if orig_env is None:
-                os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
-            else:
-                os.environ["CLAUDE_PLUGIN_ROOT"] = orig_env
-
-    def test_version_falls_back_when_env_unset(self, tmp_path: Path):
-        """read_plugin_version falls back to walk-up path when env var unset."""
-        import parsing as _parsing
-
-        orig_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
-        try:
-            os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
-            # Should not raise; returns string (possibly empty if plugin.json missing)
-            version = _parsing.read_plugin_version()
-            assert isinstance(version, str)
-        finally:
-            if orig_env is not None:
-                os.environ["CLAUDE_PLUGIN_ROOT"] = orig_env
-
-    def test_version_self_heals_wrong_depth(self, tmp_path: Path):
-        """read_plugin_version finds plugin.json when CLAUDE_PLUGIN_ROOT is repo root."""
-        import parsing as _parsing
-
-        # Simulate wrong-depth cache: repo root with plugin nested under plugins/prism-devtools/
-        repo_root = tmp_path / "repo"
-        nested = repo_root / "plugins" / "prism-devtools" / ".claude-plugin"
-        nested.mkdir(parents=True)
-        (nested / "plugin.json").write_text(
-            '{"version": "42.0.0"}', encoding="utf-8"
-        )
-
-        orig_env = os.environ.get("CLAUDE_PLUGIN_ROOT")
-        try:
-            os.environ["CLAUDE_PLUGIN_ROOT"] = str(repo_root)
-            version = _parsing.read_plugin_version()
-            assert version == "42.0.0", (
-                f"Expected self-healed version 42.0.0, got: {version!r}"
-            )
-        finally:
-            if orig_env is None:
-                os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
-            else:
-                os.environ["CLAUDE_PLUGIN_ROOT"] = orig_env
+        assert "PRISM Dashboard Snapshot" in output
 
 
 def _make_scores_db(work_dir: Path, rows: list[tuple]) -> Path:

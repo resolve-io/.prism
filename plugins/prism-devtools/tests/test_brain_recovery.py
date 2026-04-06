@@ -117,13 +117,13 @@ def test_brain_bootstrap_recovers_on_corrupt_db(tmp_path, monkeypatch):
 
     # Patch Brain and BrainCorruptError in setup_prism_loop's module namespace
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(spl, "PLUGIN_ROOT", Path(__file__).resolve().parent.parent)
+    monkeypatch.setattr(spl, "PRISM_ROOT", Path(__file__).resolve().parent.parent)
 
     original_bootstrap = spl.brain_bootstrap
 
     def patched_bootstrap():
         try:
-            hooks_dir = spl.PLUGIN_ROOT / "hooks"
+            hooks_dir = spl.PRISM_ROOT / "hooks"
             if str(hooks_dir) not in sys.path:
                 sys.path.insert(0, str(hooks_dir))
             try:
@@ -150,7 +150,7 @@ def test_brain_bootstrap_skips_on_non_corrupt_error(tmp_path, monkeypatch, capsy
     import setup_prism_loop as spl
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(spl, "PLUGIN_ROOT", Path(__file__).resolve().parent.parent)
+    monkeypatch.setattr(spl, "PRISM_ROOT", Path(__file__).resolve().parent.parent)
 
     call_count = {"n": 0}
 

@@ -17,15 +17,10 @@ from pathlib import Path
 
 from models import WORKFLOW_STEPS, WorkflowState, StoryInfo
 from parsing import (
-    check_plugin_cache_stale,
     find_session_transcript,
     parse_state_file,
     parse_story_file,
-    read_plugin_version,
 )
-
-
-_PLUGIN_VERSION: str = read_plugin_version()
 
 
 def _inject_live_tokens(state: WorkflowState) -> None:
@@ -278,29 +273,12 @@ def render_snapshot(work_dir: Path) -> str:
     if state and state.active:
         _inject_live_tokens(state)
 
-    cache = check_plugin_cache_stale(work_dir)
-
     # Header
     lines.append("=" * 64)
-    _version_suffix = f" v{_PLUGIN_VERSION}" if _PLUGIN_VERSION else ""
-    lines.append(f"  PRISM Dashboard Snapshot{_version_suffix}")
+    lines.append("  PRISM Dashboard Snapshot")
     lines.append(f"  {now.strftime('%Y-%m-%d %H:%M:%S')}")
     if state and state.active and state.current_step:
         lines.append(f"  Step: {state.current_step}")
-    if cache.get("wrong_depth"):
-        lines.append(
-            "  [!!] CACHE WRONG_DEPTH — 'claude plugin update' cached repo root"
-        )
-        lines.append(
-            "       instead of plugins/prism-devtools/. Fix installPath in"
-        )
-        lines.append(
-            "       ~/.claude/installed_plugins.json or reinstall the plugin."
-        )
-    elif cache["linked"]:
-        lines.append("  [*] CACHE LIVE — junction active, edits apply instantly")
-    elif cache["stale"]:
-        lines.append("  [!] CACHE STALE — source newer than ~/.claude/plugins/cache")
     lines.append("=" * 64)
     lines.append("")
 

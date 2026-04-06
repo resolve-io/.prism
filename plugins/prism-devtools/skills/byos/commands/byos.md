@@ -20,7 +20,7 @@ Manage project-level skills that are shared via git and auto-discovered by Claud
 Create a new project skill with directory structure and pre-filled SKILL.md.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/byos/scripts/scaffold_skill.py" $ARGUMENTS
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/byos/scripts/scaffold_skill.py" $ARGUMENTS
 ```
 
 **Usage:**
@@ -33,7 +33,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/byos/scripts/scaffold_skill.py" $ARGUMENTS
 Validate project skill(s) for correctness.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/byos/scripts/validate_skill.py" $ARGUMENTS
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/byos/scripts/validate_skill.py" $ARGUMENTS
 ```
 
 **Usage:**

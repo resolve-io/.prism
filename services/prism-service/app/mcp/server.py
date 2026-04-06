@@ -17,8 +17,7 @@ import uvicorn
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.routing import Mount
+from starlette.routing import Mount, Route
 
 from app.mcp.tools import TOOLS, handle_tool
 
@@ -64,7 +63,17 @@ async def handle_mcp(scope, receive, send):
 
     Extracts ?project=<id> from the query string and sets it as the
     current project for all tool calls on this connection.
+
+    Mount strips the matched prefix from scope["path"], but the
+    StreamableHTTPSessionManager expects the *original* path.  We
+    reconstruct it so content-type negotiation works correctly.
     """
+    # Reconstruct full path: Mount sets root_path / path relative to mount
+    original_path = scope.get("root_path", "") + scope.get("path", "")
+    if not original_path:
+        original_path = "/mcp/"
+    scope = dict(scope, path=original_path)
+
     qs = parse_qs(scope.get("query_string", b"").decode())
     project_id = qs.get("project", ["default"])[0]
     current_project.set(project_id)

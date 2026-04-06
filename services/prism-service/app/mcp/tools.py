@@ -327,6 +327,28 @@ TOOLS: list[Tool] = [
 
 
 # ---------------------------------------------------------------------------
+# Convention enrichment
+# ---------------------------------------------------------------------------
+
+def _enrich_convention(text: str) -> str:
+    """Expand a short convention one-liner into a richer description.
+
+    Ensures the description contains explicit "Never"/"Do not" phrasing
+    so the pre-write-convention-guard hook can extract anti-patterns.
+    """
+    lower = text.lower()
+    # Already has enforcement language — return as-is
+    if any(kw in lower for kw in ("never", "do not", "don't", "avoid", "prohibited")):
+        return text
+    # Expand common convention patterns into enforceable descriptions
+    if "must use" in lower or "must be" in lower:
+        return f"{text}. Do not deviate from this convention."
+    if "no " in lower and ("prefix" in lower or "suffix" in lower):
+        return f"{text}. Never use alternative naming formats."
+    return f"{text}. Do not violate this convention."
+
+
+# ---------------------------------------------------------------------------
 # Serialisation helper
 # ---------------------------------------------------------------------------
 
@@ -405,14 +427,22 @@ async def handle_tool(name: str, arguments: dict, *, project_id: str = "default"
                     classification="foundational",
                 )
 
-            # 3. Seed conventions
+            # 3. Seed conventions with enriched descriptions
+            # Convention descriptions need anti-pattern keywords so the
+            # pre-write-convention-guard hook can detect violations.
             seeded = 0
             for conv in conventions:
                 try:
+                    name = conv[:50].lower().replace(" ", "-").replace("'", "")
+                    # Enrich: if the convention is a short one-liner, expand it
+                    # with explicit "Never"/"Do not" phrasing for guard matching
+                    description = conv
+                    if len(conv) < 120:
+                        description = _enrich_convention(conv)
                     ctx.memory_svc.store(
                         domain="conventions",
-                        name=conv[:50].lower().replace(" ", "-").replace("'", ""),
-                        description=conv,
+                        name=name,
+                        description=description,
                         type="convention",
                         classification="foundational",
                     )

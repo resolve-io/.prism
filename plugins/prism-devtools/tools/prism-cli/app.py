@@ -18,11 +18,9 @@ from textual.widgets import Footer, Header, Static
 
 from models import StoryInfo, WorkflowState
 from parsing import (
-    check_plugin_cache_stale,
     find_session_transcript,
     parse_state_file,
     parse_story_file,
-    read_plugin_version,
 )
 from widgets import (
     ActivityFeed,
@@ -34,7 +32,6 @@ from widgets import (
 )
 
 
-_PLUGIN_VERSION: str = read_plugin_version()
 
 
 def _brain_status(work_dir: Path) -> tuple[int, int]:
@@ -114,10 +111,6 @@ class PrismDashboard(App):
         self._interval = interval
         self._state: WorkflowState | None = None
         self._story: StoryInfo | None = None
-        self._cache_stale: bool = False
-        self._cache_linked: bool = False
-        self._cache_wrong_depth: bool = False
-        self._cache_check_tick: int = 0
         # Live transcript reading — incremental, never re-reads from the start
         self._live_session_id: str = ""
         self._transcript_path: str = ""
@@ -136,7 +129,7 @@ class PrismDashboard(App):
         """Render k9s-style header info bar with live workflow metadata."""
         state = self._state
         parts: list[str | Content | tuple[str, str]] = [
-            ("PRISM Dashboard" + (_PLUGIN_VERSION and f" v{_PLUGIN_VERSION}"), "bold"),
+            ("PRISM Dashboard", "bold"),
         ]
 
         if state and state.active:
@@ -155,13 +148,6 @@ class PrismDashboard(App):
                 parts.append(("  ? tok", "dim yellow"))
         else:
             parts.append(("  \u25cbIDLE", "dim"))
-
-        if self._cache_wrong_depth:
-            parts.append(("  \u26a0CACHE WRONG_DEPTH", "bold red"))
-        elif self._cache_linked:
-            parts.append(("  \u25cfCACHE LIVE", "bold cyan"))
-        elif self._cache_stale:
-            parts.append(("  \u26a1CACHE STALE", "bold yellow"))
 
         if self._brain_doc_count > 0:
             entity_suffix = ""
@@ -307,13 +293,6 @@ class PrismDashboard(App):
         Bypasses Textual's reactive equality check so timers,
         durations, and staleness indicators update in real-time.
         """
-        self._cache_check_tick += 1
-        if self._cache_check_tick % 10 == 1:
-            cache = check_plugin_cache_stale(self._work_dir)
-            self._cache_linked = cache["linked"]
-            self._cache_stale = cache["stale"]
-            self._cache_wrong_depth = cache.get("wrong_depth", False)
-
         self._brain_check_tick += 1
         if self._brain_check_tick % 10 == 1:
             self._brain_doc_count, self._brain_entity_count = _brain_status(self._work_dir)

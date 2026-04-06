@@ -17,7 +17,7 @@ PRISM uses plugin-level hooks configured in `hooks/hooks.json` at the plugin roo
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/path/to/script.py",
+            "command": "${PRISM_DEVTOOLS_ROOT}/path/to/script.py",
             "description": "What this hook does",
             "timeout": 60
           }
@@ -29,7 +29,7 @@ PRISM uses plugin-level hooks configured in `hooks/hooks.json` at the plugin roo
 ```
 
 **Critical Requirements:**
-- ✅ Use `${CLAUDE_PLUGIN_ROOT}` for all plugin paths (not relative paths)
+- ✅ Use `${PRISM_DEVTOOLS_ROOT}` for all plugin paths (not relative paths)
 - ✅ Nest hooks under event names as keys
 - ✅ Each matcher gets its own object with a `hooks` array
 - ✅ Each hook needs `type: "command"` property
@@ -44,7 +44,7 @@ PRISM uses plugin-level hooks configured in `hooks/hooks.json` at the plugin roo
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/enforce-story-context.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/enforce-story-context.py",
             "description": "Ensure workflow commands have required story context"
           }
         ]
@@ -56,7 +56,7 @@ PRISM uses plugin-level hooks configured in `hooks/hooks.json` at the plugin roo
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/track-current-story.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/track-current-story.py",
             "description": "Track story file as current workflow context"
           }
         ]
@@ -66,7 +66,7 @@ PRISM uses plugin-level hooks configured in `hooks/hooks.json` at the plugin roo
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/validate-required-sections.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/validate-required-sections.py",
             "description": "Verify all required PRISM sections exist"
           }
         ]
@@ -98,7 +98,7 @@ User and project-level hooks use the same format in `~/.claude/settings.json` or
 }
 ```
 
-**Note:** User hooks don't have `${CLAUDE_PLUGIN_ROOT}` - use absolute paths.
+**Note:** User hooks don't have `${PRISM_DEVTOOLS_ROOT}` - use absolute paths.
 
 ### Schema Reference
 

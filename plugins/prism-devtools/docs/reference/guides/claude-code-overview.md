@@ -12,7 +12,7 @@ This guide explains Claude Code's core features **using PRISM as the working exa
 - [Subagents](#3-subagents) - Specialized validators
 - [Hooks](#4-hooks) - Automatic workflows
 - [Skills](#5-skills) - Context-aware agents
-- [Plugins](#6-plugins) - Distribution
+- [MCP](#6-mcp-model-context-protocol) - Distribution & Integration
 - [MCP](#7-mcp) - External integrations
 
 ## The Feature Stack
@@ -171,48 +171,26 @@ Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 
 ---
 
-## 6) Plugins
+## 6) MCP (Model Context Protocol)
 
-**What it is:** A distributable package bundling commands, hooks, skills, subagents, and configuration.
+**What it is:** Universal protocol for connecting external tools and data sources to Claude Code.
 
-**How PRISM uses it:** The entire PRISM system is a plugin:
+**How PRISM uses it:** PRISM runs as an MCP server, and also integrates with external services like Jira:
 
 ```
 .prism/
-├── .claude-plugin/
-│   └── plugin.json              # Plugin metadata
+├── .mcp.json                    # MCP server configuration
 ├── .claude/
 │   ├── settings.json            # Hook configurations
 │   └── agents/                  # 11 subagent validators
 ├── commands/                    # 7 slash commands
 ├── skills/                      # 11 skills (8 agents + 3 meta)
 ├── hooks/                       # 6 active hooks
-├── tasks/                       # Reusable workflows
 ├── templates/                   # Document templates
 └── docs/                        # Documentation
 ```
 
-**Installation:**
-
-```bash
-# Via marketplace (recommended)
-/plugin install prism-devtools@resolve-io
-
-# Or short form
-/plugin install prism-devtools
-```
-
-**Key insight:** Plugins make sophisticated AI workflows shareable. Install once, get the entire quality system.
-
-**Learn more:** [README.md](../../../README.md), [Official docs](https://docs.claude.com/claude-code/plugins)
-
----
-
-## 7) MCP (Model Context Protocol)
-
-**What it is:** Universal protocol for connecting external tools and data sources to Claude Code.
-
-**How PRISM uses it:** Optional Jira integration for fetching issue context:
+**Jira integration:**
 
 ```bash
 # Agents auto-detect issue keys
@@ -238,7 +216,7 @@ Configuration: See [`hooks/README.md`](../../../hooks/README.md) for setup
 | Automatic validation | Subagent | `story-structure-validator` |
 | Enforce process rules | Hook | `enforce-story-context.py` |
 | Context-aware automation | Skill | `dev` skill for TDD workflow |
-| Share configuration | Plugin | PRISM plugin distribution |
+| Share configuration | MCP Server | PRISM distribution |
 | External API access | MCP | Jira integration |
 
 ---

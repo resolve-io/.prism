@@ -196,7 +196,7 @@ quality_score = (
 
 **Purpose:** Ensure approved tech stack and patterns.
 
-> **Note:** This validator checks projects that PRISM helps manage, not PRISM itself. PRISM is a Claude Code plugin with no technology stack - it validates that user projects follow their own documented architecture standards.
+> **Note:** This validator checks projects that PRISM helps manage, not PRISM itself. PRISM is an MCP server with no technology stack of its own - it validates that user projects follow their own documented architecture standards.
 
 **Tools:** Read, Grep, Glob
 

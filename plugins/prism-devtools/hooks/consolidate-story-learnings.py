@@ -18,9 +18,9 @@ _SENTINEL_DIR = Path(".prism/brain")
 _SENTINEL_FILE = _SENTINEL_DIR / ".last-consolidated-story"
 
 
-def _get_plugin_root() -> Path:
-    from plugin_resolve import resolve_plugin_root
-    return resolve_plugin_root(__file__)
+def _get_prism_root() -> Path:
+    """Resolve prism-devtools root: hooks/ is one level below."""
+    return Path(__file__).resolve().parent.parent
 
 
 def _find_project_root() -> Path:
@@ -152,7 +152,7 @@ def _run_promote() -> None:
 
     # Step 2: ingest updated records into Brain
     project_root = _find_project_root()
-    hooks_dir = str(_get_plugin_root())
+    hooks_dir = str(_get_prism_root())
     try:
         orig_cwd = os.getcwd()
         os.chdir(project_root)

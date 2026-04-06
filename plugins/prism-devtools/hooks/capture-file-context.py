@@ -18,8 +18,7 @@ _DEBOUNCE_FILE = Path("/tmp/.prism-brain-reindex-ts")
 
 def _load_brain():
     """Import Brain class, adding hooks dir to sys.path."""
-    from plugin_resolve import resolve_hooks_dir
-    hooks_dir = str(resolve_hooks_dir(__file__))
+    hooks_dir = str(Path(__file__).resolve().parent)
     if hooks_dir not in sys.path:
         sys.path.insert(0, hooks_dir)
     from brain_engine import Brain

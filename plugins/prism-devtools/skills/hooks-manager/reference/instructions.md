@@ -64,7 +64,7 @@ Manage Claude Code hooks for deterministic workflow automation.
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/my-hook.py"
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/my-hook.py"
           }
         ]
       }
@@ -73,7 +73,7 @@ Manage Claude Code hooks for deterministic workflow automation.
 }
 ```
 
-**Critical:** Use `${CLAUDE_PLUGIN_ROOT}` for all plugin paths (not relative paths)
+**Critical:** Use `${PRISM_DEVTOOLS_ROOT}` for all plugin paths (not relative paths)
 
 → [Complete Configuration Reference](./commands.md#configuration-format) for full schema
 

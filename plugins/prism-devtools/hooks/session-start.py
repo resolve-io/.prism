@@ -26,7 +26,7 @@ files or making assumptions about architecture.
 ## How to query Brain
 
 Before editing an unfamiliar module:
-  Run: python3 ${CLAUDE_PLUGIN_ROOT}/hooks/brain_engine.py search "module name or concept"
+  Use /brain search "module name or concept"
 
 Brain indexes: source code, git commits, story files, Mulch expertise records,
 and overstory session logs. Results are ranked by BM25 + vector similarity + graph.
@@ -63,8 +63,7 @@ def _find_project_root() -> Path:
 
 
 def _load_brain():
-    from plugin_resolve import resolve_hooks_dir
-    hooks_dir = str(resolve_hooks_dir(__file__))
+    hooks_dir = str(Path(__file__).resolve().parent)
     if hooks_dir not in sys.path:
         sys.path.insert(0, hooks_dir)
     from brain_engine import Brain

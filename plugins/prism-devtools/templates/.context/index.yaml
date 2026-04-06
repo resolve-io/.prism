@@ -10,9 +10,6 @@ core:
     - path: core/persona-rules.md
       description: PRISM persona persistence rules
       tokens: ~100
-    - path: core/commit-format.md
-      description: Git commit message format (PLAT-XXXX)
-      tokens: ~80
 
 # Safety context - load on destructive operation triggers
 safety:

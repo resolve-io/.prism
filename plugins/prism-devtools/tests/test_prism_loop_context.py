@@ -630,7 +630,7 @@ def test_parse_skill_frontmatter_no_agent():
 def test_discover_prism_skills_empty_when_no_dir(tmp_path, monkeypatch):
     """Returns [] when .claude/skills doesn't exist."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     result = discover_prism_skills(_home_dir=tmp_path)
     assert result == []
 
@@ -638,7 +638,7 @@ def test_discover_prism_skills_empty_when_no_dir(tmp_path, monkeypatch):
 def test_discover_prism_skills_finds_matching(tmp_path, monkeypatch):
     """Finds all skills with valid prism: block."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
     result = discover_prism_skills(_home_dir=tmp_path)
@@ -649,7 +649,7 @@ def test_discover_prism_skills_finds_matching(tmp_path, monkeypatch):
 def test_discover_prism_skills_returns_all_regardless_of_agent(tmp_path, monkeypatch):
     """Returns all skills regardless of declared agent — no agent filtering."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
     # VALID_SKILL_MD declares agent=sm — should still be returned
@@ -661,7 +661,7 @@ def test_discover_prism_skills_returns_all_regardless_of_agent(tmp_path, monkeyp
 def test_discover_prism_skills_returns_all_agents(tmp_path, monkeypatch):
     """Skills with any agent value are all returned unconditionally."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
     sm_skill = """---
 name: sm-skill
@@ -691,7 +691,7 @@ prism:
 def test_discover_prism_skills_qa_matches_for_both_phases(tmp_path, monkeypatch):
     """QA skills appear unconditionally (no phase filtering)."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
     qa_skill = """---
 name: qa-patterns
@@ -710,7 +710,7 @@ prism:
 def test_discover_prism_skills_sorts_by_priority(tmp_path, monkeypatch):
     """Priority ordering works (lower = first)."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
 
     high_priority = """---
@@ -753,7 +753,7 @@ prism:
 def test_discover_prism_skills_no_stderr(tmp_path, monkeypatch, capsys):
     """discover_prism_skills produces no stderr output (hooks must not pollute conversation)."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "my-discovery-skill", VALID_SKILL_MD)
 
@@ -767,7 +767,7 @@ def test_discover_prism_skills_no_stderr(tmp_path, monkeypatch, capsys):
 def test_discover_prism_skills_no_stderr_empty_result(tmp_path, monkeypatch, capsys):
     """discover_prism_skills produces no stderr even when no skills found."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     discover_prism_skills(_home_dir=tmp_path)
     captured = capsys.readouterr()
 
@@ -777,7 +777,7 @@ def test_discover_prism_skills_no_stderr_empty_result(tmp_path, monkeypatch, cap
 def test_discover_prism_skills_no_stderr_invalid_frontmatter(tmp_path, monkeypatch, capsys):
     """discover_prism_skills produces no stderr when skipping invalid frontmatter."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "missing-name", SKILL_MD_MISSING_FIELDS)
 
@@ -1028,7 +1028,7 @@ def test_discover_four_skill_types(tmp_path, monkeypatch):
     - missing-desc:      no description field                   → excluded
     """
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
 
     _create_skill(skills_dir, "valid-prism-skill", SKILL_MD_VALID_PRISM)
@@ -1488,7 +1488,7 @@ def test_format_discovered_skills_do_not_language_in_assembled_instruction(
 def test_replaces_field_in_discovered_skill(tmp_path, monkeypatch):
     """discover_prism_skills returns replaces field when present in SKILL.md."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+
     skills_dir = tmp_path / ".claude" / "skills"
     _create_skill(skills_dir, "test", SKILL_MD_WITH_REPLACES)
 
@@ -1497,105 +1497,8 @@ def test_replaces_field_in_discovered_skill(tmp_path, monkeypatch):
     assert skills[0]["replaces"] == "npm test"
 
 
-# --- Plugin skills directory scanning ---
-
-def test_discover_prism_skills_scans_claude_plugin_root(tmp_path, monkeypatch):
-    """discover_prism_skills includes skills from CLAUDE_PLUGIN_ROOT/skills/."""
+def test_discover_prism_skills_no_skills_dirs(tmp_path, monkeypatch):
+    """discover_prism_skills returns empty list when no skill directories exist."""
     monkeypatch.chdir(tmp_path)
-    plugin_root = tmp_path / "plugin_root"
-    plugin_skills = plugin_root / "skills"
-    _create_skill(plugin_skills, "plugin-skill", VALID_SKILL_MD)
-
-    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
-    result = discover_prism_skills(_home_dir=tmp_path)
-
-    names = [s["name"] for s in result]
-    assert "my-discovery-skill" in names, "Plugin root skill should be discovered"
-
-
-def test_discover_prism_skills_no_plugin_root_env(tmp_path, monkeypatch):
-    """discover_prism_skills works when CLAUDE_PLUGIN_ROOT is not set."""
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
     result = discover_prism_skills(_home_dir=tmp_path)
     assert result == []
-
-
-def test_discover_prism_skills_scans_plugin_cache(tmp_path, monkeypatch):
-    """discover_prism_skills includes skills from ~/.claude/plugins/cache/*/*/*/skills/."""
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
-
-    # Simulate a plugin cache at tmp_path/.claude/plugins/cache/org/plugin/1.0.0/skills/
-    cache_skills = tmp_path / ".claude" / "plugins" / "cache" / "prism" / "prism-devtools" / "1.0.0" / "skills"
-    _create_skill(cache_skills, "cached-plugin-skill", VALID_SKILL_MD)
-
-    result = discover_prism_skills(_home_dir=tmp_path)
-
-    names = [s["name"] for s in result]
-    assert "my-discovery-skill" in names, "Cached plugin skill should be discovered"
-
-
-def test_discover_prism_skills_deduplicates_by_name_across_plugin_versions(tmp_path, monkeypatch):
-    """discover_prism_skills deduplicates by skill name across multiple cached plugin versions."""
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
-
-    # Two versions of the same plugin both contain the same skill
-    v1_skills = tmp_path / ".claude" / "plugins" / "cache" / "prism" / "prism-devtools" / "1.0.0" / "skills"
-    v2_skills = tmp_path / ".claude" / "plugins" / "cache" / "prism" / "prism-devtools" / "2.0.0" / "skills"
-    _create_skill(v1_skills, "duplicate-skill", VALID_SKILL_MD)
-    _create_skill(v2_skills, "duplicate-skill", VALID_SKILL_MD)
-
-    result = discover_prism_skills(_home_dir=tmp_path)
-
-    names = [s["name"] for s in result]
-    assert names.count("my-discovery-skill") == 1, "Same skill from multiple versions should appear only once"
-
-
-def test_discover_prism_skills_merges_local_and_plugin_skills(tmp_path, monkeypatch):
-    """discover_prism_skills returns skills from both .claude/skills/ and plugin directories."""
-    monkeypatch.chdir(tmp_path)
-
-    # Local skill
-    local_skills = tmp_path / ".claude" / "skills"
-    local_skill_md = """---
-name: local-skill
-description: A local project skill
-prism:
-  agent: sm
-  priority: 5
----
-"""
-    _create_skill(local_skills, "local-skill", local_skill_md)
-
-    # Plugin root skill
-    plugin_root = tmp_path / "plugin_root"
-    plugin_skill_md = """---
-name: plugin-skill
-description: A skill from the plugin
-prism:
-  agent: dev
-  priority: 10
----
-"""
-    _create_skill(plugin_root / "skills", "plugin-skill", plugin_skill_md)
-    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
-
-    result = discover_prism_skills(_home_dir=tmp_path)
-
-    names = [s["name"] for s in result]
-    assert "local-skill" in names
-    assert "plugin-skill" in names
-    assert len(result) == 2
-
-
-def test_discover_prism_skills_plugin_root_no_stderr(tmp_path, monkeypatch, capsys):
-    """discover_prism_skills produces no stderr when scanning plugin directories."""
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
-
-    discover_prism_skills(_home_dir=tmp_path)
-    captured = capsys.readouterr()
-
-    assert captured.err == "", "discover_prism_skills must not write to stderr when scanning plugin dirs"

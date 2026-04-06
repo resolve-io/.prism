@@ -87,7 +87,7 @@ sys.exit(0)  # Allows the operation
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/git-safety.py"
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/git-safety.py"
           }
         ]
       }
@@ -106,7 +106,7 @@ sys.exit(0)  # Allows the operation
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/file-protection.py"
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/file-protection.py"
           }
         ]
       }
@@ -125,7 +125,7 @@ sys.exit(0)  # Allows the operation
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/enforce-story-context.py"
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/enforce-story-context.py"
           }
         ]
       }
@@ -226,7 +226,7 @@ PostToolUse hooks cannot prevent operations (they already happened). Use PreTool
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/track-story.py"
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/track-story.py"
           }
         ]
       }

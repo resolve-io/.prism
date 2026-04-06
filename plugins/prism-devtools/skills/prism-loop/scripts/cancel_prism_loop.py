@@ -4,30 +4,25 @@ Cancel PRISM Workflow Loop - marks workflow inactive so TUI/CLI can show final s
 """
 
 import sys
-import os
 import re
 from pathlib import Path
 
 
-def _find_plugin_root() -> Path:
-    """Walk up from __file__ to find the plugin root (contains core-config.yaml)."""
+def _find_prism_root() -> Path:
+    """Walk up from __file__ to find the prism root (contains core-config.yaml)."""
     current = Path(__file__).resolve().parent
     while current != current.parent:
         if (current / "core-config.yaml").exists():
             return current
         current = current.parent
-    raise FileNotFoundError("Could not find plugin root (no core-config.yaml in any ancestor)")
+    raise FileNotFoundError("Could not find prism root (no core-config.yaml in any ancestor)")
 
 
 try:
-    PLUGIN_ROOT = _find_plugin_root()
+    PRISM_ROOT = _find_prism_root()
 except FileNotFoundError:
-    _env_root = os.environ.get('CLAUDE_PLUGIN_ROOT', '')
-    if _env_root:
-        PLUGIN_ROOT = Path(_env_root)
-    else:
-        raise
-sys.path.insert(0, str(PLUGIN_ROOT / "hooks"))
+    raise
+sys.path.insert(0, str(PRISM_ROOT / "hooks"))
 from prism_loop_context import resolve_state_file
 
 STATE_FILE = resolve_state_file()

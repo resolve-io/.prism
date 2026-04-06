@@ -2,7 +2,7 @@
 
 Pre-built hook patterns for common use cases. All examples are production-ready and security-reviewed.
 
-**Configuration Format Note:** All JSON examples below show the complete `hooks.json` structure. For plugin hooks (like PRISM), use `${CLAUDE_PLUGIN_ROOT}` in paths. For user-level hooks, use absolute paths.
+**Configuration Format Note:** All JSON examples below show the complete `hooks.json` structure. For plugin hooks (like PRISM), use `${PRISM_DEVTOOLS_ROOT}` in paths. For user-level hooks, use absolute paths.
 
 ## Quick Reference
 
@@ -98,7 +98,7 @@ print(f"✅ Tracked change: {file_path}")
         "hooks": [
           {
             "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/file-change-tracker.py"
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/file-change-tracker.py"
           }
         ]
       }

@@ -24,7 +24,6 @@ This project uses the PRISM dynamic context system. Context modules load automat
 
 ### Always Active
 - `.context/core/persona-rules.md` - PRISM persona persistence
-- `.context/core/commit-format.md` - Commit message format (PLAT-XXXX)
 
 ### Load When Relevant
 - `.context/safety/` - Destructive operations, file limits, citation rules

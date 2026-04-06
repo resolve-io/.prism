@@ -8,7 +8,7 @@
 
 ## 📋 Overview
 
-**PRISM** is a Claude Code plugin system that implements a complete development methodology through automation. This documentation explains how PRISM leverages Claude Code's architecture to deliver automated quality gates, role-based workflows, and measurable outcomes.
+**PRISM** is an MCP server that implements a complete development methodology through automation. This documentation explains how PRISM leverages Claude Code's architecture to deliver automated quality gates, role-based workflows, and measurable outcomes.
 
 > [!IMPORTANT]
 > PRISM is built entirely on Claude Code's features—**not a web application**.

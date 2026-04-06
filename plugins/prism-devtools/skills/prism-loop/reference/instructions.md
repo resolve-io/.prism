@@ -52,7 +52,7 @@ TDD-driven workflow orchestration using the Ralph Wiggum self-referential loop p
 Start the PRISM workflow loop.
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" --session-id "${CLAUDE_SESSION_ID}" "$ARGUMENTS"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" --session-id "${CLAUDE_SESSION_ID}" "$ARGUMENTS"
 ```
 
 The prompt provides context to the SM agent for planning.
@@ -67,7 +67,7 @@ The prompt provides context to the SM agent for planning.
 Approve the current gate and advance to next phase.
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_approve.py"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_approve.py"
 ```
 
 - At `red_gate`: Proceeds to GREEN phase (implementation)
@@ -78,7 +78,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_approve.py"
 Reject at red_gate and loop back to planning (step 1).
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_reject.py"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_reject.py"
 ```
 
 Only valid at `red_gate`. Use when tests need redesign.
@@ -88,7 +88,7 @@ Only valid at `red_gate`. Use when tests need redesign.
 Check current workflow state.
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/prism_status.py"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_status.py"
 ```
 
 Shows progress through all 8 steps.
@@ -98,7 +98,7 @@ Shows progress through all 8 steps.
 Cancel the active workflow.
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/prism-loop/scripts/cancel_prism_loop.py"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/cancel_prism_loop.py"
 ```
 
 Removes state file and stops the loop.
@@ -180,7 +180,7 @@ The stop hook is registered in `hooks/hooks.json`:
     "matcher": "*",
     "hooks": [{
       "type": "command",
-      "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/prism_stop_hook.py"
+      "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/prism_stop_hook.py"
     }]
   }]
 }

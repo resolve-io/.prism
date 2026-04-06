@@ -28,7 +28,6 @@ Or tell Claude: **"run all validation checks"** or **"validate all"**.
 | 1 | Documentation (6-phase) | `scripts/validate-docs.py` | CRITICAL severity |
 | 2 | Links (broken refs) | `skills/validate/scripts/validate-refs.py` | Any broken link |
 | 3 | Portability (PC001-PC005) | `scripts/check-portability.py` | PC001-PC003 errors |
-| 4 | Plugin wiring | `scripts/validate-plugin.py` | Any wiring error |
 
 ### Output
 
@@ -37,17 +36,14 @@ PRISM Unified Validation
 ============================================================
 Scan root: plugins/prism-devtools
 
-[1/4] Documentation validation (6-phase structural scan)
+[1/3] Documentation validation (6-phase structural scan)
   PASS
 
-[2/4] Link validation (broken reference check)
+[2/3] Link validation (broken reference check)
   PASS (127 files scanned)
 
-[3/4] Portability check (PC001-PC005)
+[3/3] Portability check (PC001-PC005)
   PASS (15 advisory warnings)
-
-[4/4] Plugin wiring validation (6-phase structural check)
-  PASS
 
 ============================================================
 RESULT: ALL CHECKS PASSED
@@ -69,7 +65,7 @@ Scan markdown files for broken internal links. Returns clean JSON output.
 
 ```bash
 # Run from project root
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/validate/scripts/validate-refs.py"
+python3 "${PRISM_DEVTOOLS_ROOT}/skills/validate/scripts/validate-refs.py"
 
 # With custom directories
 python3 validate-refs.py --directories .claude .prism
@@ -89,7 +85,7 @@ python3 validate-refs.py --include-archive
 - Anchor-only links (`#section`)
 - Links inside fenced code blocks
 - Template variables (`{{...}}`, `${...}`)
-- `plugins/cache` directory (duplicates)
+- `.claude/worktrees` directory (temporary copies)
 
 ### Output
 
@@ -124,38 +120,3 @@ Returns JSON to stdout. See [output format](./output-format.md) for schema.
 
 ---
 
-## validate-plugin — Plugin Wiring
-
-Structural validation of plugin component integrity and cross-component wiring.
-
-```bash
-# From the prism-devtools plugin directory
-python3 scripts/validate-plugin.py
-
-# From anywhere with --root
-python3 scripts/validate-plugin.py --root /path/to/prism-devtools
-
-# JSON output for programmatic use
-python3 scripts/validate-plugin.py --json
-```
-
-Or tell Claude: **"validate the plugin wiring"** or **"check plugin structure"**.
-
-### What It Checks
-
-| Phase | Check | Blocks on |
-|-------|-------|-----------|
-| 1 | Manifest (plugin.json required fields) | Missing name/version/description/author |
-| 2 | Skills (SKILL.md frontmatter) | Missing name or description field |
-| 3 | Commands (commands/*.md) | Empty files |
-| 4 | Agents (agents/*.md frontmatter) | Missing name or description field |
-| 5 | Hooks (hooks.json schema + scripts) | Missing scripts, Python compile errors |
-| 6 | Cross-component references | Skills referencing unknown agents |
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | All phases passed (warnings OK) |
-| 1 | One or more errors found |
-| 2 | Script error |
