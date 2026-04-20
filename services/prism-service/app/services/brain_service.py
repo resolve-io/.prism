@@ -178,14 +178,40 @@ class BrainService:
         # Expand PascalCase/camelCase for better FTS matching
         expanded_content = _expand_identifiers(content)
 
+        # Hash the RAW content (not expanded) so callers can diff against
+        # on-disk sha256 for drift detection via prism_status.
+        import hashlib as _hashlib
+        content_hash = _hashlib.sha256(content.encode("utf-8")).hexdigest()
+
         # Delete first so the AFTER INSERT trigger fires for FTS sync
         brain_conn.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
         brain_conn.execute(
             "INSERT INTO docs "
-            "(id, source_file, content, domain, indexed_at, entity_name, entity_kind) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (doc_id, path, expanded_content, domain, now, filename, "file"),
+            "(id, source_file, content, domain, indexed_at, "
+            " entity_name, entity_kind, content_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (doc_id, path, expanded_content, domain, now,
+             filename, "file", content_hash),
         )
+
+        # Populate vector index so semantic search sees MCP-ingested docs.
+        if getattr(self._brain, "vector_enabled", False):
+            vec = self._brain._embed(content)
+            if vec is not None:
+                import struct
+                blob = struct.pack(f"{len(vec)}f", *vec)
+                try:
+                    brain_conn.execute(
+                        "DELETE FROM docs_vec WHERE doc_id = ?", (doc_id,)
+                    )
+                    brain_conn.execute(
+                        "INSERT INTO docs_vec (doc_id, embedding) VALUES (?, ?)",
+                        (doc_id, blob),
+                    )
+                except Exception as e:
+                    print(f"index_doc vec insert failed: {e!r}",
+                          file=sys.stderr, flush=True)
+
         brain_conn.commit()
 
         # Index entities into graph.db if provided
@@ -200,6 +226,18 @@ class BrainService:
                         (ent_name, ent_kind, path),
                     )
             graph_conn.commit()
+
+        # Stage source file for the graphify code-graph pass.
+        # graph_svc is wired in by ProjectContext when available; if the doc
+        # has a known source-code suffix, stage_doc writes it to the project's
+        # graphify-src/ dir so a later graph_rebuild picks it up.
+        graph_svc = getattr(self, "graph_svc", None)
+        if graph_svc is not None:
+            try:
+                graph_svc.stage_doc(path, content)
+            except Exception as e:
+                print(f"index_doc: graph staging failed: {e!r}",
+                      file=sys.stderr, flush=True)
 
         return doc_id
 

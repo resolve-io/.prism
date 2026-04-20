@@ -28,8 +28,15 @@ def create_nav():
     # Force light background globally
     ui.add_head_html(f'<style>{_GLOBAL_CSS}</style>')
 
-    # Ensure a project is set in user storage
-    if 'project' not in app.storage.user:
+    # URL ?project= wins so deep-links render the right project on first paint
+    try:
+        from nicegui import context as _ctx
+        _qs_proj = _ctx.client.request.query_params.get('project')
+    except Exception:
+        _qs_proj = None
+    if _qs_proj:
+        app.storage.user['project'] = _qs_proj
+    elif 'project' not in app.storage.user:
         app.storage.user['project'] = 'default'
 
     current = app.storage.user['project']
@@ -51,6 +58,7 @@ def create_nav():
             for label, href in [
                 ('Dashboard', '/'),
                 ('Brain', '/brain'),
+                ('Graph', '/graph'),
                 ('Memory', '/memory'),
                 ('Tasks', '/tasks'),
                 ('Conductor', '/conductor'),
@@ -68,6 +76,13 @@ def _switch_project(project_id: str):
     ui.navigate.reload()
 
 
-def page_container():
-    """Wrap page content in a clean, readable container."""
+def page_container(wide: bool = False):
+    """Wrap page content in a clean, readable container.
+
+    Standard (default) caps at max-w-7xl (~1280px) for comfortable reading.
+    `wide=True` removes the cap so graph-dominated pages can breathe on
+    wide monitors.
+    """
+    if wide:
+        return ui.column().classes('w-full mx-auto px-6 py-4 gap-4')
     return ui.column().classes('w-full max-w-7xl mx-auto px-6 py-6 gap-6')

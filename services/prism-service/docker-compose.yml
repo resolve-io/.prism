@@ -8,4 +8,13 @@ services:
       - ./data:/data
     environment:
       - PRISM_DATA_DIR=/data
+      # MiniLM is the +11pt LongMemEval default (vs potion baseline).
+      # Override per project if needed: potion | minilm | bge-small | jina-code
+      - PRISM_EMBEDDER=${PRISM_EMBEDDER:-minilm}
+      # hybrid (default) | vector | bm25 — which search indices contribute
+      - PRISM_SEARCH_MODE=${PRISM_SEARCH_MODE:-hybrid}
+      # Keep torch/HF caches on the mounted volume so bad loads can't brick Docker
+      - TORCHINDUCTOR_CACHE_DIR=/data/torch-inductor-cache
+      - TORCH_HOME=/data/torch-home
+      - HF_HOME=/data/hf-home
     restart: unless-stopped

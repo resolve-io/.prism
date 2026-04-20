@@ -36,7 +36,10 @@ def start_governance_timer():
 
 
 # Import UI pages (they register routes with NiceGUI)
-from app.ui import dashboard, brain_page, memory_page, tasks_page, conductor_page, sessions_page
+from app.ui import (
+    dashboard, brain_page, graph_page, memory_page,
+    tasks_page, conductor_page, sessions_page,
+)
 
 # Guard against double-start using file lock
 _LOCK_FILE = DATA_DIR / ".mcp_started"

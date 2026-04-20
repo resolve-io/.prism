@@ -97,8 +97,35 @@ _TS_LANG_MAP: dict[str, str] = {
 }
 
 
+_EMBEDDER_PRESETS = {
+    # key -> (backend, model_id)
+    # backend in {"model2vec", "sentence-transformers"}
+    "potion": ("model2vec", "minishlab/potion-base-32M"),
+    "minilm": ("sentence-transformers", "sentence-transformers/all-MiniLM-L6-v2"),
+    "nomic-code": ("sentence-transformers", "nomic-ai/nomic-embed-code"),
+    "bge-small": ("sentence-transformers", "BAAI/bge-small-en-v1.5"),
+    "jina-code": ("sentence-transformers", "jinaai/jina-embeddings-v2-base-code"),
+}
+
+
+def _load_sentence_transformer(model_id: str):
+    """Load a sentence-transformers model. Returns object with .encode([str]) API."""
+    from sentence_transformers import SentenceTransformer  # type: ignore
+    return SentenceTransformer(model_id)
+
+
+def _load_model2vec(model_id: str):
+    from model2vec import StaticModel  # type: ignore
+    return StaticModel.from_pretrained(model_id)
+
+
 def _try_enable_vector(db: sqlite3.Connection) -> bool:
-    """Attempt to load sqlite-vec extension and model2vec. Returns True on success."""
+    """Attempt to load sqlite-vec extension and an embedding model.
+
+    The embedding model is chosen via env var PRISM_EMBEDDER (one of the keys
+    in _EMBEDDER_PRESETS); defaults to 'potion'. Returns True on success.
+    """
+    import os
     global _MODEL, _SQLITE_VEC_LOADED
     try:
         import sqlite_vec  # type: ignore
@@ -107,24 +134,31 @@ def _try_enable_vector(db: sqlite3.Connection) -> bool:
         db.enable_load_extension(False)
         _SQLITE_VEC_LOADED = True
     except (ImportError, AttributeError, Exception):
-        print(
-            "Brain: running in BM25+GraphRAG mode "
-            "(install sqlite-vec model2vec for vector search)",
-            file=sys.stderr,
-        )
+        print("Brain: running in BM25+GraphRAG mode (sqlite-vec unavailable)",
+              file=sys.stderr)
         return False
 
+    preset = os.environ.get("PRISM_EMBEDDER", "potion").strip().lower()
+    if preset not in _EMBEDDER_PRESETS:
+        print(f"Brain: unknown PRISM_EMBEDDER={preset!r}; falling back to 'potion'",
+              file=sys.stderr)
+        preset = "potion"
+    backend, model_id = _EMBEDDER_PRESETS[preset]
+
+    if _MODEL is not None:
+        return True  # already loaded (same process reuse)
+
     try:
-        from model2vec import StaticModel  # type: ignore
-        if _MODEL is None:
-            _MODEL = StaticModel.from_pretrained("minishlab/potion-base-32M")
+        if backend == "model2vec":
+            _MODEL = _load_model2vec(model_id)
+        elif backend == "sentence-transformers":
+            _MODEL = _load_sentence_transformer(model_id)
+        print(f"Brain: embedder = {preset} ({backend}: {model_id})",
+              file=sys.stderr)
         return True
-    except (ImportError, OSError, Exception):
-        print(
-            "Brain: running in BM25+GraphRAG mode "
-            "(install sqlite-vec model2vec for vector search)",
-            file=sys.stderr,
-        )
+    except Exception as e:
+        print(f"Brain: embedder load failed ({preset}: {e!r}); BM25+GraphRAG only",
+              file=sys.stderr)
         return False
 
 
@@ -358,10 +392,18 @@ class Brain:
                     pass
 
         if self.vector_enabled:
+            # Discover the model's native embedding dimension at startup so
+            # the vec0 table matches whatever local model is loaded
+            # (potion-base-32M is 512-dim; MiniLM-L6 is 384-dim).
+            try:
+                probe = _MODEL.encode(["probe"])[0]
+                dim = len(probe)
+            except Exception:
+                dim = 384
             try:
                 self._brain.execute(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS docs_vec "
-                    "USING vec0(doc_id TEXT, embedding float[384])"
+                    f"CREATE VIRTUAL TABLE IF NOT EXISTS docs_vec "
+                    f"USING vec0(doc_id TEXT, embedding float[{dim}])"
                 )
                 self._brain.commit()
             except Exception:
@@ -1456,18 +1498,31 @@ class Brain:
         # In CLI mode the Brain auto-ingests CWD on first search.
         # In service mode, documents are indexed via brain_index_doc MCP tool.
         # The old CLI auto-ingest would index /app (the container code) which is wrong.
+        import os as _os
 
         inner = limit * 2
-        bm25 = self._fts5_search(query, domain, inner, domains=domains)
-        vec = (
-            self._vector_search(query, domain, inner, domains=domains)
-            if self.vector_enabled
-            else []
-        )
-        graph = self._graph_search(query, inner)
 
-        fused = reciprocal_rank_fusion([bm25, vec, graph] if self.vector_enabled
-                                       else [bm25, graph])
+        # Experimental: PRISM_SEARCH_MODE controls which indices contribute.
+        #   hybrid (default) = BM25 + vector + graph, fused via RRF
+        #   vector           = vector search only (when vector_enabled)
+        #   bm25             = BM25 only
+        mode = _os.environ.get("PRISM_SEARCH_MODE", "hybrid").strip().lower()
+
+        if mode == "vector" and self.vector_enabled:
+            fused = self._vector_search(query, domain, inner, domains=domains)
+        elif mode == "bm25":
+            fused = self._fts5_search(query, domain, inner, domains=domains)
+        else:
+            bm25 = self._fts5_search(query, domain, inner, domains=domains)
+            vec = (
+                self._vector_search(query, domain, inner, domains=domains)
+                if self.vector_enabled
+                else []
+            )
+            graph = self._graph_search(query, inner)
+            fused = reciprocal_rank_fusion(
+                [bm25, vec, graph] if self.vector_enabled else [bm25, graph]
+            )
         top = fused[:limit]
         if not top:
             return []

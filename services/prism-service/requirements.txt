@@ -1,4 +1,21 @@
+# Install torch from the CPU-only wheels index to avoid CUDA bloat
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 nicegui>=2.0
 mcp>=1.0
 uvicorn
 plotly
+
+# Vector search (fully local, no API / tokens required)
+model2vec>=0.3
+sqlite-vec>=0.1
+numpy
+tokenizers
+
+# Pluggable neural embedders (selected via PRISM_EMBEDDER env var)
+torch>=2.2,<3
+sentence-transformers>=2.7
+
+# Code knowledge graph (tree-sitter AST + Leiden clustering + edge confidence).
+# We use graphify's `update` subcommand which is LLM-free and local-only.
+graphifyy>=0.1
