@@ -566,21 +566,41 @@ class Brain:
     # ------------------------------------------------------------------
 
     def _chunk_source_file(self, filepath: str, content: str) -> list[dict]:
-        """Split a source file into semantic chunks.
+        """Split a source file into multi-granular chunks.
 
         Returns a list of chunk dicts with keys:
           doc_id, content, entity_name, entity_kind, line_start, line_end
 
-        Code files (.py/.ts/.tsx/.js/.jsx/.cs): split by function/class/module.
-        Other files: single whole-file chunk with entity_kind='module'.
+        Three granularity tiers (all emitted when PRISM_MULTIGRAN=on, default):
+          - coarse: one whole-file chunk (``path::__file__`` for code, or the
+            existing single-chunk ``filepath`` id for prose)
+          - mid: semantic chunks at function/class boundaries (code only,
+            ``path::EntityName``) and a ``path::__module__`` for loose
+            top-level statements
+          - fine: sliding 2048-char windows with 256-char overlap over the
+            whole content (``path::win_N``). Emitted when content is large
+            enough that windows carry new signal (>= min_chars).
+
+        Chars/4 approximation: 2048 chars ~ 512 tokens, 256 chars ~ 64 tokens,
+        matching the [512, 128]-token mid/fine target plus a file-level
+        coarse pass. Per brain_engine.search() matches `_embed()`'s own
+        2048-char truncation, so windows are sized to fit one embedding.
+
+        Set PRISM_MULTIGRAN=off to fall back to the original single-tier
+        semantic-only chunking (useful for A/B comparisons).
         """
+        import os as _os
+
+        multigran = _os.environ.get("PRISM_MULTIGRAN", "on").strip().lower() != "off"
+
         suffix = Path(filepath).suffix.lower()
         lines = content.splitlines()
         n = len(lines) or 1
 
         if suffix not in _TS_LANG_MAP:
-            # Non-code file: single whole-file chunk
-            return [{
+            # Prose/config/unknown: keep the legacy single whole-file chunk
+            # as the coarse tier, then add sliding windows for large files.
+            chunks: list[dict] = [{
                 "doc_id": filepath,
                 "content": content,
                 "entity_name": "__module__",
@@ -588,6 +608,11 @@ class Brain:
                 "line_start": 1,
                 "line_end": n,
             }]
+            if multigran:
+                chunks.extend(
+                    self._sliding_window_chunks(filepath, content, min_chars=2048)
+                )
+            return chunks
 
         lang_name = _TS_LANG_MAP[suffix]
         parser = _get_treesitter_parser(lang_name)
@@ -597,7 +622,69 @@ class Brain:
         else:
             chunks = self._chunk_regex_fallback(filepath, content, lines, suffix)
 
+        if not multigran:
+            return chunks
+
+        # Coarse tier: whole-file view, distinct from __module__ (which only
+        # covers lines NOT covered by any def/class). Only worth emitting when
+        # the file has multiple semantic chunks AND is substantial.
+        if len(chunks) > 1 and len(content) >= 2048:
+            chunks.append({
+                "doc_id": f"{filepath}::__file__",
+                "content": content,
+                "entity_name": "__file__",
+                "entity_kind": "file",
+                "line_start": 1,
+                "line_end": n,
+            })
+
+        # Fine tier: sliding windows over full content. Skips small files
+        # where the semantic chunks already cover everything.
+        chunks.extend(
+            self._sliding_window_chunks(filepath, content, min_chars=2048)
+        )
+
         return chunks
+
+    def _sliding_window_chunks(
+        self,
+        filepath: str,
+        content: str,
+        *,
+        min_chars: int = 2048,
+        window_chars: int = 2048,
+        overlap_chars: int = 256,
+    ) -> list[dict]:
+        """Emit overlapping content windows for the fine-granularity tier.
+
+        Returns an empty list when content is shorter than ``min_chars``
+        (no new signal vs. the whole-file chunk). Windows are ``window_chars``
+        wide with ``overlap_chars`` overlap between consecutive windows.
+        Line ranges are computed from newline counts so UI linking stays
+        accurate on arbitrary offsets.
+        """
+        total = len(content)
+        if total < min_chars:
+            return []
+        step = max(1, window_chars - overlap_chars)
+        windows: list[dict] = []
+        pos = 0
+        idx = 0
+        while pos < total:
+            end_pos = min(pos + window_chars, total)
+            windows.append({
+                "doc_id": f"{filepath}::win_{idx}",
+                "content": content[pos:end_pos],
+                "entity_name": f"win_{idx}",
+                "entity_kind": "window",
+                "line_start": content.count("\n", 0, pos) + 1,
+                "line_end": content.count("\n", 0, end_pos) + 1,
+            })
+            idx += 1
+            if end_pos >= total:
+                break
+            pos += step
+        return windows
 
     def _chunk_python_treesitter(
         self, filepath: str, content: str, parser: object, lines: list[str]
