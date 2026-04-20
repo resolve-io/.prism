@@ -195,10 +195,17 @@ def run_instance(inst: dict, k_max: int = 10, reset: bool = False) -> dict:
     payload = parse_result(resp) or []
     if isinstance(payload, dict):
         payload = payload.get("results") or payload.get("matches") or []
-    retrieved = []
+    # Dedupe file paths across chunks — multi-granular chunking emits
+    # ::win_N / ::__file__ / ::EntityName variants of the same file, and
+    # swebench scores at file granularity.
+    retrieved: list[str] = []
+    seen: set[str] = set()
     for item in payload:
-        did = item.get("doc_id", "").removesuffix("::main")
-        if did:
+        did = item.get("doc_id", "")
+        if "::" in did:
+            did = did.split("::", 1)[0]
+        if did and did not in seen:
+            seen.add(did)
             retrieved.append(did)
     query_sec = time.perf_counter() - t2
 

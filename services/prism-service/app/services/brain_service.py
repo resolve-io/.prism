@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os as _os
 import sqlite3
 import sys
 from typing import Optional
@@ -10,6 +11,37 @@ from typing import Optional
 import re as _re
 
 _CAMEL_RE = _re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
+
+
+def _build_context_header(
+    source_file: str,
+    entity_name: Optional[str],
+    entity_kind: Optional[str],
+    line_start: Optional[int] = None,
+    line_end: Optional[int] = None,
+) -> str:
+    """Short structural prefix prepended to a chunk before embedding/BM25.
+
+    Anthropic Contextual Retrieval: anchoring a chunk in its parent document
+    (path, qualified name, line range) cuts retrieval failures 35-67% without
+    any LLM call. We use structural metadata we already carry per chunk.
+    """
+    lines = [f"File: {source_file}"]
+    if entity_name == "__file__":
+        lines.append("Scope: entire file")
+    elif entity_name == "__module__":
+        lines.append("Scope: module-level code outside any function or class")
+    elif entity_kind == "window":
+        if line_start and line_end:
+            lines.append(f"Scope: window over lines {line_start}-{line_end}")
+        else:
+            lines.append("Scope: sliding window")
+    elif entity_name and entity_kind:
+        qual = f"{entity_kind} {entity_name}"
+        if line_start and line_end:
+            qual += f" (lines {line_start}-{line_end})"
+        lines.append(f"Scope: {qual}")
+    return "\n".join(lines)
 
 
 def _expand_identifiers(text: str) -> str:
@@ -210,8 +242,28 @@ class BrainService:
                 first_doc_id = doc_id
 
             chunk_content = chunk["content"]
+            # Contextual prefix (PRISM_CONTEXT_PREFIX=on default): prepend a
+            # short header with file path + entity scope so the embedder and
+            # BM25 see chunks anchored in their parent document. Hash and the
+            # chunker's raw content are unchanged so drift detection still
+            # aligns with on-disk sha256.
+            if _os.environ.get(
+                "PRISM_CONTEXT_PREFIX", "on"
+            ).strip().lower() != "off":
+                header = _build_context_header(
+                    path,
+                    chunk.get("entity_name"),
+                    chunk.get("entity_kind"),
+                    chunk.get("line_start"),
+                    chunk.get("line_end"),
+                )
+                indexed_content = (
+                    f"{header}\n\n{chunk_content}" if header else chunk_content
+                )
+            else:
+                indexed_content = chunk_content
             # Expand PascalCase/camelCase per chunk for FTS matching.
-            expanded = _expand_identifiers(chunk_content)
+            expanded = _expand_identifiers(indexed_content)
             # Hash RAW chunk content so prism_status drift detection still
             # lines up with on-disk sha256 when the file is single-chunk.
             chash = _hashlib.sha256(chunk_content.encode("utf-8")).hexdigest()
@@ -228,7 +280,7 @@ class BrainService:
             )
 
             if vector_on:
-                vec = self._brain._embed(chunk_content)
+                vec = self._brain._embed(indexed_content)
                 if vec is not None:
                     blob = struct.pack(f"{len(vec)}f", *vec)
                     try:

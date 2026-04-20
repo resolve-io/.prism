@@ -13,6 +13,11 @@ services:
       - PRISM_EMBEDDER=${PRISM_EMBEDDER:-minilm}
       # hybrid (default) | vector | bm25 — which search indices contribute
       - PRISM_SEARCH_MODE=${PRISM_SEARCH_MODE:-hybrid}
+      # Cross-encoder reranker: off (default) | bge-v2 | jina-v2 | ms-marco-minilm
+      - PRISM_RERANK=${PRISM_RERANK:-off}
+      - PRISM_RERANK_TOPN=${PRISM_RERANK_TOPN:-50}
+      # Contextual chunk prefixing (Anthropic-style): on (default) | off
+      - PRISM_CONTEXT_PREFIX=${PRISM_CONTEXT_PREFIX:-on}
       # Keep torch.compile / inductor temp files inside the mounted volume
       # (not in the overlay fs root) so a bad model load can't brick Docker.
       - TORCHINDUCTOR_CACHE_DIR=/data/torch-inductor-cache

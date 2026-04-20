@@ -99,7 +99,11 @@ def run_one(project: str, q_idx: int, entry: dict, k: int = 5) -> dict:
         payload = payload.get("results") or payload.get("matches") or []
     retrieved = []
     for item in payload:
-        did = item.get("doc_id", "").removesuffix("::main")
+        did = item.get("doc_id", "")
+        # Strip any chunk suffix (::main legacy, ::win_N sliding window,
+        # ::__file__, ::__module__, ::EntityName from multi-granular chunking).
+        if "::" in did:
+            did = did.split("::", 1)[0]
         if did:
             retrieved.append(did.rsplit("/", 1)[-1])
     query_sec = time.perf_counter() - t1

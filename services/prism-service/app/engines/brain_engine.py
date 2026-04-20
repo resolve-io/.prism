@@ -38,6 +38,46 @@ class BrainCorruptError(Exception):
 _MODEL = None
 _SQLITE_VEC_LOADED = False
 
+# Cross-encoder reranker (lazy-loaded on first use when PRISM_RERANK != off).
+# Separate from the embedder so both can coexist in memory.
+_RERANKER = None
+_RERANKER_KEY = ""
+
+_RERANKER_PRESETS = {
+    # key -> sentence-transformers CrossEncoder model_id
+    "bge-v2": "BAAI/bge-reranker-v2-m3",
+    "jina-v2": "jinaai/jina-reranker-v2-base-multilingual",
+    "ms-marco-minilm": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+}
+
+
+def _load_reranker(preset: str):
+    """Return a cached CrossEncoder for ``preset``, or None on failure.
+
+    Loading is lazy and cached process-wide. Unknown preset -> None.
+    """
+    global _RERANKER, _RERANKER_KEY
+    preset = (preset or "").strip().lower()
+    if preset in ("", "off", "none"):
+        return None
+    if preset not in _RERANKER_PRESETS:
+        print(f"Brain: unknown PRISM_RERANK={preset!r}; disabling reranker",
+              file=sys.stderr)
+        return None
+    if _RERANKER is not None and _RERANKER_KEY == preset:
+        return _RERANKER
+    try:
+        from sentence_transformers import CrossEncoder  # type: ignore
+        model_id = _RERANKER_PRESETS[preset]
+        _RERANKER = CrossEncoder(model_id, trust_remote_code=True)
+        _RERANKER_KEY = preset
+        print(f"Brain: reranker = {preset} ({model_id})", file=sys.stderr)
+        return _RERANKER
+    except Exception as e:
+        print(f"Brain: reranker load failed ({preset}: {e!r}); disabled",
+              file=sys.stderr)
+        return None
+
 # ---------------------------------------------------------------------------
 # Tree-sitter language loader
 # ---------------------------------------------------------------------------
@@ -1619,6 +1659,25 @@ class Brain:
             fused = reciprocal_rank_fusion(
                 [bm25, vec, graph] if self.vector_enabled else [bm25, graph]
             )
+
+        # Optional cross-encoder reranker (PRISM_RERANK=bge-v2|jina-v2|
+        # ms-marco-minilm|off). Rescores the top PRISM_RERANK_TOPN candidates
+        # by feeding (query, chunk_content) pairs through a cross-encoder,
+        # then replaces that slice of ``fused`` with the reranked order.
+        rerank_preset = (
+            _os.environ.get("PRISM_RERANK", "off").strip().lower()
+        )
+        if rerank_preset not in ("", "off", "none") and fused:
+            try:
+                pool_n = int(_os.environ.get("PRISM_RERANK_TOPN", "50"))
+            except ValueError:
+                pool_n = 50
+            pool_n = max(inner, pool_n)
+            pool = fused[:pool_n]
+            reranked = self._rerank_candidates(query, pool, rerank_preset)
+            if reranked is not None:
+                fused = reranked + fused[pool_n:]
+
         # Take a larger candidate pool when aggregating so collapsing doesn't
         # leave us short of ``limit`` results.
         top = fused[: inner if aggregate else limit]
@@ -1661,6 +1720,50 @@ class Brain:
             if len(results) >= limit:
                 break
         return results
+
+    def _rerank_candidates(
+        self, query: str, candidates: list[dict], preset: str,
+    ) -> Optional[list[dict]]:
+        """Rescore ``candidates`` with a cross-encoder and return new order.
+
+        Returns None when the reranker is unavailable so the caller falls
+        back to RRF order. Attaches a ``rerank_score`` field to each
+        returned item. Caps each document at 2048 chars to keep the
+        cross-encoder under its input limit.
+        """
+        if not candidates:
+            return None
+        reranker = _load_reranker(preset)
+        if reranker is None:
+            return None
+        ids = [c["doc_id"] for c in candidates]
+        placeholders = ",".join("?" * len(ids))
+        rows = self._brain.execute(
+            f"SELECT id, content FROM docs WHERE id IN ({placeholders})", ids,
+        ).fetchall()
+        content_by_id = {r["id"]: r["content"] for r in rows}
+        pairs: list[tuple[str, str]] = []
+        ordered: list[dict] = []
+        for c in candidates:
+            text = content_by_id.get(c["doc_id"])
+            if not text:
+                continue
+            pairs.append((query, text[:2048]))
+            ordered.append(c)
+        if not pairs:
+            return None
+        try:
+            scores = reranker.predict(pairs)
+        except Exception as e:
+            print(f"Brain: reranker predict failed: {e!r}", file=sys.stderr)
+            return None
+        scored: list[dict] = []
+        for c, s in zip(ordered, scores):
+            c2 = dict(c)
+            c2["rerank_score"] = float(s)
+            scored.append(c2)
+        scored.sort(key=lambda x: -x["rerank_score"])
+        return scored
 
     def system_context(
         self,
