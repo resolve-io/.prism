@@ -426,6 +426,18 @@ class Brain:
             );
             CREATE INDEX IF NOT EXISTS idx_searches_ts
                 ON searches(ts DESC);
+            CREATE TABLE IF NOT EXISTS search_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                search_id INTEGER,
+                doc_id TEXT NOT NULL,
+                signal TEXT NOT NULL,
+                note TEXT,
+                ts TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_sf_search
+                ON search_feedback(search_id);
+            CREATE INDEX IF NOT EXISTS idx_sf_doc
+                ON search_feedback(doc_id);
         """)
         # Migrate existing DBs: add chunk metadata columns if missing
         _meta_cols = [
@@ -1741,7 +1753,7 @@ class Brain:
             })
             if len(results) >= limit:
                 break
-        self._log_search(
+        search_id = self._log_search(
             query=query,
             domain=domain,
             domains=domains,
@@ -1755,6 +1767,9 @@ class Brain:
             results=results,
             latency_ms=int((_time.perf_counter() - _search_t0) * 1000),
         )
+        if search_id is not None:
+            for r in results:
+                r["search_id"] = search_id
         return results
 
     def _log_search(
@@ -1770,10 +1785,12 @@ class Brain:
         limit_requested: int,
         results: list[dict],
         latency_ms: int,
-    ) -> None:
+    ) -> Optional[int]:
         """Persist one search event to the ``searches`` table.
 
-        Silent on failure — observability must never break retrieval.
+        Returns the new row id (used by search() to stamp each result with a
+        ``search_id`` so feedback can be tied back later). Silent on failure —
+        observability must never break retrieval.
         """
         try:
             import json as _json
@@ -1787,7 +1804,7 @@ class Brain:
                 }
                 for r in results
             ])
-            self._brain.execute(
+            cur = self._brain.execute(
                 "INSERT INTO searches (query, domain, domains, mode, rerank, "
                 "context_prefix, chunk_agg, limit_requested, n_results, "
                 "latency_ms, final_top) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1801,22 +1818,97 @@ class Brain:
                 ),
             )
             self._brain.commit()
+            return cur.lastrowid
         except Exception:
-            pass
+            return None
 
     def get_recent_searches(self, limit: int = 50) -> list[dict]:
-        """Return the last ``limit`` search events, newest first."""
+        """Return the last ``limit`` search events, newest first.
+
+        Each row is augmented with ``up_count`` and ``down_count`` aggregated
+        from the ``search_feedback`` table so the UI can surface sentiment
+        without a second round-trip.
+        """
         try:
             rows = self._brain.execute(
-                "SELECT id, ts, query, domain, domains, mode, rerank, "
-                "context_prefix, chunk_agg, limit_requested, n_results, "
-                "latency_ms, final_top FROM searches "
-                "ORDER BY id DESC LIMIT ?",
+                "SELECT s.id, s.ts, s.query, s.domain, s.domains, s.mode, "
+                "s.rerank, s.context_prefix, s.chunk_agg, s.limit_requested, "
+                "s.n_results, s.latency_ms, s.final_top, "
+                "COALESCE(SUM(CASE WHEN f.signal='up' THEN 1 ELSE 0 END), 0) "
+                "    AS up_count, "
+                "COALESCE(SUM(CASE WHEN f.signal='down' THEN 1 ELSE 0 END), 0) "
+                "    AS down_count "
+                "FROM searches s "
+                "LEFT JOIN search_feedback f ON f.search_id = s.id "
+                "GROUP BY s.id "
+                "ORDER BY s.id DESC LIMIT ?",
                 (int(limit),),
             ).fetchall()
         except Exception:
             return []
         return [dict(r) for r in rows]
+
+    def record_search_feedback(
+        self,
+        search_id: int,
+        doc_id: str,
+        signal: str,
+        note: Optional[str] = None,
+    ) -> Optional[int]:
+        """Record a thumbs-up / thumbs-down on one doc from a prior search.
+
+        Returns the new feedback row id, or None if the insert failed (e.g.
+        unknown search_id, malformed signal). Only 'up' and 'down' signals
+        are accepted.
+        """
+        if signal not in ("up", "down"):
+            return None
+        try:
+            cur = self._brain.execute(
+                "INSERT INTO search_feedback (search_id, doc_id, signal, note) "
+                "VALUES (?, ?, ?, ?)",
+                (int(search_id), doc_id, signal, note),
+            )
+            self._brain.commit()
+            return cur.lastrowid
+        except Exception:
+            return None
+
+    def get_search_feedback(self, search_id: int) -> list[dict]:
+        """Return all feedback rows tied to ``search_id``."""
+        try:
+            rows = self._brain.execute(
+                "SELECT id, search_id, doc_id, signal, note, ts "
+                "FROM search_feedback WHERE search_id = ? ORDER BY id",
+                (int(search_id),),
+            ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def feedback_stats(self) -> dict:
+        """Aggregate thumbs up/down counts and per-doc win rates."""
+        try:
+            total = self._brain.execute(
+                "SELECT signal, COUNT(*) AS n FROM search_feedback "
+                "GROUP BY signal"
+            ).fetchall()
+            counts = {r["signal"]: r["n"] for r in total}
+            worst = self._brain.execute(
+                "SELECT doc_id, "
+                "  SUM(CASE WHEN signal='down' THEN 1 ELSE 0 END) AS downs, "
+                "  SUM(CASE WHEN signal='up' THEN 1 ELSE 0 END) AS ups, "
+                "  COUNT(*) AS total "
+                "FROM search_feedback GROUP BY doc_id "
+                "HAVING downs > ups ORDER BY downs DESC LIMIT 10"
+            ).fetchall()
+        except Exception:
+            return {"up": 0, "down": 0, "worst": []}
+        return {
+            "up": int(counts.get("up", 0)),
+            "down": int(counts.get("down", 0)),
+            "worst": [dict(r) for r in worst],
+        }
 
     def _rerank_candidates(
         self, query: str, candidates: list[dict], preset: str,

@@ -71,6 +71,41 @@ TOOLS: list[Tool] = [
         },
     ),
     Tool(
+        name="brain_search_feedback",
+        description=(
+            "Record thumbs-up (signal='up') or thumbs-down (signal='down') "
+            "on a single doc_id returned by a prior brain_search call. Uses "
+            "the search_id the caller receives on each brain_search result. "
+            "Feedback is persisted to the search_feedback table and "
+            "aggregated on the /retrievals UI. Use this after you've worked "
+            "with a search result to record whether it was actually useful "
+            "— the data feeds future retrieval tuning."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "search_id": {
+                    "type": "integer",
+                    "description": "The search_id returned on each brain_search result",
+                },
+                "doc_id": {
+                    "type": "string",
+                    "description": "Which retrieved doc_id the feedback is about",
+                },
+                "signal": {
+                    "type": "string",
+                    "enum": ["up", "down"],
+                    "description": "up = useful, down = not useful",
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Optional short reason (why it was good/bad)",
+                },
+            },
+            "required": ["search_id", "doc_id", "signal"],
+        },
+    ),
+    Tool(
         name="brain_list",
         description="List all documents indexed in Brain. Returns doc_id, domain, and content length for each.",
         inputSchema={
@@ -1188,6 +1223,18 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 "domain": domain,
                 "content_length": len(content),
                 "entities": len(entities),
+            }))]
+
+        if name == "brain_search_feedback":
+            feedback_id = brain_svc.record_search_feedback(
+                search_id=int(arguments["search_id"]),
+                doc_id=str(arguments["doc_id"]),
+                signal=str(arguments["signal"]),
+                note=arguments.get("note"),
+            )
+            return [TextContent(type="text", text=_json({
+                "recorded": feedback_id is not None,
+                "feedback_id": feedback_id,
             }))]
 
         if name == "brain_list":

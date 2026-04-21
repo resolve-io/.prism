@@ -97,6 +97,9 @@ def _build_table(container, rows: list[dict]) -> None:
              "align": "right"},
             {"name": "top", "label": "Top hit", "field": "top",
              "align": "left"},
+            {"name": "up", "label": "👍", "field": "up", "align": "right"},
+            {"name": "down", "label": "👎", "field": "down",
+             "align": "right"},
         ]
         data = []
         for r in rows:
@@ -107,6 +110,8 @@ def _build_table(container, rows: list[dict]) -> None:
                     top_hit = parsed[0].get("doc_id") or "-"
             except Exception:
                 pass
+            up = int(r.get("up_count") or 0)
+            down = int(r.get("down_count") or 0)
             data.append({
                 "id": r.get("id"),
                 "ts": _fmt_ts(r.get("ts") or ""),
@@ -115,6 +120,8 @@ def _build_table(container, rows: list[dict]) -> None:
                 "n": r.get("n_results", 0),
                 "lat": f"{r.get('latency_ms', 0)} ms",
                 "top": top_hit[:80] if top_hit else "-",
+                "up": str(up) if up else "",
+                "down": str(down) if down else "",
             })
         ui.table(columns=columns, rows=data, row_key="id").classes("w-full")
 
@@ -131,14 +138,74 @@ def retrievals_page():
         )
         summary_box = ui.column().classes("w-full")
         with ui.card().classes("w-full bg-white shadow-sm rounded-lg p-5"):
+            ui.label("Rate the latest search").classes(
+                "text-lg font-semibold text-gray-900 mb-2"
+            )
+            rate_box = ui.column().classes("w-full")
+        with ui.card().classes("w-full bg-white shadow-sm rounded-lg p-5"):
             ui.label("Recent searches").classes(
                 "text-lg font-semibold text-gray-900 mb-4"
             )
             table_box = ui.column().classes("w-full")
 
+    def record(search_id: int, doc_id: str, signal: str):
+        """Feedback callback wired to the 👍/👎 buttons."""
+        fb = _brain_svc().record_search_feedback(
+            search_id=search_id, doc_id=doc_id, signal=signal,
+        )
+        if fb:
+            ui.notify(f"Recorded {signal} on {doc_id[:40]}", type="positive")
+        else:
+            ui.notify("Failed to record feedback", type="warning")
+        refresh()
+
+    def _build_rater(container, rows: list[dict]) -> None:
+        container.clear()
+        with container:
+            if not rows:
+                ui.label("No searches to rate yet.").classes(
+                    "text-sm text-gray-500"
+                )
+                return
+            latest = rows[0]
+            sid = int(latest.get("id") or 0)
+            try:
+                parsed = json.loads(latest.get("final_top") or "[]")
+            except Exception:
+                parsed = []
+            ui.label(
+                f"Search #{sid} · {_fmt_ts(latest.get('ts') or '')} · "
+                f"{(latest.get('query') or '')[:100]}"
+            ).classes("text-sm text-gray-600 mb-2")
+            if not parsed:
+                ui.label("(empty result set — nothing to rate)").classes(
+                    "text-sm text-gray-400"
+                )
+                return
+            for i, hit in enumerate(parsed[:5]):
+                did = hit.get("doc_id") or "?"
+                with ui.row().classes("items-center gap-2 w-full"):
+                    ui.label(f"#{i+1}").classes(
+                        "text-xs text-gray-400 w-8"
+                    )
+                    ui.label(did[:90]).classes(
+                        "text-sm text-gray-800 flex-1"
+                    )
+                    ui.button(
+                        "👍",
+                        on_click=lambda _=None, s=sid, d=did:
+                            record(s, d, "up"),
+                    ).props("flat dense").classes("text-sm")
+                    ui.button(
+                        "👎",
+                        on_click=lambda _=None, s=sid, d=did:
+                            record(s, d, "down"),
+                    ).props("flat dense").classes("text-sm")
+
     def refresh():
         rows = _brain_svc().recent_searches(limit=100)
         _build_summary(summary_box, rows)
+        _build_rater(rate_box, rows)
         _build_table(table_box, rows)
 
     refresh()

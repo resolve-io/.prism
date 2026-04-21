@@ -139,6 +139,33 @@ class BrainService:
             return []
         return self._brain.get_recent_searches(limit=limit)
 
+    def record_search_feedback(
+        self,
+        search_id: int,
+        doc_id: str,
+        signal: str,
+        note: Optional[str] = None,
+    ) -> Optional[int]:
+        """Write one thumbs-up/thumbs-down on a search result doc."""
+        if not self._available or self._brain is None:
+            return None
+        return self._brain.record_search_feedback(
+            search_id=search_id, doc_id=doc_id,
+            signal=signal, note=note,
+        )
+
+    def search_feedback(self, search_id: int) -> list[dict]:
+        """Return all feedback rows tied to ``search_id``."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.get_search_feedback(search_id=search_id)
+
+    def feedback_stats(self) -> dict:
+        """Aggregate up/down counts + worst-offender docs."""
+        if not self._available or self._brain is None:
+            return {"up": 0, "down": 0, "worst": []}
+        return self._brain.feedback_stats()
+
     def list_docs(
         self, domain: Optional[str] = None, limit: int = 100,
     ) -> list[dict]:
