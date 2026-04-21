@@ -124,6 +124,28 @@ in `services/bench-service/docker-compose.yml`.
   delivers clearly on code retrieval even though it saturated at the ceiling on
   LongMemEval smoke. The conversational corpus measures a different kind of hard.
 
+### 2026-04-21 — swebench-noreranker-limit10 (A/B vs yesterday's full stack)
+- Same 10 SWE-bench Lite instances, PRISM_RERANK=off, everything else identical to
+  2026-04-20 swebench-fullstack-limit10 (multi-granular + contextual prefix on).
+- **R@1 = 0.600** (vs 0.400 with bge-v2, **+0.200**)
+- **R@5 = 0.800** (identical)
+- **R@10 = 0.900** (identical)
+- Every non-trivial instance (6 of 10) showed the reranker demoting the correctly-#1-ranked
+  gold file down the top-10. Examples:
+    astropy-7746: off=0.833 -> bge=0.500
+    django-10914: off=0.714 -> bge=0.429
+    django-11019: off=0.600 -> bge=0.400
+  R@5 and R@10 survive because gold stays in the pool, just loses rank 1.
+- astropy-14995 is the one counter-example: bge lifted R@5 from 0.750 to 1.000 (found a
+  gold file that off missed at rank 5). Not enough to offset the aggregate R@1 regression.
+- Interpretation: bge-reranker-v2-m3 is trained on general-domain QA pairs. On
+  (problem_statement, code_chunk) pairs it apparently rewards surface-lexical overlap
+  over the graph/call-structure signals that MiniLM + RRF already exploit. CoIR-trained
+  rerankers (jina-v3) are untested here — would be a separate experiment if we ever
+  revisit.
+- **Decision: PRISM_RERANK=off is the permanent default.** Already the compose default;
+  no code change required. Keep the reranker wiring (opt-in for future models).
+
 ### 2026-04-20 — operator notes (cold-start behavior)
 - **Community summary prose-enrichment requires function/class docs.** The new
   ``communities.summary`` column (see graph rebuild) always gets a structural
