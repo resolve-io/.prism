@@ -672,18 +672,43 @@ class Brain:
         self._brain.commit()
 
     def _purge_deleted(self) -> int:
-        """Remove DB entries for files that no longer exist or are now excluded.
+        """Remove DB entries for files that no longer exist or are excluded.
 
-        Returns count of purged documents.
+        Safety: if ZERO indexed source files are reachable from this
+        process, the project directory is likely not mounted (common in
+        service-mode containers). A 100%-purge decision in that case
+        wipes the index. We detect and skip, logging so operators know.
+        Override with PRISM_PURGE_FORCE=1 for environments where the
+        empty result is the actual truth.
         """
+        import os as _os
+        import sys as _sys
         rows = self._brain.execute(
             "SELECT id, source_file FROM docs WHERE source_file IS NOT NULL"
         ).fetchall()
+        if not rows:
+            return 0
         to_purge: list[str] = []
+        reachable = 0
         for row in rows:
             sf = row["source_file"]
-            if not Path(sf).exists() or not self._should_index(sf):
+            exists = Path(sf).exists()
+            if exists:
+                reachable += 1
+                if not self._should_index(sf):
+                    to_purge.append(sf)
+            else:
                 to_purge.append(sf)
+        if to_purge and reachable == 0:
+            if _os.environ.get("PRISM_PURGE_FORCE", "").strip() != "1":
+                print(
+                    f"[purge-skip] {len(to_purge)}/{len(rows)} rows look "
+                    f"missing but no indexed file is reachable — "
+                    f"skipping purge (project likely unmounted). Set "
+                    f"PRISM_PURGE_FORCE=1 to override.",
+                    file=_sys.stderr,
+                )
+                return 0
         if to_purge:
             self._remove_entries_by_source(to_purge)
         return len(to_purge)
