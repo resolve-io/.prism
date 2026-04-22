@@ -20,6 +20,8 @@ services:
       - PRISM_CONTEXT_PREFIX=${PRISM_CONTEXT_PREFIX:-on}
       # Feedback consumption weight; "off" disables entirely.
       - PRISM_FEEDBACK_WEIGHT=${PRISM_FEEDBACK_WEIGHT:-0.002}
+      # Drift auto-reindex — benches do not want implicit reindex; disable.
+      - PRISM_DRIFT_INTERVAL=${PRISM_DRIFT_INTERVAL:-0}
       # Keep torch.compile / inductor temp files inside the mounted volume
       # (not in the overlay fs root) so a bad model load can't brick Docker.
       - TORCHINDUCTOR_CACHE_DIR=/data/torch-inductor-cache

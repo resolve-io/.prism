@@ -22,6 +22,8 @@ services:
       # Default 0.002 so ~3 consistent thumbs overcome a typical RRF gap.
       # Set to "off" to disable feedback-driven re-ranking entirely.
       - PRISM_FEEDBACK_WEIGHT=${PRISM_FEEDBACK_WEIGHT:-0.002}
+      # Drift auto-reindex interval (seconds). 0 disables the loop.
+      - PRISM_DRIFT_INTERVAL=${PRISM_DRIFT_INTERVAL:-1800}
       # Keep torch/HF caches on the mounted volume so bad loads can't brick Docker
       - TORCHINDUCTOR_CACHE_DIR=/data/torch-inductor-cache
       - TORCH_HOME=/data/torch-home
