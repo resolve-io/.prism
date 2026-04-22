@@ -198,6 +198,41 @@ class BrainService:
             return []
         return self._brain.graph_query(entity, relation=relation, limit=limit)
 
+    def find_symbol(
+        self,
+        name: str,
+        kind: Optional[str] = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Find chunks matching entity_name; token-efficient alternative to Read."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.find_symbol(name=name, kind=kind, limit=limit)
+
+    def outline(self, source_file: str) -> list[dict]:
+        """Return symbol outline of a file — metadata only, ~200 tokens."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.outline(source_file=source_file)
+
+    def find_references(
+        self, name: str, limit: int = 20,
+    ) -> list[dict]:
+        """Return callers of ``name`` from the graph (caller_name/kind/file)."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.find_references(name=name, limit=limit)
+
+    def call_chain(
+        self, entity: str, depth: int = 2, limit: int = 50,
+    ) -> list[dict]:
+        """Bounded BFS over the call graph from ``entity``."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.call_chain(
+            entity=entity, depth=depth, limit=limit,
+        )
+
     def ingest(self, sources: list[str]) -> int:
         """Ingest source files into the knowledge base."""
         if not self._available or self._brain is None:

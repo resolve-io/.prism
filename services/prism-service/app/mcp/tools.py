@@ -113,6 +113,84 @@ TOOLS: list[Tool] = [
         },
     ),
     Tool(
+        name="brain_find_symbol",
+        description=(
+            "Return the chunk(s) for a named function/class/method — the "
+            "token-efficient alternative to Read-ing the whole parent "
+            "file. Example: brain_find_symbol('_fts5_search') returns a "
+            "~40-line chunk with file, line range, and body instead of "
+            "the 2500-line brain_engine.py. Optional kind filter: "
+            "function | class | method | module."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string",
+                         "description": "entity name (function, class, method)"},
+                "kind": {"type": "string",
+                         "description": "optional filter: function|class|method|module"},
+                "limit": {"type": "integer", "default": 10},
+            },
+            "required": ["name"],
+        },
+    ),
+    Tool(
+        name="brain_outline",
+        description=(
+            "Return the symbol outline of a source file — list of "
+            "entity_name/entity_kind/line_start/line_end with NO bodies. "
+            "Costs ~200 tokens for a file that would be 15K tokens to "
+            "Read. Use this to orient before deciding which specific "
+            "chunks to fetch via brain_find_symbol."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source_file": {"type": "string",
+                                 "description": "file path as indexed"},
+            },
+            "required": ["source_file"],
+        },
+    ),
+    Tool(
+        name="brain_find_references",
+        description=(
+            "Return the call sites of a named entity via the graph. "
+            "Each result is {caller_name, caller_kind, caller_file, "
+            "relation}. Use find_symbol() on a caller_name to fetch its "
+            "chunk content. Replaces 'grep for foo(' with a semantic "
+            "query that respects function boundaries."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "limit": {"type": "integer", "default": 20},
+            },
+            "required": ["name"],
+        },
+    ),
+    Tool(
+        name="brain_call_chain",
+        description=(
+            "Bounded BFS over the call graph starting at ``entity``. "
+            "Returns a flat edge list [{from, to, kind, relation, hop}] "
+            "so you can reconstruct 'what does this entity transitively "
+            "call'. Use to understand flow without Reading multiple "
+            "files."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "entity": {"type": "string"},
+                "depth": {"type": "integer", "default": 2,
+                          "description": "max hops (default 2)"},
+                "limit": {"type": "integer", "default": 50},
+            },
+            "required": ["entity"],
+        },
+    ),
+    Tool(
         name="brain_list",
         description="List all documents indexed in Brain. Returns doc_id, domain, and content length for each.",
         inputSchema={
@@ -1286,6 +1364,33 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 "recorded": feedback_id is not None,
                 "feedback_id": feedback_id,
             }))]
+
+        if name == "brain_find_symbol":
+            results = brain_svc.find_symbol(
+                name=arguments["name"],
+                kind=arguments.get("kind"),
+                limit=arguments.get("limit", 10),
+            )
+            return [TextContent(type="text", text=_json(results))]
+
+        if name == "brain_outline":
+            results = brain_svc.outline(source_file=arguments["source_file"])
+            return [TextContent(type="text", text=_json(results))]
+
+        if name == "brain_find_references":
+            results = brain_svc.find_references(
+                name=arguments["name"],
+                limit=arguments.get("limit", 20),
+            )
+            return [TextContent(type="text", text=_json(results))]
+
+        if name == "brain_call_chain":
+            results = brain_svc.call_chain(
+                entity=arguments["entity"],
+                depth=arguments.get("depth", 2),
+                limit=arguments.get("limit", 50),
+            )
+            return [TextContent(type="text", text=_json(results))]
 
         if name == "brain_list":
             docs = brain_svc.list_docs(

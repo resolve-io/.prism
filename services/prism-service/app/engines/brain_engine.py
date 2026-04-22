@@ -2048,6 +2048,143 @@ class Brain:
             return []
 
     # ------------------------------------------------------------------
+    # Semantic chunk accessors (token-efficient alternatives to file Read)
+    # ------------------------------------------------------------------
+
+    def find_symbol(
+        self,
+        name: str,
+        kind: Optional[str] = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Return chunks whose entity_name matches ``name``.
+
+        Optional ``kind`` filter (function/class/method/etc). Returns the
+        full chunk content so Claude can read a bounded semantic unit
+        instead of loading the whole parent file.
+        """
+        try:
+            if kind:
+                rows = self._brain.execute(
+                    "SELECT id, source_file, content, entity_name, "
+                    "entity_kind, line_start, line_end FROM docs "
+                    "WHERE entity_name = ? AND entity_kind = ? "
+                    "ORDER BY source_file, line_start LIMIT ?",
+                    (name, kind, int(limit)),
+                ).fetchall()
+            else:
+                rows = self._brain.execute(
+                    "SELECT id, source_file, content, entity_name, "
+                    "entity_kind, line_start, line_end FROM docs "
+                    "WHERE entity_name = ? "
+                    "ORDER BY source_file, line_start LIMIT ?",
+                    (name, int(limit)),
+                ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def outline(self, source_file: str) -> list[dict]:
+        """Return the symbol outline of a file — metadata only, no bodies.
+
+        For a ~2500-line file this drops the read cost from ~15K tokens
+        (whole-file Read) to ~200 tokens (one line per entity).
+        """
+        try:
+            rows = self._brain.execute(
+                "SELECT entity_name, entity_kind, line_start, line_end "
+                "FROM docs WHERE source_file = ? "
+                "AND entity_kind NOT IN ('window', 'file') "
+                "AND entity_name NOT IN ('__file__', '__module__') "
+                "ORDER BY line_start",
+                (source_file,),
+            ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def find_references(
+        self, name: str, limit: int = 20,
+    ) -> list[dict]:
+        """Return call sites referencing ``name`` via the graph.
+
+        Looks up ``name`` in graph.db entities, then finds inbound
+        relationships. For each caller, returns its name/kind/file and
+        the relation type. No chunk body — use find_symbol() on the
+        returned caller names for content.
+        """
+        try:
+            tgt = self._graph.execute(
+                "SELECT id FROM entities WHERE name = ? LIMIT 1", (name,),
+            ).fetchone()
+            if not tgt:
+                return []
+            rows = self._graph.execute(
+                "SELECT e.name AS caller_name, e.kind AS caller_kind, "
+                "e.file AS caller_file, r.relation AS relation "
+                "FROM relationships r "
+                "JOIN entities e ON e.id = r.source_id "
+                "WHERE r.target_id = ? LIMIT ?",
+                (tgt["id"], int(limit)),
+            ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def call_chain(
+        self,
+        entity: str,
+        depth: int = 2,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Bounded BFS on the relationships graph starting at ``entity``.
+
+        Returns a flat list of edges [{from, to, kind, relation, hop}]
+        so the caller can reconstruct either tree or flat views. Hop 0
+        is the entity itself; hop 1 is direct callees; etc.
+        """
+        try:
+            start = self._graph.execute(
+                "SELECT id, name FROM entities WHERE name = ? LIMIT 1",
+                (entity,),
+            ).fetchone()
+            if not start:
+                return []
+            visited = {start["id"]}
+            frontier = [start["id"]]
+            edges: list[dict] = []
+            for hop in range(1, max(1, int(depth)) + 1):
+                if not frontier or len(edges) >= limit:
+                    break
+                placeholders = ",".join("?" * len(frontier))
+                rows = self._graph.execute(
+                    f"SELECT r.source_id AS src_id, "
+                    f"s.name AS src_name, t.name AS tgt_name, "
+                    f"t.kind AS tgt_kind, t.id AS tgt_id, "
+                    f"r.relation AS relation "
+                    f"FROM relationships r "
+                    f"JOIN entities s ON s.id = r.source_id "
+                    f"JOIN entities t ON t.id = r.target_id "
+                    f"WHERE r.source_id IN ({placeholders}) "
+                    f"LIMIT ?",
+                    (*frontier, int(limit) - len(edges)),
+                ).fetchall()
+                next_frontier: list[int] = []
+                for r in rows:
+                    edges.append({
+                        "from": r["src_name"], "to": r["tgt_name"],
+                        "kind": r["tgt_kind"], "relation": r["relation"],
+                        "hop": hop,
+                    })
+                    if r["tgt_id"] not in visited:
+                        visited.add(r["tgt_id"])
+                        next_frontier.append(r["tgt_id"])
+                frontier = next_frontier
+            return edges
+        except Exception:
+            return []
+
+    # ------------------------------------------------------------------
     # Ingest
     # ------------------------------------------------------------------
 
