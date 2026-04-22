@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os as _os
 import sqlite3
 import sys
 from typing import Optional
@@ -10,6 +11,37 @@ from typing import Optional
 import re as _re
 
 _CAMEL_RE = _re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
+
+
+def _build_context_header(
+    source_file: str,
+    entity_name: Optional[str],
+    entity_kind: Optional[str],
+    line_start: Optional[int] = None,
+    line_end: Optional[int] = None,
+) -> str:
+    """Short structural prefix prepended to a chunk before embedding/BM25.
+
+    Anthropic Contextual Retrieval: anchoring a chunk in its parent document
+    (path, qualified name, line range) cuts retrieval failures 35-67% without
+    any LLM call. We use structural metadata we already carry per chunk.
+    """
+    lines = [f"File: {source_file}"]
+    if entity_name == "__file__":
+        lines.append("Scope: entire file")
+    elif entity_name == "__module__":
+        lines.append("Scope: module-level code outside any function or class")
+    elif entity_kind == "window":
+        if line_start and line_end:
+            lines.append(f"Scope: window over lines {line_start}-{line_end}")
+        else:
+            lines.append("Scope: sliding window")
+    elif entity_name and entity_kind:
+        qual = f"{entity_kind} {entity_name}"
+        if line_start and line_end:
+            qual += f" (lines {line_start}-{line_end})"
+        lines.append(f"Scope: {qual}")
+    return "\n".join(lines)
 
 
 def _expand_identifiers(text: str) -> str:
@@ -101,6 +133,39 @@ class BrainService:
             story_file=story_file, persona=persona, limit=limit,
         )
 
+    def recent_searches(self, limit: int = 50) -> list[dict]:
+        """Return the most recent ``limit`` search events from brain.db."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.get_recent_searches(limit=limit)
+
+    def record_search_feedback(
+        self,
+        search_id: int,
+        doc_id: str,
+        signal: str,
+        note: Optional[str] = None,
+    ) -> Optional[int]:
+        """Write one thumbs-up/thumbs-down on a search result doc."""
+        if not self._available or self._brain is None:
+            return None
+        return self._brain.record_search_feedback(
+            search_id=search_id, doc_id=doc_id,
+            signal=signal, note=note,
+        )
+
+    def search_feedback(self, search_id: int) -> list[dict]:
+        """Return all feedback rows tied to ``search_id``."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.get_search_feedback(search_id=search_id)
+
+    def feedback_stats(self) -> dict:
+        """Aggregate up/down counts + worst-offender docs."""
+        if not self._available or self._brain is None:
+            return {"up": 0, "down": 0, "worst": []}
+        return self._brain.feedback_stats()
+
     def list_docs(
         self, domain: Optional[str] = None, limit: int = 100,
     ) -> list[dict]:
@@ -133,6 +198,41 @@ class BrainService:
             return []
         return self._brain.graph_query(entity, relation=relation, limit=limit)
 
+    def find_symbol(
+        self,
+        name: str,
+        kind: Optional[str] = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Find chunks matching entity_name; token-efficient alternative to Read."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.find_symbol(name=name, kind=kind, limit=limit)
+
+    def outline(self, source_file: str) -> list[dict]:
+        """Return symbol outline of a file — metadata only, ~200 tokens."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.outline(source_file=source_file)
+
+    def find_references(
+        self, name: str, limit: int = 20,
+    ) -> list[dict]:
+        """Return callers of ``name`` from the graph (caller_name/kind/file)."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.find_references(name=name, limit=limit)
+
+    def call_chain(
+        self, entity: str, depth: int = 2, limit: int = 50,
+    ) -> list[dict]:
+        """Bounded BFS over the call graph from ``entity``."""
+        if not self._available or self._brain is None:
+            return []
+        return self._brain.call_chain(
+            entity=entity, depth=depth, limit=limit,
+        )
+
     def ingest(self, sources: list[str]) -> int:
         """Ingest source files into the knowledge base."""
         if not self._available or self._brain is None:
@@ -152,43 +252,118 @@ class BrainService:
         domain: str = "code",
         entities: list[dict] | None = None,
     ) -> str:
-        """Index a document directly from content (no filesystem access needed).
+        """Index a document, chunked at function/class boundaries when possible.
 
-        Claude reads the file on the host and sends content via MCP.
-        Brain stores and indexes it for future search.
+        Code files (suffix in _TS_LANG_MAP): chunked via Brain._chunk_source_file
+        into per-function/class docs with ``path::EntityName`` ids, each with
+        its own embedding. Prose (md/txt): single whole-file doc with
+        ``path::main`` (legacy id format preserved for backward-compat).
 
-        Uses the Brain engine's own DB connections so FTS triggers fire.
-
-        Returns the doc_id.
+        Replaces any prior chunks for the same source_file so re-indexing
+        leaves no stale rows. Returns the first chunk's doc_id.
         """
         from datetime import datetime, timezone
-
-        doc_id = f"{path}::main"
-        now = datetime.now(timezone.utc).isoformat()
-        filename = path.rsplit("/", 1)[-1] if "/" in path else path
+        import hashlib as _hashlib
+        import struct
 
         if not self._available or self._brain is None:
-            return doc_id  # silently skip if Brain not available
+            return f"{path}::main"
 
-        # Use the Brain engine's own connections so search sees the new data.
-        # self._brain is the Brain engine instance.
-        # self._brain._brain is its sqlite3 connection to brain.db.
         brain_conn = self._brain._brain
+        now = datetime.now(timezone.utc).isoformat()
+        vector_on = getattr(self._brain, "vector_enabled", False)
 
-        # Expand PascalCase/camelCase for better FTS matching
-        expanded_content = _expand_identifiers(content)
+        # Purge any prior rows for this source file (by source_file column,
+        # plus the legacy path::main and path-only ids) so a re-index leaves
+        # no stale chunks behind.
+        stale = brain_conn.execute(
+            "SELECT id FROM docs WHERE source_file = ? OR id = ? OR id = ?",
+            (path, path, f"{path}::main"),
+        ).fetchall()
+        stale_ids = [r[0] for r in stale]
+        if stale_ids:
+            ph = ",".join("?" * len(stale_ids))
+            if vector_on:
+                try:
+                    brain_conn.execute(
+                        f"DELETE FROM docs_vec WHERE doc_id IN ({ph})",
+                        stale_ids,
+                    )
+                except Exception:
+                    pass
+            brain_conn.execute(
+                f"DELETE FROM docs WHERE id IN ({ph})", stale_ids,
+            )
 
-        # Delete first so the AFTER INSERT trigger fires for FTS sync
-        brain_conn.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
-        brain_conn.execute(
-            "INSERT INTO docs "
-            "(id, source_file, content, domain, indexed_at, entity_name, entity_kind) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (doc_id, path, expanded_content, domain, now, filename, "file"),
-        )
+        # Chunk via Brain's native chunker (tree-sitter for .py, regex
+        # fallback for .ts/.tsx/.js/.jsx/.cs, whole-file for everything else).
+        chunks = self._brain._chunk_source_file(path, content)
+
+        first_doc_id = ""
+        for chunk in chunks:
+            doc_id = chunk["doc_id"]
+            # Non-code files come back with doc_id == filepath (no "::").
+            # Normalise to the legacy path::main form for prose compat.
+            if "::" not in doc_id:
+                doc_id = f"{path}::main"
+            if not first_doc_id:
+                first_doc_id = doc_id
+
+            chunk_content = chunk["content"]
+            # Contextual prefix (PRISM_CONTEXT_PREFIX=on default): prepend a
+            # short header with file path + entity scope so the embedder and
+            # BM25 see chunks anchored in their parent document. Hash and the
+            # chunker's raw content are unchanged so drift detection still
+            # aligns with on-disk sha256.
+            if _os.environ.get(
+                "PRISM_CONTEXT_PREFIX", "on"
+            ).strip().lower() != "off":
+                header = _build_context_header(
+                    path,
+                    chunk.get("entity_name"),
+                    chunk.get("entity_kind"),
+                    chunk.get("line_start"),
+                    chunk.get("line_end"),
+                )
+                indexed_content = (
+                    f"{header}\n\n{chunk_content}" if header else chunk_content
+                )
+            else:
+                indexed_content = chunk_content
+            # Expand PascalCase/camelCase per chunk for FTS matching.
+            expanded = _expand_identifiers(indexed_content)
+            # Hash RAW chunk content so prism_status drift detection still
+            # lines up with on-disk sha256 when the file is single-chunk.
+            chash = _hashlib.sha256(chunk_content.encode("utf-8")).hexdigest()
+
+            brain_conn.execute(
+                "INSERT INTO docs "
+                "(id, source_file, content, domain, indexed_at, "
+                " entity_name, entity_kind, content_hash, "
+                " line_start, line_end) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (doc_id, path, expanded, domain, now,
+                 chunk["entity_name"], chunk["entity_kind"], chash,
+                 chunk["line_start"], chunk["line_end"]),
+            )
+
+            if vector_on:
+                vec = self._brain._embed(indexed_content)
+                if vec is not None:
+                    blob = struct.pack(f"{len(vec)}f", *vec)
+                    try:
+                        brain_conn.execute(
+                            "INSERT INTO docs_vec (doc_id, embedding) "
+                            "VALUES (?, ?)",
+                            (doc_id, blob),
+                        )
+                    except Exception as e:
+                        print(f"index_doc vec insert failed: {e!r}",
+                              file=sys.stderr, flush=True)
+
         brain_conn.commit()
 
-        # Index entities into graph.db if provided
+        # Index caller-supplied entities into graph.db (unchanged).
         if entities:
             graph_conn = self._brain._graph
             for ent in entities:
@@ -196,12 +371,22 @@ class BrainService:
                 ent_kind = ent.get("kind", "unknown")
                 if ent_name:
                     graph_conn.execute(
-                        "INSERT OR IGNORE INTO entities (name, kind, file) VALUES (?, ?, ?)",
+                        "INSERT OR IGNORE INTO entities (name, kind, file) "
+                        "VALUES (?, ?, ?)",
                         (ent_name, ent_kind, path),
                     )
             graph_conn.commit()
 
-        return doc_id
+        # Stage source for graphify's code-graph pass (unchanged).
+        graph_svc = getattr(self, "graph_svc", None)
+        if graph_svc is not None:
+            try:
+                graph_svc.stage_doc(path, content)
+            except Exception as e:
+                print(f"index_doc: graph staging failed: {e!r}",
+                      file=sys.stderr, flush=True)
+
+        return first_doc_id or f"{path}::main"
 
     # ------------------------------------------------------------------
     # Status

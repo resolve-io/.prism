@@ -123,6 +123,16 @@
             "description": "Log terminal command outputs to files for later grep searching"
           }
         ]
+      },
+      {
+        "matcher": "mcp__prism__brain_search|Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/feedback_signal_hook.py",
+            "description": "Implicit retrieval feedback: correlate brain_search results with Read/Edit to emit auto thumbs-up via brain_search_feedback MCP"
+          }
+        ]
       }
     ],
     "SubagentStart": [

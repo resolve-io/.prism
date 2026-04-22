@@ -21,6 +21,13 @@ MCP_PORT = int(os.environ.get("PRISM_MCP_PORT", "8081"))
 # Governance
 GOVERNANCE_INTERVAL_SECONDS = int(os.environ.get("PRISM_GOVERNANCE_INTERVAL", "300"))  # 5 min
 
+# Drift auto-reindex — how often a background thread runs
+# incremental_reindex across all projects. 0 disables the loop
+# entirely so ops can opt out.
+DRIFT_INTERVAL_SECONDS = int(
+    os.environ.get("PRISM_DRIFT_INTERVAL", "1800"),  # 30 min default
+)
+
 # Shelf-life defaults per domain (days)
 DOMAIN_SHELF_LIFE: dict[str, int] = {
     "default": 30,

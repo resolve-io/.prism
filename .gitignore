@@ -90,3 +90,11 @@ skills/orca-*/
 brain/
 .prism/brain/
 plugins/prism-devtools/tools/prism-cli/.prism/
+
+# Benchmarks — runtime data, cloned fixtures, and results (scripts only in git)
+benchmarks/data/
+benchmarks/repos/
+benchmarks/results/
+benchmarks/.venv/
+services/bench-service/data-bench/
+.prism/feedback-buffer.jsonl

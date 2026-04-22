@@ -1,0 +1,3 @@
+# Benchmark runner deps — NOT shipped with PRISM.
+# Install into a local venv: `python -m venv .venv && .venv/bin/pip install -r requirements.txt`
+datasets>=2.14

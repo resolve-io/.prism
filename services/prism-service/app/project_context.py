@@ -23,6 +23,7 @@ class ProjectContext:
 
         # Lazy service instances
         self._brain_svc = None
+        self._graph_svc = None
         self._task_svc = None
         self._workflow_svc = None
         self._memory_svc = None
@@ -38,7 +39,19 @@ class ProjectContext:
                 graph_db=str(self._data_dir / "graph.db"),
                 scores_db=str(self._data_dir / "scores.db"),
             )
+            # Wire graph service for source-file staging
+            self._brain_svc.graph_svc = self.graph_svc
         return self._brain_svc
+
+    @property
+    def graph_svc(self):
+        if self._graph_svc is None:
+            from app.services.graph_service import GraphService
+            self._graph_svc = GraphService(
+                project_data_dir=str(self._data_dir),
+                graph_db_path=str(self._data_dir / "graph.db"),
+            )
+        return self._graph_svc
 
     @property
     def task_svc(self):

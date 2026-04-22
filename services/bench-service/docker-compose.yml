@@ -1,15 +1,15 @@
 services:
-  prism-service:
-    build: .
+  bench-service:
+    build: ../prism-service
     ports:
-      - "8080:8080"
-      - "8081:8081"
+      - "18080:8080"
+      - "18081:8081"
     volumes:
-      - ./data:/data
+      - ./data-bench:/data
     environment:
       - PRISM_DATA_DIR=/data
-      # MiniLM is the +11pt LongMemEval default (vs potion baseline).
-      # Override per project if needed: potion | minilm | bge-small | jina-code
+      # Override per experiment: potion | minilm | bge-small | jina-code
+      # (nomic-code excluded — its torch.compile cache corrupts the overlay fs)
       - PRISM_EMBEDDER=${PRISM_EMBEDDER:-minilm}
       # hybrid (default) | vector | bm25 — which search indices contribute
       - PRISM_SEARCH_MODE=${PRISM_SEARCH_MODE:-hybrid}
@@ -18,13 +18,12 @@ services:
       - PRISM_RERANK_TOPN=${PRISM_RERANK_TOPN:-50}
       # Contextual chunk prefixing (Anthropic-style): on (default) | off
       - PRISM_CONTEXT_PREFIX=${PRISM_CONTEXT_PREFIX:-on}
-      # Feedback consumption weight: per-thumb adjustment to rrf_score.
-      # Default 0.002 so ~3 consistent thumbs overcome a typical RRF gap.
-      # Set to "off" to disable feedback-driven re-ranking entirely.
+      # Feedback consumption weight; "off" disables entirely.
       - PRISM_FEEDBACK_WEIGHT=${PRISM_FEEDBACK_WEIGHT:-0.002}
-      # Drift auto-reindex interval (seconds). 0 disables the loop.
-      - PRISM_DRIFT_INTERVAL=${PRISM_DRIFT_INTERVAL:-1800}
-      # Keep torch/HF caches on the mounted volume so bad loads can't brick Docker
+      # Drift auto-reindex — benches do not want implicit reindex; disable.
+      - PRISM_DRIFT_INTERVAL=${PRISM_DRIFT_INTERVAL:-0}
+      # Keep torch.compile / inductor temp files inside the mounted volume
+      # (not in the overlay fs root) so a bad model load can't brick Docker.
       - TORCHINDUCTOR_CACHE_DIR=/data/torch-inductor-cache
       - TORCH_HOME=/data/torch-home
       - HF_HOME=/data/hf-home

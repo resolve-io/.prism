@@ -38,6 +38,46 @@ class BrainCorruptError(Exception):
 _MODEL = None
 _SQLITE_VEC_LOADED = False
 
+# Cross-encoder reranker (lazy-loaded on first use when PRISM_RERANK != off).
+# Separate from the embedder so both can coexist in memory.
+_RERANKER = None
+_RERANKER_KEY = ""
+
+_RERANKER_PRESETS = {
+    # key -> sentence-transformers CrossEncoder model_id
+    "bge-v2": "BAAI/bge-reranker-v2-m3",
+    "jina-v2": "jinaai/jina-reranker-v2-base-multilingual",
+    "ms-marco-minilm": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+}
+
+
+def _load_reranker(preset: str):
+    """Return a cached CrossEncoder for ``preset``, or None on failure.
+
+    Loading is lazy and cached process-wide. Unknown preset -> None.
+    """
+    global _RERANKER, _RERANKER_KEY
+    preset = (preset or "").strip().lower()
+    if preset in ("", "off", "none"):
+        return None
+    if preset not in _RERANKER_PRESETS:
+        print(f"Brain: unknown PRISM_RERANK={preset!r}; disabling reranker",
+              file=sys.stderr)
+        return None
+    if _RERANKER is not None and _RERANKER_KEY == preset:
+        return _RERANKER
+    try:
+        from sentence_transformers import CrossEncoder  # type: ignore
+        model_id = _RERANKER_PRESETS[preset]
+        _RERANKER = CrossEncoder(model_id, trust_remote_code=True)
+        _RERANKER_KEY = preset
+        print(f"Brain: reranker = {preset} ({model_id})", file=sys.stderr)
+        return _RERANKER
+    except Exception as e:
+        print(f"Brain: reranker load failed ({preset}: {e!r}); disabled",
+              file=sys.stderr)
+        return None
+
 # ---------------------------------------------------------------------------
 # Tree-sitter language loader
 # ---------------------------------------------------------------------------
@@ -60,6 +100,17 @@ def _init_treesitter_lib() -> None:
         _TS_AVAILABLE = True
     except Exception:
         pass
+
+
+def _ts_find_name(node, name_types):
+    """Return the text of the first identifier-like child, or None."""
+    try:
+        for c in node.children:  # type: ignore[attr-defined]
+            if c.type in name_types:
+                return c.text.decode("utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    return None
 
 
 def _get_treesitter_parser(lang_name: str) -> Optional[object]:
@@ -87,6 +138,70 @@ def _get_treesitter_parser(lang_name: str) -> Optional[object]:
 
 
 # Map file suffix -> tree-sitter language name (as in languages.so symbol)
+# Per-language chunker config for _chunk_treesitter_lang. Keys are
+# language names from _TS_LANG_MAP. Entries describe which AST node
+# types are top-level declarations, which of those carry member
+# bodies, what the body node type is, which member node types to
+# emit as methods, and which wrapper/container nodes to transparently
+# descend through (decorators, namespaces, export statements).
+_LANG_CHUNK_CONFIG: dict[str, dict | str] = {
+    "python": {
+        "top": {"function_definition": "function",
+                "class_definition": "class"},
+        "decorated_wrapper": "decorated_definition",
+        "class_types": {"class_definition"},
+        "body_type": "block",
+        "method": {"function_definition": "method"},
+        "name_types": ("identifier",),
+        "descend": set(),
+    },
+    "c_sharp": {
+        "top": {"class_declaration": "class",
+                "interface_declaration": "interface",
+                "struct_declaration": "struct",
+                "record_declaration": "record"},
+        "decorated_wrapper": None,
+        "class_types": {"class_declaration", "interface_declaration",
+                        "struct_declaration", "record_declaration"},
+        "body_type": "declaration_list",
+        "method": {"method_declaration": "method",
+                   "constructor_declaration": "constructor"},
+        "name_types": ("identifier",),
+        # namespace bodies also use declaration_list in C#; descend
+        # into it so class_declaration inside a namespace is reached.
+        # The walker only RECURSES into ``descend`` types — class
+        # members are not reached this way because class_declaration
+        # itself is not in ``descend``; its methods are emitted via
+        # _chunk_ts_methods, which walks the class body explicitly.
+        "descend": {"namespace_declaration", "declaration_list"},
+    },
+    "typescript": {
+        "top": {"class_declaration": "class",
+                "function_declaration": "function",
+                "interface_declaration": "interface"},
+        "decorated_wrapper": None,
+        "class_types": {"class_declaration", "interface_declaration"},
+        "body_type": "class_body",
+        "method": {"method_definition": "method"},
+        "name_types": ("identifier", "property_identifier",
+                       "type_identifier"),
+        "descend": {"export_statement"},
+    },
+    "javascript": {
+        "top": {"class_declaration": "class",
+                "function_declaration": "function"},
+        "decorated_wrapper": None,
+        "class_types": {"class_declaration"},
+        "body_type": "class_body",
+        "method": {"method_definition": "method"},
+        "name_types": ("identifier", "property_identifier"),
+        "descend": {"export_statement"},
+    },
+    "tsx": "typescript",      # alias resolved at lookup time
+    "jsx": "javascript",
+}
+
+
 _TS_LANG_MAP: dict[str, str] = {
     ".py": "python",
     ".ts": "typescript",
@@ -97,8 +212,35 @@ _TS_LANG_MAP: dict[str, str] = {
 }
 
 
+_EMBEDDER_PRESETS = {
+    # key -> (backend, model_id)
+    # backend in {"model2vec", "sentence-transformers"}
+    "potion": ("model2vec", "minishlab/potion-base-32M"),
+    "minilm": ("sentence-transformers", "sentence-transformers/all-MiniLM-L6-v2"),
+    "nomic-code": ("sentence-transformers", "nomic-ai/nomic-embed-code"),
+    "bge-small": ("sentence-transformers", "BAAI/bge-small-en-v1.5"),
+    "jina-code": ("sentence-transformers", "jinaai/jina-embeddings-v2-base-code"),
+}
+
+
+def _load_sentence_transformer(model_id: str):
+    """Load a sentence-transformers model. Returns object with .encode([str]) API."""
+    from sentence_transformers import SentenceTransformer  # type: ignore
+    return SentenceTransformer(model_id)
+
+
+def _load_model2vec(model_id: str):
+    from model2vec import StaticModel  # type: ignore
+    return StaticModel.from_pretrained(model_id)
+
+
 def _try_enable_vector(db: sqlite3.Connection) -> bool:
-    """Attempt to load sqlite-vec extension and model2vec. Returns True on success."""
+    """Attempt to load sqlite-vec extension and an embedding model.
+
+    The embedding model is chosen via env var PRISM_EMBEDDER (one of the keys
+    in _EMBEDDER_PRESETS); defaults to 'potion'. Returns True on success.
+    """
+    import os
     global _MODEL, _SQLITE_VEC_LOADED
     try:
         import sqlite_vec  # type: ignore
@@ -107,24 +249,31 @@ def _try_enable_vector(db: sqlite3.Connection) -> bool:
         db.enable_load_extension(False)
         _SQLITE_VEC_LOADED = True
     except (ImportError, AttributeError, Exception):
-        print(
-            "Brain: running in BM25+GraphRAG mode "
-            "(install sqlite-vec model2vec for vector search)",
-            file=sys.stderr,
-        )
+        print("Brain: running in BM25+GraphRAG mode (sqlite-vec unavailable)",
+              file=sys.stderr)
         return False
 
+    preset = os.environ.get("PRISM_EMBEDDER", "potion").strip().lower()
+    if preset not in _EMBEDDER_PRESETS:
+        print(f"Brain: unknown PRISM_EMBEDDER={preset!r}; falling back to 'potion'",
+              file=sys.stderr)
+        preset = "potion"
+    backend, model_id = _EMBEDDER_PRESETS[preset]
+
+    if _MODEL is not None:
+        return True  # already loaded (same process reuse)
+
     try:
-        from model2vec import StaticModel  # type: ignore
-        if _MODEL is None:
-            _MODEL = StaticModel.from_pretrained("minishlab/potion-base-32M")
+        if backend == "model2vec":
+            _MODEL = _load_model2vec(model_id)
+        elif backend == "sentence-transformers":
+            _MODEL = _load_sentence_transformer(model_id)
+        print(f"Brain: embedder = {preset} ({backend}: {model_id})",
+              file=sys.stderr)
         return True
-    except (ImportError, OSError, Exception):
-        print(
-            "Brain: running in BM25+GraphRAG mode "
-            "(install sqlite-vec model2vec for vector search)",
-            file=sys.stderr,
-        )
+    except Exception as e:
+        print(f"Brain: embedder load failed ({preset}: {e!r}); BM25+GraphRAG only",
+              file=sys.stderr)
         return False
 
 
@@ -335,6 +484,35 @@ class Brain:
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
+            CREATE TABLE IF NOT EXISTS searches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT NOT NULL DEFAULT (datetime('now')),
+                query TEXT NOT NULL,
+                domain TEXT,
+                domains TEXT,
+                mode TEXT,
+                rerank TEXT,
+                context_prefix INTEGER,
+                chunk_agg INTEGER,
+                limit_requested INTEGER,
+                n_results INTEGER,
+                latency_ms INTEGER,
+                final_top TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_searches_ts
+                ON searches(ts DESC);
+            CREATE TABLE IF NOT EXISTS search_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                search_id INTEGER,
+                doc_id TEXT NOT NULL,
+                signal TEXT NOT NULL,
+                note TEXT,
+                ts TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_sf_search
+                ON search_feedback(search_id);
+            CREATE INDEX IF NOT EXISTS idx_sf_doc
+                ON search_feedback(doc_id);
         """)
         # Migrate existing DBs: add chunk metadata columns if missing
         _meta_cols = [
@@ -358,10 +536,18 @@ class Brain:
                     pass
 
         if self.vector_enabled:
+            # Discover the model's native embedding dimension at startup so
+            # the vec0 table matches whatever local model is loaded
+            # (potion-base-32M is 512-dim; MiniLM-L6 is 384-dim).
+            try:
+                probe = _MODEL.encode(["probe"])[0]
+                dim = len(probe)
+            except Exception:
+                dim = 384
             try:
                 self._brain.execute(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS docs_vec "
-                    "USING vec0(doc_id TEXT, embedding float[384])"
+                    f"CREATE VIRTUAL TABLE IF NOT EXISTS docs_vec "
+                    f"USING vec0(doc_id TEXT, embedding float[{dim}])"
                 )
                 self._brain.commit()
             except Exception:
@@ -486,18 +672,43 @@ class Brain:
         self._brain.commit()
 
     def _purge_deleted(self) -> int:
-        """Remove DB entries for files that no longer exist or are now excluded.
+        """Remove DB entries for files that no longer exist or are excluded.
 
-        Returns count of purged documents.
+        Safety: if ZERO indexed source files are reachable from this
+        process, the project directory is likely not mounted (common in
+        service-mode containers). A 100%-purge decision in that case
+        wipes the index. We detect and skip, logging so operators know.
+        Override with PRISM_PURGE_FORCE=1 for environments where the
+        empty result is the actual truth.
         """
+        import os as _os
+        import sys as _sys
         rows = self._brain.execute(
             "SELECT id, source_file FROM docs WHERE source_file IS NOT NULL"
         ).fetchall()
+        if not rows:
+            return 0
         to_purge: list[str] = []
+        reachable = 0
         for row in rows:
             sf = row["source_file"]
-            if not Path(sf).exists() or not self._should_index(sf):
+            exists = Path(sf).exists()
+            if exists:
+                reachable += 1
+                if not self._should_index(sf):
+                    to_purge.append(sf)
+            else:
                 to_purge.append(sf)
+        if to_purge and reachable == 0:
+            if _os.environ.get("PRISM_PURGE_FORCE", "").strip() != "1":
+                print(
+                    f"[purge-skip] {len(to_purge)}/{len(rows)} rows look "
+                    f"missing but no indexed file is reachable — "
+                    f"skipping purge (project likely unmounted). Set "
+                    f"PRISM_PURGE_FORCE=1 to override.",
+                    file=_sys.stderr,
+                )
+                return 0
         if to_purge:
             self._remove_entries_by_source(to_purge)
         return len(to_purge)
@@ -524,21 +735,41 @@ class Brain:
     # ------------------------------------------------------------------
 
     def _chunk_source_file(self, filepath: str, content: str) -> list[dict]:
-        """Split a source file into semantic chunks.
+        """Split a source file into multi-granular chunks.
 
         Returns a list of chunk dicts with keys:
           doc_id, content, entity_name, entity_kind, line_start, line_end
 
-        Code files (.py/.ts/.tsx/.js/.jsx/.cs): split by function/class/module.
-        Other files: single whole-file chunk with entity_kind='module'.
+        Three granularity tiers (all emitted when PRISM_MULTIGRAN=on, default):
+          - coarse: one whole-file chunk (``path::__file__`` for code, or the
+            existing single-chunk ``filepath`` id for prose)
+          - mid: semantic chunks at function/class boundaries (code only,
+            ``path::EntityName``) and a ``path::__module__`` for loose
+            top-level statements
+          - fine: sliding 2048-char windows with 256-char overlap over the
+            whole content (``path::win_N``). Emitted when content is large
+            enough that windows carry new signal (>= min_chars).
+
+        Chars/4 approximation: 2048 chars ~ 512 tokens, 256 chars ~ 64 tokens,
+        matching the [512, 128]-token mid/fine target plus a file-level
+        coarse pass. Per brain_engine.search() matches `_embed()`'s own
+        2048-char truncation, so windows are sized to fit one embedding.
+
+        Set PRISM_MULTIGRAN=off to fall back to the original single-tier
+        semantic-only chunking (useful for A/B comparisons).
         """
+        import os as _os
+
+        multigran = _os.environ.get("PRISM_MULTIGRAN", "on").strip().lower() != "off"
+
         suffix = Path(filepath).suffix.lower()
         lines = content.splitlines()
         n = len(lines) or 1
 
         if suffix not in _TS_LANG_MAP:
-            # Non-code file: single whole-file chunk
-            return [{
+            # Prose/config/unknown: keep the legacy single whole-file chunk
+            # as the coarse tier, then add sliding windows for large files.
+            chunks: list[dict] = [{
                 "doc_id": filepath,
                 "content": content,
                 "entity_name": "__module__",
@@ -546,16 +777,247 @@ class Brain:
                 "line_start": 1,
                 "line_end": n,
             }]
+            if multigran:
+                chunks.extend(
+                    self._sliding_window_chunks(filepath, content, min_chars=2048)
+                )
+            return chunks
 
         lang_name = _TS_LANG_MAP[suffix]
         parser = _get_treesitter_parser(lang_name)
 
-        if parser is not None and suffix == ".py":
-            chunks = self._chunk_python_treesitter(filepath, content, parser, lines)
+        if parser is not None and lang_name in _LANG_CHUNK_CONFIG:
+            chunks = self._chunk_treesitter_lang(
+                filepath, content, parser, lines, lang_name,
+            )
         else:
             chunks = self._chunk_regex_fallback(filepath, content, lines, suffix)
 
+        if not multigran:
+            return chunks
+
+        # Coarse tier: whole-file view, distinct from __module__ (which only
+        # covers lines NOT covered by any def/class). Only worth emitting when
+        # the file has multiple semantic chunks AND is substantial.
+        if len(chunks) > 1 and len(content) >= 2048:
+            chunks.append({
+                "doc_id": f"{filepath}::__file__",
+                "content": content,
+                "entity_name": "__file__",
+                "entity_kind": "file",
+                "line_start": 1,
+                "line_end": n,
+            })
+
+        # Fine tier: sliding windows over full content. Skips small files
+        # where the semantic chunks already cover everything.
+        chunks.extend(
+            self._sliding_window_chunks(filepath, content, min_chars=2048)
+        )
+
         return chunks
+
+    def _sliding_window_chunks(
+        self,
+        filepath: str,
+        content: str,
+        *,
+        min_chars: int = 2048,
+        window_chars: int = 2048,
+        overlap_chars: int = 256,
+    ) -> list[dict]:
+        """Emit overlapping content windows for the fine-granularity tier.
+
+        Returns an empty list when content is shorter than ``min_chars``
+        (no new signal vs. the whole-file chunk). Windows are ``window_chars``
+        wide with ``overlap_chars`` overlap between consecutive windows.
+        Line ranges are computed from newline counts so UI linking stays
+        accurate on arbitrary offsets.
+        """
+        total = len(content)
+        if total < min_chars:
+            return []
+        step = max(1, window_chars - overlap_chars)
+        windows: list[dict] = []
+        pos = 0
+        idx = 0
+        while pos < total:
+            end_pos = min(pos + window_chars, total)
+            windows.append({
+                "doc_id": f"{filepath}::win_{idx}",
+                "content": content[pos:end_pos],
+                "entity_name": f"win_{idx}",
+                "entity_kind": "window",
+                "line_start": content.count("\n", 0, pos) + 1,
+                "line_end": content.count("\n", 0, end_pos) + 1,
+            })
+            idx += 1
+            if end_pos >= total:
+                break
+            pos += step
+        return windows
+
+    def _chunk_treesitter_lang(
+        self,
+        filepath: str,
+        content: str,
+        parser: object,
+        lines: list[str],
+        lang_name: str,
+    ) -> list[dict]:
+        """Language-generic tree-sitter chunker.
+
+        Produces the same output shape as ``_chunk_python_treesitter`` for
+        any language that has an entry in ``_LANG_CHUNK_CONFIG`` (Python,
+        C#, TypeScript, JavaScript, TSX, JSX today). Methods nested in
+        classes/interfaces/structs are emitted as their own chunks with
+        doc_id = ``{path}::{ContainerName}.{method_name}`` so
+        find_symbol can return a function-level slice.
+        """
+        cfg = _LANG_CHUNK_CONFIG.get(lang_name)
+        if cfg is None:
+            return []
+        if isinstance(cfg, str):
+            cfg = _LANG_CHUNK_CONFIG[cfg]  # alias
+        raw = content.encode("utf-8", errors="replace")
+        tree = parser.parse(raw)  # type: ignore[attr-defined]
+        chunks: list[dict] = []
+        covered: set[int] = set()
+        self._chunk_ts_walk(
+            tree.root_node, cfg, filepath, lines, chunks, covered,
+            emit_docstring=(lang_name == "python"),
+        )
+        module_lines = [
+            lines[i] for i in range(len(lines))
+            if i not in covered and lines[i].strip()
+        ]
+        if module_lines:
+            chunks.append({
+                "doc_id": f"{filepath}::__module__",
+                "content": "\n".join(module_lines),
+                "entity_name": "__module__",
+                "entity_kind": "module",
+                "line_start": 1,
+                "line_end": len(lines) or 1,
+            })
+        if not chunks:
+            return [{
+                "doc_id": filepath, "content": content,
+                "entity_name": "__module__", "entity_kind": "module",
+                "line_start": 1, "line_end": len(lines) or 1,
+            }]
+        return chunks
+
+    def _chunk_ts_walk(
+        self, node, cfg, filepath, lines, chunks, covered, emit_docstring,
+    ):
+        """Recursive AST visitor for _chunk_treesitter_lang."""
+        for child in node.children:
+            t = child.type
+            if t in cfg["descend"]:
+                self._chunk_ts_walk(
+                    child, cfg, filepath, lines, chunks, covered,
+                    emit_docstring,
+                )
+                continue
+            self._chunk_ts_emit(
+                child, cfg, filepath, lines, chunks, covered, emit_docstring,
+            )
+
+    def _chunk_ts_emit(
+        self, outer, cfg, filepath, lines, chunks, covered, emit_docstring,
+    ):
+        """Emit a chunk for ``outer`` if it is a top-level declaration."""
+        t = outer.type
+        def_node = outer
+        if cfg["decorated_wrapper"] and t == cfg["decorated_wrapper"]:
+            inner = next(
+                (c for c in outer.children if c.type in cfg["top"]),
+                None,
+            )
+            if inner is None:
+                return
+            def_node = inner
+            t = inner.type
+        if t not in cfg["top"]:
+            return
+        kind = cfg["top"][t]
+        name = _ts_find_name(def_node, cfg["name_types"])
+        if name is None:
+            return
+        start = outer.start_point[0]
+        end = outer.end_point[0]
+        body = "\n".join(lines[start:end + 1])
+        if emit_docstring:
+            summary = self._extract_python_docstring(def_node)
+            if summary:
+                body = f"{summary}\n\n{body}"
+        for i in range(start, end + 1):
+            covered.add(i)
+        chunks.append({
+            "doc_id": f"{filepath}::{name}",
+            "content": body,
+            "entity_name": name,
+            "entity_kind": kind,
+            "line_start": start + 1,
+            "line_end": end + 1,
+        })
+        if t in cfg["class_types"]:
+            self._chunk_ts_methods(
+                def_node, cfg, filepath, lines, chunks, name,
+                emit_docstring,
+            )
+
+    def _chunk_ts_methods(
+        self, class_node, cfg, filepath, lines, chunks, class_name,
+        emit_docstring,
+    ):
+        """Emit method chunks for members of a class-like node."""
+        body = next(
+            (c for c in class_node.children if c.type == cfg["body_type"]),
+            None,
+        )
+        if body is None:
+            return
+        seen: set[str] = set()
+        for member in body.children:
+            outer_m = member
+            mtype = member.type
+            mnode = member
+            if cfg["decorated_wrapper"] and mtype == cfg["decorated_wrapper"]:
+                inner = next(
+                    (c for c in member.children if c.type in cfg["method"]),
+                    None,
+                )
+                if inner is None:
+                    continue
+                mnode = inner
+                mtype = inner.type
+            if mtype not in cfg["method"]:
+                continue
+            mkind = cfg["method"][mtype]
+            mname = _ts_find_name(mnode, cfg["name_types"])
+            if mname is None:
+                continue
+            doc_id = f"{filepath}::{class_name}.{mname}"
+            if doc_id in seen:
+                continue
+            seen.add(doc_id)
+            ms = outer_m.start_point[0]
+            me = outer_m.end_point[0]
+            mbody = "\n".join(lines[ms:me + 1])
+            if emit_docstring:
+                msummary = self._extract_python_docstring(mnode)
+                if msummary:
+                    mbody = f"{msummary}\n\n{mbody}"
+            chunks.append({
+                "doc_id": doc_id,
+                "content": mbody,
+                "entity_name": mname,
+                "entity_kind": mkind,
+                "line_start": ms + 1,
+                "line_end": me + 1,
+            })
 
     def _chunk_python_treesitter(
         self, filepath: str, content: str, parser: object, lines: list[str]
@@ -618,6 +1080,13 @@ class Brain:
                 "line_end": end + 1,
             })
 
+            if kind == "class":
+                chunks.extend(
+                    self._python_class_methods(
+                        def_node, lines, name, filepath,
+                    )
+                )
+
         # Module-level chunk: non-empty lines not covered by any definition
         module_lines = [
             lines[i] for i in range(len(lines))
@@ -651,6 +1120,58 @@ class Brain:
             }]
 
         return chunks
+
+    def _python_class_methods(
+        self, class_node, lines, class_name, filepath,
+    ) -> list[dict]:
+        """Emit one method chunk per function_definition inside a class.
+
+        The class chunk itself still carries the full class body so
+        whole-class queries work; these extra chunks let find_symbol
+        return a ~40-line method slice instead.
+        """
+        block = next(
+            (c for c in class_node.children if c.type == "block"), None,
+        )
+        if block is None:
+            return []
+        out: list[dict] = []
+        for child in block.children:
+            if child.type == "decorated_definition":
+                mdef = next(
+                    (c for c in child.children
+                     if c.type == "function_definition"), None,
+                )
+                outer = child
+            elif child.type == "function_definition":
+                mdef = child
+                outer = child
+            else:
+                continue
+            if mdef is None:
+                continue
+            nname = next(
+                (c for c in mdef.children if c.type == "identifier"),
+                None,
+            )
+            if nname is None:
+                continue
+            mname = nname.text.decode("utf-8", errors="replace")
+            start = outer.start_point[0]
+            end = outer.end_point[0]
+            body = "\n".join(lines[start:end + 1])
+            summary = self._extract_python_docstring(mdef)
+            if summary:
+                body = f"{summary}\n\n{body}"
+            out.append({
+                "doc_id": f"{filepath}::{class_name}.{mname}",
+                "content": body,
+                "entity_name": mname,
+                "entity_kind": "method",
+                "line_start": start + 1,
+                "line_end": end + 1,
+            })
+        return out
 
     @staticmethod
     def _extract_python_docstring(func_or_class_node: object) -> str:
@@ -823,7 +1344,62 @@ class Brain:
                 "line_end": len(lines) or 1,
             })
 
+        # Second pass: for Python classes, emit indented-def as method chunks
+        # so find_symbol('method_name') returns a ~40-line slice instead of
+        # the whole class. Python-only for now — other languages can follow
+        # with appropriate indent-aware regex.
+        if suffix == ".py":
+            chunks.extend(self._regex_python_methods(filepath, lines, chunks))
+
         return chunks
+
+    def _regex_python_methods(
+        self, filepath: str, lines: list[str], chunks: list[dict],
+    ) -> list[dict]:
+        """Emit method chunks for directly-nested defs inside each class chunk.
+
+        Locks onto the indent level of the first def seen in the class body
+        and only emits defs at that exact level, so nested helper functions
+        inside a method don't collide with their outer siblings.
+        """
+        mre = re.compile(r"^(\s+)(?:async\s+)?def\s+(\w+)")
+        out: list[dict] = []
+        seen: set[str] = set()
+        for c in chunks:
+            if c.get("entity_kind") != "class":
+                continue
+            cname = c["entity_name"]
+            cs, ce = c["line_start"] - 1, c["line_end"] - 1
+            method_indent: int | None = None
+            hits: list[tuple[int, str]] = []
+            for i in range(cs, ce + 1):
+                m = mre.match(lines[i])
+                if not m:
+                    continue
+                indent = len(m.group(1))
+                if method_indent is None:
+                    method_indent = indent
+                if indent != method_indent:
+                    continue  # nested helper inside a method
+                hits.append((i, m.group(2)))
+            if not hits:
+                continue
+            for j, (ms, mname) in enumerate(hits):
+                me = hits[j + 1][0] - 1 if j + 1 < len(hits) else ce
+                doc_id = f"{filepath}::{cname}.{mname}"
+                if doc_id in seen:
+                    continue  # defensive: suffix-level collision
+                seen.add(doc_id)
+                body = "\n".join(lines[ms:me + 1])
+                out.append({
+                    "doc_id": doc_id,
+                    "content": body,
+                    "entity_name": mname,
+                    "entity_kind": "method",
+                    "line_start": ms + 1,
+                    "line_end": me + 1,
+                })
+        return out
 
     def _index_files(self, files: list[str]) -> None:
         for filepath in files:
@@ -1456,46 +2032,380 @@ class Brain:
         # In CLI mode the Brain auto-ingests CWD on first search.
         # In service mode, documents are indexed via brain_index_doc MCP tool.
         # The old CLI auto-ingest would index /app (the container code) which is wrong.
+        import os as _os
+        import time as _time
 
-        inner = limit * 2
-        bm25 = self._fts5_search(query, domain, inner, domains=domains)
-        vec = (
-            self._vector_search(query, domain, inner, domains=domains)
-            if self.vector_enabled
-            else []
+        _search_t0 = _time.perf_counter()
+
+        # Experimental: PRISM_SEARCH_MODE controls which indices contribute.
+        #   hybrid (default) = BM25 + vector + graph, fused via RRF
+        #   vector           = vector search only (when vector_enabled)
+        #   bm25             = BM25 only
+        mode = _os.environ.get("PRISM_SEARCH_MODE", "hybrid").strip().lower()
+
+        # PRISM_CHUNK_AGG (default on): collapse same-source_file hits to the
+        # single best-ranked chunk per file so multi-granular chunking doesn't
+        # crowd top-K with __file__/__module__/func_X variants of one file.
+        aggregate = (
+            _os.environ.get("PRISM_CHUNK_AGG", "on").strip().lower() != "off"
         )
-        graph = self._graph_search(query, inner)
 
-        fused = reciprocal_rank_fusion([bm25, vec, graph] if self.vector_enabled
-                                       else [bm25, graph])
-        top = fused[:limit]
+        # When aggregating we over-fetch from each sub-index and from the
+        # fused list so there are enough candidates left after dedupe.
+        inner = limit * 6 if aggregate else limit * 2
+
+        if mode == "vector" and self.vector_enabled:
+            fused = self._vector_search(query, domain, inner, domains=domains)
+        elif mode == "bm25":
+            fused = self._fts5_search(query, domain, inner, domains=domains)
+        else:
+            bm25 = self._fts5_search(query, domain, inner, domains=domains)
+            vec = (
+                self._vector_search(query, domain, inner, domains=domains)
+                if self.vector_enabled
+                else []
+            )
+            graph = self._graph_search(query, inner)
+            fused = reciprocal_rank_fusion(
+                [bm25, vec, graph] if self.vector_enabled else [bm25, graph]
+            )
+
+        # Optional cross-encoder reranker (PRISM_RERANK=bge-v2|jina-v2|
+        # ms-marco-minilm|off). Rescores the top PRISM_RERANK_TOPN candidates
+        # by feeding (query, chunk_content) pairs through a cross-encoder,
+        # then replaces that slice of ``fused`` with the reranked order.
+        rerank_preset = (
+            _os.environ.get("PRISM_RERANK", "off").strip().lower()
+        )
+        if rerank_preset not in ("", "off", "none") and fused:
+            try:
+                pool_n = int(_os.environ.get("PRISM_RERANK_TOPN", "50"))
+            except ValueError:
+                pool_n = 50
+            pool_n = max(inner, pool_n)
+            pool = fused[:pool_n]
+            reranked = self._rerank_candidates(query, pool, rerank_preset)
+            if reranked is not None:
+                fused = reranked + fused[pool_n:]
+
+        # PRISM_FEEDBACK_WEIGHT (default 0.002; "off" disables): close the
+        # feedback loop by nudging rrf_score by accumulated past thumbs on
+        # each doc_id. Small weight so a single vote doesn't flip ordering —
+        # ~3 consistent thumbs overcome a typical RRF gap.
+        fb_weight_env = _os.environ.get("PRISM_FEEDBACK_WEIGHT", "0.002")
+        try:
+            fb_weight = 0.0 if fb_weight_env.strip().lower() in (
+                "off", "none", ""
+            ) else float(fb_weight_env)
+        except ValueError:
+            fb_weight = 0.0
+        if fb_weight and fused:
+            fb_scores = self.get_feedback_scores(
+                [c["doc_id"] for c in fused[:200]]
+            )
+            if fb_scores:
+                for c in fused:
+                    adj = fb_scores.get(c["doc_id"], 0.0)
+                    if adj:
+                        c["rrf_score"] = (
+                            c.get("rrf_score", 0.0) + fb_weight * adj
+                        )
+                        c["feedback_adj"] = adj
+                fused = sorted(fused, key=lambda x: (
+                    -x.get("rrf_score", 0.0), x.get("doc_id", ""),
+                ))
+
+        # Take a larger candidate pool when aggregating so collapsing doesn't
+        # leave us short of ``limit`` results.
+        top = fused[: inner if aggregate else limit]
         if not top:
             return []
 
         ids = [item["doc_id"] for item in top]
         placeholders = ",".join("?" * len(ids))
         rows = self._brain.execute(
-            f"SELECT id, content, domain, entity_name, entity_kind, line_start, line_end "
+            f"SELECT id, source_file, content, domain, entity_name, entity_kind, "
+            f"line_start, line_end "
             f"FROM docs WHERE id IN ({placeholders})",
             ids,
         ).fetchall()
         content_map = {r["id"]: r for r in rows}
 
-        results = []
+        results: list[dict] = []
+        seen_files: set[str] = set()
         for item in top:
             row = content_map.get(item["doc_id"])
-            if row:
-                results.append({
-                    "doc_id": item["doc_id"],
-                    "content": row["content"],
-                    "domain": row["domain"],
-                    "entity_name": row["entity_name"],
-                    "entity_kind": row["entity_kind"],
-                    "line_start": row["line_start"],
-                    "line_end": row["line_end"],
-                    "rrf_score": item.get("rrf_score", 0.0),
-                })
+            if not row:
+                continue
+            if aggregate:
+                # Use source_file as the dedupe key; fall back to doc_id for
+                # rows without one (legacy expertise/memory domain docs).
+                group_key = row["source_file"] or item["doc_id"]
+                if group_key in seen_files:
+                    continue
+                seen_files.add(group_key)
+            results.append({
+                "doc_id": item["doc_id"],
+                "source_file": row["source_file"],
+                "content": row["content"],
+                "domain": row["domain"],
+                "entity_name": row["entity_name"],
+                "entity_kind": row["entity_kind"],
+                "line_start": row["line_start"],
+                "line_end": row["line_end"],
+                "rrf_score": item.get("rrf_score", 0.0),
+                "rerank_score": item.get("rerank_score"),
+                "feedback_adj": item.get("feedback_adj"),
+            })
+            if len(results) >= limit:
+                break
+        search_id = self._log_search(
+            query=query,
+            domain=domain,
+            domains=domains,
+            mode=mode,
+            rerank=rerank_preset,
+            context_prefix=_os.environ.get(
+                "PRISM_CONTEXT_PREFIX", "on"
+            ).strip().lower() != "off",
+            chunk_agg=aggregate,
+            limit_requested=limit,
+            results=results,
+            latency_ms=int((_time.perf_counter() - _search_t0) * 1000),
+        )
+        if search_id is not None:
+            for r in results:
+                r["search_id"] = search_id
         return results
+
+    def _log_search(
+        self,
+        *,
+        query: str,
+        domain: Optional[str],
+        domains: Optional[list[str]],
+        mode: str,
+        rerank: str,
+        context_prefix: bool,
+        chunk_agg: bool,
+        limit_requested: int,
+        results: list[dict],
+        latency_ms: int,
+    ) -> Optional[int]:
+        """Persist one search event to the ``searches`` table.
+
+        Returns the new row id (used by search() to stamp each result with a
+        ``search_id`` so feedback can be tied back later). Silent on failure —
+        observability must never break retrieval.
+        """
+        try:
+            import json as _json
+            final_top = _json.dumps([
+                {
+                    "doc_id": r.get("doc_id"),
+                    "rrf_score": r.get("rrf_score"),
+                    "rerank_score": r.get("rerank_score"),
+                    "domain": r.get("domain"),
+                    "entity_name": r.get("entity_name"),
+                }
+                for r in results
+            ])
+            cur = self._brain.execute(
+                "INSERT INTO searches (query, domain, domains, mode, rerank, "
+                "context_prefix, chunk_agg, limit_requested, n_results, "
+                "latency_ms, final_top) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    query, domain,
+                    _json.dumps(domains) if domains else None,
+                    mode, rerank or "off",
+                    1 if context_prefix else 0,
+                    1 if chunk_agg else 0,
+                    limit_requested, len(results), latency_ms, final_top,
+                ),
+            )
+            self._brain.commit()
+            return cur.lastrowid
+        except Exception:
+            return None
+
+    def get_recent_searches(self, limit: int = 50) -> list[dict]:
+        """Return the last ``limit`` search events, newest first.
+
+        Each row is augmented with ``up_count`` and ``down_count`` aggregated
+        from the ``search_feedback`` table so the UI can surface sentiment
+        without a second round-trip.
+        """
+        try:
+            rows = self._brain.execute(
+                "SELECT s.id, s.ts, s.query, s.domain, s.domains, s.mode, "
+                "s.rerank, s.context_prefix, s.chunk_agg, s.limit_requested, "
+                "s.n_results, s.latency_ms, s.final_top, "
+                "COALESCE(SUM(CASE WHEN f.signal='up' THEN 1 ELSE 0 END), 0) "
+                "    AS up_count, "
+                "COALESCE(SUM(CASE WHEN f.signal='down' THEN 1 ELSE 0 END), 0) "
+                "    AS down_count "
+                "FROM searches s "
+                "LEFT JOIN search_feedback f ON f.search_id = s.id "
+                "GROUP BY s.id "
+                "ORDER BY s.id DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def record_search_feedback(
+        self,
+        search_id: int,
+        doc_id: str,
+        signal: str,
+        note: Optional[str] = None,
+    ) -> Optional[int]:
+        """Record a thumbs-up / thumbs-down on one doc from a prior search.
+
+        Returns the new feedback row id, or None if the insert failed (e.g.
+        unknown search_id, malformed signal). Only 'up' and 'down' signals
+        are accepted.
+        """
+        if signal not in ("up", "down"):
+            return None
+        try:
+            cur = self._brain.execute(
+                "INSERT INTO search_feedback (search_id, doc_id, signal, note) "
+                "VALUES (?, ?, ?, ?)",
+                (int(search_id), doc_id, signal, note),
+            )
+            self._brain.commit()
+            return cur.lastrowid
+        except Exception:
+            return None
+
+    def get_search_feedback(self, search_id: int) -> list[dict]:
+        """Return all feedback rows tied to ``search_id``."""
+        try:
+            rows = self._brain.execute(
+                "SELECT id, search_id, doc_id, signal, note, ts "
+                "FROM search_feedback WHERE search_id = ? ORDER BY id",
+                (int(search_id),),
+            ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def get_feedback_scores(
+        self,
+        doc_ids: list[str],
+        cap: float = 5.0,
+        decay_days: int = 30,
+    ) -> dict:
+        """Return a net signal per doc_id for the consumption layer.
+
+        net = SUM(up) - SUM(down), clamped to [-cap, +cap]. Rows older
+        than ``decay_days`` get weight 0.3 so ancient feedback decays
+        rather than dominating. Silent on error — retrieval must keep
+        working even if feedback data is weird.
+        """
+        if not doc_ids:
+            return {}
+        try:
+            placeholders = ",".join("?" * len(doc_ids))
+            rows = self._brain.execute(
+                f"SELECT doc_id, signal, ts FROM search_feedback "
+                f"WHERE doc_id IN ({placeholders})",
+                list(doc_ids),
+            ).fetchall()
+        except Exception:
+            return {}
+        if not rows:
+            return {}
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        out: dict[str, float] = {}
+        for r in rows:
+            try:
+                ts = datetime.fromisoformat(
+                    (r["ts"] or "").replace(" ", "T")
+                )
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                age_days = (now - ts).days
+            except Exception:
+                age_days = 0
+            w = 0.3 if age_days > decay_days else 1.0
+            delta = w if r["signal"] == "up" else (-w if r["signal"] == "down" else 0)
+            out[r["doc_id"]] = out.get(r["doc_id"], 0.0) + delta
+        # Clamp to [-cap, +cap]
+        for k in list(out):
+            out[k] = max(-cap, min(cap, out[k]))
+        return out
+
+    def feedback_stats(self) -> dict:
+        """Aggregate thumbs up/down counts and per-doc win rates."""
+        try:
+            total = self._brain.execute(
+                "SELECT signal, COUNT(*) AS n FROM search_feedback "
+                "GROUP BY signal"
+            ).fetchall()
+            counts = {r["signal"]: r["n"] for r in total}
+            worst = self._brain.execute(
+                "SELECT doc_id, "
+                "  SUM(CASE WHEN signal='down' THEN 1 ELSE 0 END) AS downs, "
+                "  SUM(CASE WHEN signal='up' THEN 1 ELSE 0 END) AS ups, "
+                "  COUNT(*) AS total "
+                "FROM search_feedback GROUP BY doc_id "
+                "HAVING downs > ups ORDER BY downs DESC LIMIT 10"
+            ).fetchall()
+        except Exception:
+            return {"up": 0, "down": 0, "worst": []}
+        return {
+            "up": int(counts.get("up", 0)),
+            "down": int(counts.get("down", 0)),
+            "worst": [dict(r) for r in worst],
+        }
+
+    def _rerank_candidates(
+        self, query: str, candidates: list[dict], preset: str,
+    ) -> Optional[list[dict]]:
+        """Rescore ``candidates`` with a cross-encoder and return new order.
+
+        Returns None when the reranker is unavailable so the caller falls
+        back to RRF order. Attaches a ``rerank_score`` field to each
+        returned item. Caps each document at 2048 chars to keep the
+        cross-encoder under its input limit.
+        """
+        if not candidates:
+            return None
+        reranker = _load_reranker(preset)
+        if reranker is None:
+            return None
+        ids = [c["doc_id"] for c in candidates]
+        placeholders = ",".join("?" * len(ids))
+        rows = self._brain.execute(
+            f"SELECT id, content FROM docs WHERE id IN ({placeholders})", ids,
+        ).fetchall()
+        content_by_id = {r["id"]: r["content"] for r in rows}
+        pairs: list[tuple[str, str]] = []
+        ordered: list[dict] = []
+        for c in candidates:
+            text = content_by_id.get(c["doc_id"])
+            if not text:
+                continue
+            pairs.append((query, text[:2048]))
+            ordered.append(c)
+        if not pairs:
+            return None
+        try:
+            scores = reranker.predict(pairs)
+        except Exception as e:
+            print(f"Brain: reranker predict failed: {e!r}", file=sys.stderr)
+            return None
+        scored: list[dict] = []
+        for c, s in zip(ordered, scores):
+            c2 = dict(c)
+            c2["rerank_score"] = float(s)
+            scored.append(c2)
+        scored.sort(key=lambda x: -x["rerank_score"])
+        return scored
 
     def system_context(
         self,
@@ -1587,6 +2497,143 @@ class Brain:
                  "file": r["file"], "relation": r["relation"]}
                 for r in rows
             ]
+        except Exception:
+            return []
+
+    # ------------------------------------------------------------------
+    # Semantic chunk accessors (token-efficient alternatives to file Read)
+    # ------------------------------------------------------------------
+
+    def find_symbol(
+        self,
+        name: str,
+        kind: Optional[str] = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Return chunks whose entity_name matches ``name``.
+
+        Optional ``kind`` filter (function/class/method/etc). Returns the
+        full chunk content so Claude can read a bounded semantic unit
+        instead of loading the whole parent file.
+        """
+        try:
+            if kind:
+                rows = self._brain.execute(
+                    "SELECT id, source_file, content, entity_name, "
+                    "entity_kind, line_start, line_end FROM docs "
+                    "WHERE entity_name = ? AND entity_kind = ? "
+                    "ORDER BY source_file, line_start LIMIT ?",
+                    (name, kind, int(limit)),
+                ).fetchall()
+            else:
+                rows = self._brain.execute(
+                    "SELECT id, source_file, content, entity_name, "
+                    "entity_kind, line_start, line_end FROM docs "
+                    "WHERE entity_name = ? "
+                    "ORDER BY source_file, line_start LIMIT ?",
+                    (name, int(limit)),
+                ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def outline(self, source_file: str) -> list[dict]:
+        """Return the symbol outline of a file — metadata only, no bodies.
+
+        For a ~2500-line file this drops the read cost from ~15K tokens
+        (whole-file Read) to ~200 tokens (one line per entity).
+        """
+        try:
+            rows = self._brain.execute(
+                "SELECT entity_name, entity_kind, line_start, line_end "
+                "FROM docs WHERE source_file = ? "
+                "AND entity_kind NOT IN ('window', 'file') "
+                "AND entity_name NOT IN ('__file__', '__module__') "
+                "ORDER BY line_start",
+                (source_file,),
+            ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def find_references(
+        self, name: str, limit: int = 20,
+    ) -> list[dict]:
+        """Return call sites referencing ``name`` via the graph.
+
+        Looks up ``name`` in graph.db entities, then finds inbound
+        relationships. For each caller, returns its name/kind/file and
+        the relation type. No chunk body — use find_symbol() on the
+        returned caller names for content.
+        """
+        try:
+            tgt = self._graph.execute(
+                "SELECT id FROM entities WHERE name = ? LIMIT 1", (name,),
+            ).fetchone()
+            if not tgt:
+                return []
+            rows = self._graph.execute(
+                "SELECT e.name AS caller_name, e.kind AS caller_kind, "
+                "e.file AS caller_file, r.relation AS relation "
+                "FROM relationships r "
+                "JOIN entities e ON e.id = r.source_id "
+                "WHERE r.target_id = ? LIMIT ?",
+                (tgt["id"], int(limit)),
+            ).fetchall()
+        except Exception:
+            return []
+        return [dict(r) for r in rows]
+
+    def call_chain(
+        self,
+        entity: str,
+        depth: int = 2,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Bounded BFS on the relationships graph starting at ``entity``.
+
+        Returns a flat list of edges [{from, to, kind, relation, hop}]
+        so the caller can reconstruct either tree or flat views. Hop 0
+        is the entity itself; hop 1 is direct callees; etc.
+        """
+        try:
+            start = self._graph.execute(
+                "SELECT id, name FROM entities WHERE name = ? LIMIT 1",
+                (entity,),
+            ).fetchone()
+            if not start:
+                return []
+            visited = {start["id"]}
+            frontier = [start["id"]]
+            edges: list[dict] = []
+            for hop in range(1, max(1, int(depth)) + 1):
+                if not frontier or len(edges) >= limit:
+                    break
+                placeholders = ",".join("?" * len(frontier))
+                rows = self._graph.execute(
+                    f"SELECT r.source_id AS src_id, "
+                    f"s.name AS src_name, t.name AS tgt_name, "
+                    f"t.kind AS tgt_kind, t.id AS tgt_id, "
+                    f"r.relation AS relation "
+                    f"FROM relationships r "
+                    f"JOIN entities s ON s.id = r.source_id "
+                    f"JOIN entities t ON t.id = r.target_id "
+                    f"WHERE r.source_id IN ({placeholders}) "
+                    f"LIMIT ?",
+                    (*frontier, int(limit) - len(edges)),
+                ).fetchall()
+                next_frontier: list[int] = []
+                for r in rows:
+                    edges.append({
+                        "from": r["src_name"], "to": r["tgt_name"],
+                        "kind": r["tgt_kind"], "relation": r["relation"],
+                        "hop": hop,
+                    })
+                    if r["tgt_id"] not in visited:
+                        visited.add(r["tgt_id"])
+                        next_frontier.append(r["tgt_id"])
+                frontier = next_frontier
+            return edges
         except Exception:
             return []
 
