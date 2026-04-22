@@ -816,6 +816,13 @@ class Brain:
                 "line_end": end + 1,
             })
 
+            if kind == "class":
+                chunks.extend(
+                    self._python_class_methods(
+                        def_node, lines, name, filepath,
+                    )
+                )
+
         # Module-level chunk: non-empty lines not covered by any definition
         module_lines = [
             lines[i] for i in range(len(lines))
@@ -849,6 +856,58 @@ class Brain:
             }]
 
         return chunks
+
+    def _python_class_methods(
+        self, class_node, lines, class_name, filepath,
+    ) -> list[dict]:
+        """Emit one method chunk per function_definition inside a class.
+
+        The class chunk itself still carries the full class body so
+        whole-class queries work; these extra chunks let find_symbol
+        return a ~40-line method slice instead.
+        """
+        block = next(
+            (c for c in class_node.children if c.type == "block"), None,
+        )
+        if block is None:
+            return []
+        out: list[dict] = []
+        for child in block.children:
+            if child.type == "decorated_definition":
+                mdef = next(
+                    (c for c in child.children
+                     if c.type == "function_definition"), None,
+                )
+                outer = child
+            elif child.type == "function_definition":
+                mdef = child
+                outer = child
+            else:
+                continue
+            if mdef is None:
+                continue
+            nname = next(
+                (c for c in mdef.children if c.type == "identifier"),
+                None,
+            )
+            if nname is None:
+                continue
+            mname = nname.text.decode("utf-8", errors="replace")
+            start = outer.start_point[0]
+            end = outer.end_point[0]
+            body = "\n".join(lines[start:end + 1])
+            summary = self._extract_python_docstring(mdef)
+            if summary:
+                body = f"{summary}\n\n{body}"
+            out.append({
+                "doc_id": f"{filepath}::{class_name}.{mname}",
+                "content": body,
+                "entity_name": mname,
+                "entity_kind": "method",
+                "line_start": start + 1,
+                "line_end": end + 1,
+            })
+        return out
 
     @staticmethod
     def _extract_python_docstring(func_or_class_node: object) -> str:
@@ -1021,7 +1080,62 @@ class Brain:
                 "line_end": len(lines) or 1,
             })
 
+        # Second pass: for Python classes, emit indented-def as method chunks
+        # so find_symbol('method_name') returns a ~40-line slice instead of
+        # the whole class. Python-only for now — other languages can follow
+        # with appropriate indent-aware regex.
+        if suffix == ".py":
+            chunks.extend(self._regex_python_methods(filepath, lines, chunks))
+
         return chunks
+
+    def _regex_python_methods(
+        self, filepath: str, lines: list[str], chunks: list[dict],
+    ) -> list[dict]:
+        """Emit method chunks for directly-nested defs inside each class chunk.
+
+        Locks onto the indent level of the first def seen in the class body
+        and only emits defs at that exact level, so nested helper functions
+        inside a method don't collide with their outer siblings.
+        """
+        mre = re.compile(r"^(\s+)(?:async\s+)?def\s+(\w+)")
+        out: list[dict] = []
+        seen: set[str] = set()
+        for c in chunks:
+            if c.get("entity_kind") != "class":
+                continue
+            cname = c["entity_name"]
+            cs, ce = c["line_start"] - 1, c["line_end"] - 1
+            method_indent: int | None = None
+            hits: list[tuple[int, str]] = []
+            for i in range(cs, ce + 1):
+                m = mre.match(lines[i])
+                if not m:
+                    continue
+                indent = len(m.group(1))
+                if method_indent is None:
+                    method_indent = indent
+                if indent != method_indent:
+                    continue  # nested helper inside a method
+                hits.append((i, m.group(2)))
+            if not hits:
+                continue
+            for j, (ms, mname) in enumerate(hits):
+                me = hits[j + 1][0] - 1 if j + 1 < len(hits) else ce
+                doc_id = f"{filepath}::{cname}.{mname}"
+                if doc_id in seen:
+                    continue  # defensive: suffix-level collision
+                seen.add(doc_id)
+                body = "\n".join(lines[ms:me + 1])
+                out.append({
+                    "doc_id": doc_id,
+                    "content": body,
+                    "entity_name": mname,
+                    "entity_kind": "method",
+                    "line_start": ms + 1,
+                    "line_end": me + 1,
+                })
+        return out
 
     def _index_files(self, files: list[str]) -> None:
         for filepath in files:
