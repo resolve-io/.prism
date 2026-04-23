@@ -482,12 +482,11 @@ class BrainService:
 
         try:
             conn = sqlite3.connect(self._brain_db)
-            row = conn.execute("SELECT COUNT(*) FROM documents").fetchone()
+            row = conn.execute("SELECT COUNT(*) FROM docs").fetchone()
             result["doc_count"] = row[0] if row else 0
-            # Check for last reindex timestamp if the column exists
             try:
                 ts_row = conn.execute(
-                    "SELECT MAX(indexed_at) FROM documents"
+                    "SELECT MAX(indexed_at) FROM docs"
                 ).fetchone()
                 result["last_reindex"] = ts_row[0] or "" if ts_row else ""
             except sqlite3.OperationalError:
@@ -498,14 +497,18 @@ class BrainService:
 
         try:
             conn = sqlite3.connect(self._graph_db)
-            row = conn.execute("SELECT COUNT(DISTINCT entity) FROM triples").fetchone()
+            row = conn.execute(
+                "SELECT COUNT(*) FROM entities"
+            ).fetchone()
             result["entity_count"] = row[0] if row else 0
             conn.close()
         except Exception:
             pass
 
         try:
-            result["vector_enabled"] = getattr(self._brain, "_vec_available", False)
+            result["vector_enabled"] = bool(
+                getattr(self._brain, "vector_enabled", False)
+            )
         except Exception:
             pass
 
