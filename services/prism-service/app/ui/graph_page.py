@@ -42,11 +42,15 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 <div id="status">Loading graph...</div>
 <div id="graph"></div>
 <div id="legend">Scroll to zoom · drag to pan · click a node for details</div>
-<script src="https://unpkg.com/graphology@0.25.4/dist/graphology.umd.min.js"></script>
-<script src="https://unpkg.com/graphology-layout@0.6.1/dist/graphology-layout.min.js"></script>
-<script src="https://unpkg.com/graphology-layout-forceatlas2@0.10.1/dist/graphology-layout-forceatlas2.min.js"></script>
-<script src="https://unpkg.com/sigma@3.0.0/build/sigma.min.js"></script>
-<script>
+<script type="module">
+  // ESM via esm.sh — avoids the UMD-global naming mess across
+  // graphology's package family. Each import has an explicit name
+  // (Graph, forceAtlas2, Sigma) instead of reaching into a
+  // graphologyLibrary global that different packages register
+  // inconsistently.
+  import Graph from "https://esm.sh/graphology@0.25.4";
+  import forceAtlas2 from "https://esm.sh/graphology-layout-forceatlas2@0.10.1";
+  import Sigma from "https://esm.sh/sigma@3.0.0";
   const PROJECT_ID = "__PROJECT_ID__";
   const statusEl = document.getElementById("status");
   const COMMUNITY_COLORS = [
@@ -74,7 +78,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   fetch(`/graphify-visual/${PROJECT_ID}/graph.json`)
     .then(r => { if (!r.ok) throw new Error("graph.json " + r.status); return r.json(); })
     .then(data => {
-      const g = new graphology.Graph();
+      const g = new Graph();
       const nodes = data.nodes || [];
       const edges = data.links || data.edges || [];
       statusEl.textContent = `Loading ${nodes.length.toLocaleString()} nodes, `
@@ -105,7 +109,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // community separation and keep it tractable at 35k+ nodes.
       statusEl.textContent = `Laying out ${nodes.length.toLocaleString()} nodes `
         + `(ForceAtlas2)...`;
-      const settings = graphologyLibrary.ForceAtlas2.inferSettings(g);
+      const settings = forceAtlas2.inferSettings(g);
       settings.barnesHutOptimize = g.order > 2000;
       settings.barnesHutTheta = 0.8;
       settings.linLogMode = true;
@@ -118,7 +122,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // Yield to the browser once so the "Laying out..." status can paint
       // before the synchronous FA2 pass blocks the main thread.
       setTimeout(() => {
-        graphologyLibrary.ForceAtlas2.assign(g, { iterations: iters, settings });
+        forceAtlas2.assign(g, { iterations: iters, settings });
         const dt = ((performance.now() - t0) / 1000).toFixed(1);
         const renderer = new Sigma(g, document.getElementById("graph"), {
           labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
