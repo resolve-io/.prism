@@ -150,6 +150,66 @@ def _humanize(stem: str) -> str:
 _GENERIC_ENTITY_NAMES = {
     "__init__", "init", "main", "run", "setup", "config", "module",
     "self", "cls", "args", "kwargs", "value", "result", "data",
+    # Utility methods that dominate hub-selection in test-heavy
+    # communities. Produce labels like "search"/"list"/"check" that
+    # describe the method's verb, not what the community is about.
+    "search", "list", "get", "set", "add", "remove", "delete", "create",
+    "update", "check", "validate", "execute", "process", "handle",
+    "load", "save", "read", "write", "open", "close", "build", "make",
+    "find", "filter", "map", "reduce", "call", "send", "receive",
+    "start", "stop", "reset", "clear", "parse", "format", "render",
+    "test", "setup_method", "teardown_method", "fixture",
+}
+
+
+def _path_prefix_label(nodes: list[dict], threshold: float = 0.6) -> str:
+    """Return a humanized directory prefix that covers ``threshold`` of
+    the community's nodes, or empty string if no prefix is strong enough.
+
+    Walks from the deepest shared directory outward so we pick the most
+    specific prefix that still clears the threshold. For 130 nodes with
+    100 of them under ``plugins/prism-devtools/tests/`` → returns
+    ``"plugin tests"``; with only 40 under that prefix → returns empty
+    and the caller falls through to the filename/hub heuristic.
+    """
+    paths: list[list[str]] = []
+    for n in nodes:
+        sf = (n.get("source_file") or "").replace("\\", "/").strip("/")
+        if not sf:
+            continue
+        parts = sf.rsplit("/", 1)[0].split("/") if "/" in sf else []
+        parts = [p for p in parts if p]
+        if parts:
+            paths.append(parts)
+    if not paths:
+        return ""
+    n_paths = len(paths)
+    min_cov = max(2, int(n_paths * threshold))
+    # Try depths from deepest to shallowest.
+    max_depth = max(len(p) for p in paths)
+    for depth in range(max_depth, 0, -1):
+        counts: _Counter = _Counter()
+        for p in paths:
+            if len(p) >= depth:
+                counts[tuple(p[:depth])] += 1
+        prefix, cov = counts.most_common(1)[0]
+        if cov >= min_cov:
+            # Prefer the last 1–2 segments of the prefix — "plugins/
+            # prism-devtools/tests" → "prism-devtools tests" reads better
+            # than the full path. Drop common top-level containers.
+            tail = [seg for seg in prefix[-2:]
+                    if seg.lower() not in _PATH_PREFIX_DROP]
+            if not tail:
+                tail = list(prefix[-1:])
+            return _humanize(" ".join(tail))
+    return ""
+
+
+# Top-level directory segments that add no information — drop them
+# when shortening a path prefix to a label.
+_PATH_PREFIX_DROP = {
+    "src", "app", "lib", "pkg", "source", "sources",
+    "plugins", "services", "packages",
 }
 
 
@@ -185,12 +245,17 @@ def _derive_community_label(
 ) -> tuple[str, list[str], list[str]]:
     """Return (label, top_files, top_entities) for a community.
 
-    Heuristic:
-      * Primary descriptor = dominant source-file basename.
-      * Secondary descriptor = highest-degree NON-GENERIC entity in the
-        community. Appended as "<file> · <hub>" to distinguish sibling
-        communities that share a huge dominant file (e.g. brain_engine.py
-        splits into 9 sub-clusters — each now gets named by its hub entity).
+    Cascade, most-specific first:
+      1. Single dominant file (≥55%) → ``<file> · <hub>``.
+      2. Directory-prefix covering ≥60% → ``<prefix> · <hub>``. Catches
+         test-heavy communities where no one file dominates but they all
+         live under ``.../tests/`` — previously these fell through to
+         the hub picker and got named after a utility method.
+      3. Two files covering ≥70% together → ``<f1> + <f2> · <hub>``.
+      4. Hub entity.
+
+    The hub entity is appended in cases 1–3 so sibling communities
+    from the same dominant file/directory remain distinguishable.
     """
     file_counts: _Counter = _Counter()
     for n in nodes:
@@ -213,28 +278,28 @@ def _derive_community_label(
         if (n.get("label") or n.get("id"))
     ]
     hub = _pick_hub_entity(entity_scores)
+    hub_h = _humanize(hub) if hub else ""
 
-    if top:
-        first, first_n = top[0]
-        first_frac = first_n / total
-        if first_frac >= 0.55:
-            base = _humanize(first)
-            # For mega-files (most of the community from one file), append
-            # the hub entity so sibling communities from the same file stay
-            # distinguishable.
-            label = f"{base} · {_humanize(hub)}" if hub else base
-        elif len(top) >= 2 and (top[0][1] + top[1][1]) / total >= 0.70:
-            label = f"{_humanize(top[0][0])} + {_humanize(top[1][0])}"
-            if hub:
-                label = f"{label} · {_humanize(hub)}"
-        else:
-            # dispersed — use hub entity if we have one, else top file
-            if hub:
-                label = _humanize(hub)
-            else:
-                label = _humanize(top[0][0]) or "mixed"
+    first_frac = (top[0][1] / total) if top else 0.0
+    two_frac = ((top[0][1] + top[1][1]) / total) if len(top) >= 2 else 0.0
+
+    if top and first_frac >= 0.55:
+        base = _humanize(top[0][0])
+        label = f"{base} · {hub_h}" if hub_h else base
     else:
-        label = _humanize(hub) if hub else "misc"
+        prefix_label = _path_prefix_label(nodes, threshold=0.6)
+        if prefix_label:
+            label = f"{prefix_label} · {hub_h}" if hub_h else prefix_label
+        elif two_frac >= 0.70:
+            label = f"{_humanize(top[0][0])} + {_humanize(top[1][0])}"
+            if hub_h:
+                label = f"{label} · {hub_h}"
+        elif hub_h:
+            label = hub_h
+        elif top:
+            label = _humanize(top[0][0]) or "mixed"
+        else:
+            label = "misc"
 
     return label, top_files, top_entities
 
