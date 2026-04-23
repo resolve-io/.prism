@@ -9,7 +9,7 @@ Run a headless validation of the PRISM dashboard TUI. Boots the real Textual app
 ## Execute
 
 ```bash
-python3 "${PRISM_DEVTOOLS_ROOT}/tools/prism-cli/validate.py" --path "${PWD}" $ARGUMENTS
+python "${PRISM_DEVTOOLS_ROOT}/tools/prism-cli/validate.py" --path "${PWD}" $ARGUMENTS
 ```
 
 ## Checks

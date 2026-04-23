@@ -50,7 +50,7 @@ def _brief_context(tool_name: str, tool_input: dict) -> str:
 
 
 def _record_skill_invocation(session_id: str, tool_input: dict) -> None:
-    """Record a Skill invocation to scores.db. Best-effort, never raises."""
+    """Record a Skill invocation via MCP. Best-effort, never raises."""
     try:
         skill_name = (
             tool_input.get("name")
@@ -58,10 +58,13 @@ def _record_skill_invocation(session_id: str, tool_input: dict) -> None:
             or tool_input.get("skillName")
             or ""
         )
-        if not session_id:
+        if not session_id or not skill_name:
             return
-        from brain_engine import Brain
-        Brain().record_skill_usage(session_id=session_id, skill_name=str(skill_name))
+        from prism_mcp_client import call as _mcp_call
+        _mcp_call("record_skill_usage", {
+            "session_id": session_id,
+            "skill_name": str(skill_name),
+        })
     except Exception:
         pass
 

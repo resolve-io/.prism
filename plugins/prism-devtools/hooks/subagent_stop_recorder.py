@@ -127,25 +127,20 @@ def _record_outcome(
     tokens_used: int,
     duration_s: float,
 ) -> None:
-    """Write a row to subagent_outcomes in scores.db. Best-effort."""
+    """Write one subagent_outcomes row via MCP. Best-effort."""
     try:
-        from brain_engine import Brain
-        brain = Brain()
-        brain._scores.execute(
-            """
-            INSERT OR IGNORE INTO subagent_outcomes
-                (prompt_id, validator, recommendation, evidence_count,
-                 certificate_complete, certificate_blocked, timed_out,
-                 gate_agreed, tokens_used, duration_s)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
-            """,
-            (
-                prompt_id, agent_name, recommendation, evidence_count,
-                certificate_complete, certificate_blocked, timed_out,
-                tokens_used, duration_s,
-            ),
-        )
-        brain._scores.commit()
+        from prism_mcp_client import call as _mcp_call
+        _mcp_call("record_subagent_outcome", {
+            "prompt_id": prompt_id,
+            "validator": agent_name,
+            "recommendation": recommendation,
+            "evidence_count": evidence_count,
+            "certificate_complete": certificate_complete,
+            "certificate_blocked": certificate_blocked,
+            "timed_out": timed_out,
+            "tokens_used": tokens_used,
+            "duration_s": duration_s,
+        })
     except Exception:
         pass
 

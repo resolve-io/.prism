@@ -149,17 +149,35 @@ class ConductorService:
             return []
 
     def get_session_outcomes(self, limit: int = 50) -> list[dict]:
-        """Query recent outcomes from scores.db."""
+        """Query recent session outcomes from scores.db.
+
+        Reads the ``session_outcomes`` table populated by
+        ``record_session_outcome`` (served by the MCP and written by the
+        plugin's Stop hook). Maps DB columns onto the keys the
+        /sessions UI expects (id, session_id, duration, tokens,
+        files_modified, recorded_at).
+        """
         try:
             conn = self._scores_conn()
             rows = conn.execute(
-                "SELECT * FROM outcomes ORDER BY recorded_at DESC LIMIT ?",
+                "SELECT session_id, duration_s, tokens_used, files_read, "
+                "files_modified, skills_invoked, timestamp "
+                "FROM session_outcomes ORDER BY timestamp DESC LIMIT ?",
                 (limit,),
             ).fetchall()
             conn.close()
-            return [dict(r) for r in rows]
         except Exception:
             return []
+        out: list[dict] = []
+        for r in rows:
+            d = dict(r)
+            # Normalise keys to what sessions_page.py expects.
+            d["id"] = d["session_id"]
+            d["duration"] = d.get("duration_s")
+            d["tokens"] = d.get("tokens_used")
+            d["recorded_at"] = d.get("timestamp")
+            out.append(d)
+        return out
 
     def get_skill_usage(self, session_id: Optional[str] = None) -> list[dict]:
         """Query skill_usage from scores.db."""
@@ -185,7 +203,9 @@ class ConductorService:
         """
         try:
             conn = self._scores_conn()
-            row = conn.execute("SELECT COUNT(*) FROM outcomes").fetchone()
+            row = conn.execute(
+                "SELECT COUNT(*) FROM prompt_scores"
+            ).fetchone()
             conn.close()
             total = row[0] if row else 0
             return max(EPSILON_MIN, EPSILON_START * math.exp(-EPSILON_DECAY * total))

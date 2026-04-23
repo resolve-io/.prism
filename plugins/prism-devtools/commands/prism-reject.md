@@ -9,7 +9,7 @@ Reject at red_gate and loop back to planning (step 1).
 ## Execute
 
 ```bash
-python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_reject.py"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_reject.py"
 ```
 
 ## Behavior

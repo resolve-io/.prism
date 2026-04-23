@@ -13,7 +13,7 @@ Display the current state of the PRISM workflow loop.
 ## Execute
 
 ```bash
-python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_status.py"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/prism_status.py"
 ```
 
 Shows:

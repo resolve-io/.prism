@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/session-start.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/session-start.py",
             "description": "Bootstrap Brain, seed auto-memory pointer, run incremental reindex"
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/enforce-story-context.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/enforce-story-context.py",
             "description": "Ensure workflow commands have required story context"
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/pre-read-token-guard.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/pre-read-token-guard.py",
             "description": "Track file reads and warn on redundant re-reads with token estimates"
           }
         ]
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/pre-write-convention-guard.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/pre-write-convention-guard.py",
             "description": "Check proposed writes against known conventions from Memory"
           }
         ]
@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/prism_activity_hook.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/prism_activity_hook.py",
             "description": "Update dashboard with real-time activity"
           }
         ]
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/track-current-story.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/track-current-story.py",
             "description": "Track story file as current workflow context"
           }
         ]
@@ -69,7 +69,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/validate-story-updates.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/validate-story-updates.py",
             "description": "Validate story file updates"
           }
         ]
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/validate-required-sections.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/validate-required-sections.py",
             "description": "Verify all required PRISM sections exist"
           }
         ]
@@ -89,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/capture-commit-context.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/capture-commit-context.py",
             "description": "Capture git commit context into Brain on commit"
           }
         ]
@@ -99,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/capture-file-context.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/capture-file-context.py",
             "description": "Trigger Brain incremental reindex on file edits (30s debounce)"
           }
         ]
@@ -109,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/save-large-responses.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/save-large-responses.py",
             "description": "Save large tool responses (>50 lines) to files to reduce context bloat"
           }
         ]
@@ -119,7 +119,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/log-terminal-output.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/log-terminal-output.py",
             "description": "Log terminal command outputs to files for later grep searching"
           }
         ]
@@ -129,7 +129,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/feedback_signal_hook.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/feedback_signal_hook.py",
             "description": "Implicit retrieval feedback: correlate brain_search results with Read/Edit to emit auto thumbs-up via brain_search_feedback MCP"
           }
         ]
@@ -140,7 +140,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/subagent_sfr_inject.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/subagent_sfr_inject.py",
             "description": "Inject SFR certificate template + Brain context into sub-agent"
           }
         ]
@@ -151,7 +151,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/subagent_stop_recorder.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/subagent_stop_recorder.py",
             "description": "Record sub-agent outcome for SFR scoring and observability"
           }
         ]
@@ -162,7 +162,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/prism_stop_hook.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/prism_stop_hook.py",
             "description": "Auto-advance PRISM workflow on response completion",
             "timeout": 120000
           }
@@ -172,7 +172,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PRISM_DEVTOOLS_ROOT}/hooks/consolidate-story-learnings.py",
+            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/consolidate-story-learnings.py",
             "description": "Consolidate completed story learnings into Mulch"
           }
         ]

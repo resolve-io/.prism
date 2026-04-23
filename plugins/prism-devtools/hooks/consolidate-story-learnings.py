@@ -150,19 +150,12 @@ def _run_promote() -> None:
     except (subprocess.SubprocessError, FileNotFoundError, OSError):
         pass
 
-    # Step 2: ingest updated records into Brain
-    project_root = _find_project_root()
-    hooks_dir = str(_get_prism_root())
+    # Step 2: ask the MCP to pick up the freshly-committed expertise
+    # records. The server's drift-sync path already handles indexing
+    # new .mulch/expertise/*.jsonl files, so we just need to nudge it.
     try:
-        orig_cwd = os.getcwd()
-        os.chdir(project_root)
-        try:
-            if hooks_dir not in sys.path:
-                sys.path.insert(0, hooks_dir)
-            from brain_engine import Brain  # noqa: PLC0415
-            Brain().incremental_reindex()
-        finally:
-            os.chdir(orig_cwd)
+        from prism_mcp_client import call as _mcp_call
+        _mcp_call("prism_sync", {})
     except Exception:
         pass
 

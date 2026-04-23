@@ -233,6 +233,78 @@ class BrainService:
             entity=entity, depth=depth, limit=limit,
         )
 
+    def record_session_outcome(
+        self, session_id: str, duration_s: int, tokens_used: int,
+        files_read: int, files_modified: int, skills_invoked: int,
+    ) -> bool:
+        """Persist one session outcome row (server-side scores.db)."""
+        if not self._available or self._brain is None:
+            return False
+        try:
+            self._brain.record_session_outcome(
+                session_id=session_id, duration_s=int(duration_s),
+                tokens_used=int(tokens_used), files_read=int(files_read),
+                files_modified=int(files_modified),
+                skills_invoked=int(skills_invoked),
+            )
+            return True
+        except Exception:
+            return False
+
+    def record_skill_usage(
+        self, session_id: str, skill_name: str,
+        timestamp: str = "",
+    ) -> bool:
+        """Persist one skill invocation row."""
+        if not self._available or self._brain is None:
+            return False
+        try:
+            self._brain.record_skill_usage(
+                session_id=session_id, skill_name=skill_name,
+                timestamp=timestamp,
+            )
+            return True
+        except Exception:
+            return False
+
+    def record_outcome(
+        self, prompt_id: str, persona: str, step_id: str, metrics: dict,
+    ) -> bool:
+        """Persist one PSP-scored execution outcome (subagents + workflow)."""
+        if not self._available or self._brain is None:
+            return False
+        try:
+            self._brain.record_outcome(
+                prompt_id=prompt_id, persona=persona,
+                step_id=step_id, metrics=metrics or {},
+            )
+            return True
+        except Exception:
+            return False
+
+    def record_subagent_outcome(
+        self, prompt_id: str, validator: str, recommendation: str,
+        evidence_count: int = 0, certificate_complete: int = 0,
+        certificate_blocked: int = 0, timed_out: int = 0,
+        tokens_used: int = 0, duration_s: float = 0.0,
+    ) -> bool:
+        """Persist one SFR outcome row for a validator sub-agent."""
+        if not self._available or self._brain is None:
+            return False
+        try:
+            self._brain.record_subagent_outcome(
+                prompt_id=prompt_id, validator=validator,
+                recommendation=recommendation,
+                evidence_count=evidence_count,
+                certificate_complete=certificate_complete,
+                certificate_blocked=certificate_blocked,
+                timed_out=timed_out, tokens_used=tokens_used,
+                duration_s=duration_s,
+            )
+            return True
+        except Exception:
+            return False
+
     def ingest(self, sources: list[str]) -> int:
         """Ingest source files into the knowledge base."""
         if not self._available or self._brain is None:
@@ -410,12 +482,11 @@ class BrainService:
 
         try:
             conn = sqlite3.connect(self._brain_db)
-            row = conn.execute("SELECT COUNT(*) FROM documents").fetchone()
+            row = conn.execute("SELECT COUNT(*) FROM docs").fetchone()
             result["doc_count"] = row[0] if row else 0
-            # Check for last reindex timestamp if the column exists
             try:
                 ts_row = conn.execute(
-                    "SELECT MAX(indexed_at) FROM documents"
+                    "SELECT MAX(indexed_at) FROM docs"
                 ).fetchone()
                 result["last_reindex"] = ts_row[0] or "" if ts_row else ""
             except sqlite3.OperationalError:
@@ -426,14 +497,18 @@ class BrainService:
 
         try:
             conn = sqlite3.connect(self._graph_db)
-            row = conn.execute("SELECT COUNT(DISTINCT entity) FROM triples").fetchone()
+            row = conn.execute(
+                "SELECT COUNT(*) FROM entities"
+            ).fetchone()
             result["entity_count"] = row[0] if row else 0
             conn.close()
         except Exception:
             pass
 
         try:
-            result["vector_enabled"] = getattr(self._brain, "_vec_available", False)
+            result["vector_enabled"] = bool(
+                getattr(self._brain, "vector_enabled", False)
+            )
         except Exception:
             pass
 

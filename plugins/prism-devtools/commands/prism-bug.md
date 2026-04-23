@@ -15,7 +15,7 @@ Capture PRISM session context and submit a diagnostic GitHub issue with full tra
 ## Execute
 
 ```bash
-python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-bug/scripts/prism-bug.py" $ARGUMENTS
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-bug/scripts/prism-bug.py" $ARGUMENTS
 ```
 
 ## What It Does

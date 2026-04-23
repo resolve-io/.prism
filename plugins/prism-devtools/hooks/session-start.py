@@ -81,14 +81,23 @@ def _ensure_memory_dir(project_root: Path) -> Path:
 
 
 def _run_reindex(project_root: Path) -> int:
-    """Run Brain incremental reindex; return count of reindexed files."""
+    """Ask the MCP to sync drift; return number of files refreshed.
+
+    The .claude/hooks/prism-sync.py sync hook (installed by prism_install)
+    walks the project tree from the client side and pushes drifted
+    content via prism_refresh. This wrapper kicks off that same server-
+    side sync via the prism_sync MCP tool and returns the refresh count
+    reported by the server.
+    """
     try:
         orig_cwd = os.getcwd()
         os.chdir(project_root)
         try:
-            Brain = _load_brain()
-            brain = Brain()
-            return brain.incremental_reindex()
+            from prism_mcp_client import call as _mcp_call
+            resp = _mcp_call("prism_sync", {}) or {}
+            if isinstance(resp, dict):
+                return int(resp.get("refreshed") or 0)
+            return 0
         finally:
             os.chdir(orig_cwd)
     except Exception:
@@ -96,15 +105,16 @@ def _run_reindex(project_root: Path) -> int:
 
 
 def _brain_doc_count(project_root: Path) -> int:
-    """Return number of indexed documents; 0 on error."""
+    """Return number of indexed documents via MCP; 0 on error."""
     try:
         orig_cwd = os.getcwd()
         os.chdir(project_root)
         try:
-            Brain = _load_brain()
-            brain = Brain()
-            row = brain._brain.execute("SELECT COUNT(*) FROM docs").fetchone()
-            return row[0] if row else 0
+            from prism_mcp_client import call as _mcp_call
+            resp = _mcp_call("prism_status", {}) or {}
+            if isinstance(resp, dict):
+                return int(resp.get("docs") or 0)
+            return 0
         finally:
             os.chdir(orig_cwd)
     except Exception:

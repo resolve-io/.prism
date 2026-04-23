@@ -16,7 +16,7 @@ Start TDD-driven orchestration of the Core Development Cycle. The workflow auto-
 Run the setup script to initialize workflow state:
 
 ```bash
-python3 "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" --session-id "${CLAUDE_SESSION_ID}" "$ARGUMENTS"
+python "${PRISM_DEVTOOLS_ROOT}/skills/prism-loop/scripts/setup_prism_loop.py" --session-id "${CLAUDE_SESSION_ID}" "$ARGUMENTS"
 ```
 
 ## Workflow Steps (8 steps)

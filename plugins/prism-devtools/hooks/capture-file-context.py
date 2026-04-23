@@ -57,13 +57,15 @@ def main():
         if _should_debounce():
             sys.exit(0)
 
+        # The server's drift auto-reindex timer and the SessionStart sync
+        # hook both keep Brain fresh relative to disk. This per-edit
+        # client reindex is kept as a no-op for now; if tighter freshness
+        # is needed we can swap to a prism_refresh MCP call with the
+        # changed file's current content.
         try:
-            Brain = _load_brain()
-            brain = Brain()
-            brain.incremental_reindex()
             _update_debounce_ts()
         except Exception:
-            pass  # Fail silently
+            pass
     except Exception:
         sys.exit(0)
 

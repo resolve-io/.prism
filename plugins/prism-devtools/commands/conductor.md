@@ -17,7 +17,7 @@ Interact with the Conductor prompt optimization engine.
 ## Execute
 
 ```bash
-python3 "${PRISM_DEVTOOLS_ROOT}/hooks/conductor_engine.py" $ARGUMENTS
+python "${PRISM_DEVTOOLS_ROOT}/hooks/conductor_engine.py" $ARGUMENTS
 ```
 
 ## Commands

@@ -191,6 +191,94 @@ TOOLS: list[Tool] = [
         },
     ),
     Tool(
+        name="record_session_outcome",
+        description=(
+            "Upsert one session_outcomes row for the current Claude Code "
+            "session. Called by the plugin's Stop hook. Fields: "
+            "session_id, duration_s, tokens_used, files_read, "
+            "files_modified, skills_invoked. Persists to scores.db so "
+            "the /sessions UI can render it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string"},
+                "duration_s": {"type": "integer"},
+                "tokens_used": {"type": "integer"},
+                "files_read": {"type": "integer"},
+                "files_modified": {"type": "integer"},
+                "skills_invoked": {"type": "integer"},
+            },
+            "required": ["session_id"],
+        },
+    ),
+    Tool(
+        name="record_skill_usage",
+        description=(
+            "Record one skill invocation. Called by the plugin's "
+            "PostToolUse hook on Skill tool use. Feeds the Conductor's "
+            "skill-ranking model."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string"},
+                "skill_name": {"type": "string"},
+                "timestamp": {"type": "string",
+                               "description": "ISO-8601; omit for now"},
+            },
+            "required": ["session_id", "skill_name"],
+        },
+    ),
+    Tool(
+        name="record_outcome",
+        description=(
+            "Persist one PSP-scored execution outcome. Used by the "
+            "plugin's SubagentStop recorder and by workflow-step "
+            "recorders. Metrics dict accepts tokens_used, duration_s, "
+            "retries, gate_passed, tests_passed, coverage_pct, "
+            "traceability_pct, probe_accuracy."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "prompt_id": {"type": "string"},
+                "persona": {"type": "string",
+                             "description": "sm | dev | qa | validator | ..."},
+                "step_id": {"type": "string"},
+                "metrics": {"type": "object"},
+            },
+            "required": ["prompt_id", "persona", "step_id"],
+        },
+    ),
+    Tool(
+        name="record_subagent_outcome",
+        description=(
+            "Persist one SFR (Structured Feedback Review) outcome from a "
+            "validator sub-agent. Called by the SubagentStop recorder. "
+            "Upsert by prompt_id."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "prompt_id": {"type": "string"},
+                "validator": {"type": "string",
+                               "description": "sub-agent name"},
+                "recommendation": {"type": "string",
+                                    "description": "APPROVE | REVISE | PASS | FAIL | ..."},
+                "evidence_count": {"type": "integer"},
+                "certificate_complete": {"type": "integer",
+                                          "description": "0 or 1"},
+                "certificate_blocked": {"type": "integer",
+                                         "description": "0 or 1"},
+                "timed_out": {"type": "integer", "description": "0 or 1"},
+                "tokens_used": {"type": "integer"},
+                "duration_s": {"type": "number"},
+            },
+            "required": ["prompt_id", "validator", "recommendation"],
+        },
+    ),
+    Tool(
         name="brain_list",
         description="List all documents indexed in Brain. Returns doc_id, domain, and content length for each.",
         inputSchema={
@@ -261,10 +349,17 @@ TOOLS: list[Tool] = [
     Tool(
         name="prism_refresh",
         description=(
-            "Batch-ingest a map of {path: content} and then trigger a "
-            "graph_rebuild in one call. Use when the SessionStart hook "
-            "detected drift: pass only the drifted paths with their current "
-            "disk content. Returns indexed-count + rebuild summary."
+            "Batch-ingest a map of {path: content}. Blocks until all "
+            "chunks are in brain.db and (when skip_graph is false) the "
+            "graph has been rebuilt — when this call returns, the files "
+            "ARE queryable via brain_search and (unless you skipped) "
+            "brain_graph / brain_find_references.\n\n"
+            "Set skip_graph=true on every call of a bulk loader except "
+            "the last, then call graph_rebuild once at the end. Graph "
+            "rebuild walks the whole staging dir per call and dominates "
+            "latency (~100s even for one file on a ~100-file project); "
+            "amortizing it across a batch is the difference between "
+            "'usable bulk ingest' and '30 hours wall-clock'."
         ),
         inputSchema={
             "type": "object",
@@ -278,9 +373,62 @@ TOOLS: list[Tool] = [
                     "type": "string",
                     "description": "Default domain for files without a per-path override. Default 'code'.",
                 },
+                "skip_graph": {
+                    "type": "boolean",
+                    "description": "When true, index the files but skip the per-call graph_rebuild. Call graph_rebuild once at the end of a bulk load. Default false.",
+                },
             },
             "required": ["files"],
         },
+    ),
+    Tool(
+        name="prism_bulk_refresh",
+        description=(
+            "Ingest a large {path: content} map with server-side chunking "
+            "and automatic graph rebuild at the end. Use this instead of "
+            "rolling chunking on the client: callers stop needing to "
+            "tune chunk_size to the server's behavior.\n\n"
+            "Semantics: splits files into batches of `chunk_size` "
+            "(default 25), indexes each batch with skip_graph=true, "
+            "runs graph_rebuild once at the end unless skip_graph is "
+            "set. Blocks until complete, same contract as prism_refresh. "
+            "Supports cancellation via prism_cancel_pending.\n\n"
+            "Backpressure: when `PRISM_MAX_CONCURRENT_REFRESH` other "
+            "refreshes are in flight (default 2), returns "
+            "{busy: true, in_flight: N, retry_after_s: 30} instead of "
+            "queuing. Clients should back off rather than pile more work "
+            "onto a saturated server."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                },
+                "domain": {"type": "string"},
+                "chunk_size": {"type": "integer",
+                                 "description": "default 25"},
+                "skip_graph": {"type": "boolean",
+                                "description": "skip final graph_rebuild; default false"},
+            },
+            "required": ["files"],
+        },
+    ),
+    Tool(
+        name="prism_cancel_pending",
+        description=(
+            "Request cancellation of an in-flight prism_refresh for the "
+            "current project. The request is consumed at the next "
+            "unit-of-work boundary inside the refresh loop (between "
+            "files) — files that have already been indexed stay "
+            "indexed, the remaining batch is skipped, and the graph "
+            "rebuild is skipped. Returns {cancelled_requested: bool}. "
+            "One cancel per one refresh; subsequent refreshes start "
+            "clean. Use together with prism_status.indexing_in_flight "
+            "to confirm the refresh actually ended."
+        ),
+        inputSchema={"type": "object", "properties": {}},
     ),
     Tool(
         name="prism_install",
@@ -1044,12 +1192,39 @@ def main() -> int:
     if not to_refresh:
         return 0
 
-    try:
-        _mcp_call(base, project, "prism_refresh", {"files": to_refresh})
-        print(f"[prism-sync] refreshed {len(to_refresh)} drifted file(s)",
-              file=sys.stderr)
-    except Exception as e:
-        print(f"[prism-sync] prism_refresh failed: {e!r}", file=sys.stderr)
+    # Chunked refresh: push files in batches of CHUNK_SIZE with
+    # skip_graph=true, then fire one graph_rebuild at the end. Avoids
+    # the per-call graphify cost that dominates latency on larger syncs.
+    CHUNK_SIZE = 25
+    items = list(to_refresh.items())
+    refreshed = 0
+    for i in range(0, len(items), CHUNK_SIZE):
+        batch = dict(items[i:i + CHUNK_SIZE])
+        try:
+            _mcp_call(
+                base, project, "prism_refresh",
+                {"files": batch, "skip_graph": True},
+            )
+            refreshed += len(batch)
+        except Exception as e:
+            print(
+                f"[prism-sync] prism_refresh chunk {i // CHUNK_SIZE} "
+                f"failed: {e!r}", file=sys.stderr,
+            )
+    if refreshed:
+        try:
+            _mcp_call(base, project, "graph_rebuild", {})
+        except Exception as e:
+            print(
+                f"[prism-sync] graph_rebuild after sync failed: {e!r}",
+                file=sys.stderr,
+            )
+        print(
+            f"[prism-sync] refreshed {refreshed} drifted file(s) in "
+            f"{(len(items) + CHUNK_SIZE - 1) // CHUNK_SIZE} chunk(s) + "
+            "1 graph_rebuild",
+            file=sys.stderr,
+        )
 
     return 0
 
@@ -1149,6 +1324,56 @@ def _install_manifest(project_id: str) -> dict:
             "logs for '[prism-sync] refreshed 1 drifted file(s)'.",
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Indexer in-flight tracking — exposed via prism_status (#15 observability).
+# Bumped when a request is actively inside prism_refresh's synchronous
+# index/graph work, so a concurrent prism_status call can report
+# indexing_in_flight=True without scanning state.
+# ---------------------------------------------------------------------------
+import threading as _th
+
+_INDEXING_LOCK = _th.Lock()
+_INDEXING_IN_FLIGHT: dict[str, int] = {}  # project_id -> in-flight request count
+
+
+def _indexing_begin(project_id: str) -> None:
+    with _INDEXING_LOCK:
+        _INDEXING_IN_FLIGHT[project_id] = (
+            _INDEXING_IN_FLIGHT.get(project_id, 0) + 1
+        )
+
+
+def _indexing_end(project_id: str) -> None:
+    with _INDEXING_LOCK:
+        n = _INDEXING_IN_FLIGHT.get(project_id, 0) - 1
+        if n <= 0:
+            _INDEXING_IN_FLIGHT.pop(project_id, None)
+        else:
+            _INDEXING_IN_FLIGHT[project_id] = n
+
+
+def indexing_in_flight(project_id: str) -> int:
+    with _INDEXING_LOCK:
+        return int(_INDEXING_IN_FLIGHT.get(project_id, 0))
+
+
+# Cancellation flag per project. Set by prism_cancel_pending, consumed
+# at the next unit-of-work boundary inside prism_refresh. Pop-on-read
+# so a single cancel request cancels a single in-flight refresh.
+_CANCEL_FLAGS: dict[str, bool] = {}
+
+
+def request_cancel(project_id: str) -> None:
+    with _INDEXING_LOCK:
+        _CANCEL_FLAGS[project_id] = True
+
+
+def check_and_clear_cancel(project_id: str) -> bool:
+    """Return True exactly once if a cancel was requested; clear it."""
+    with _INDEXING_LOCK:
+        return bool(_CANCEL_FLAGS.pop(project_id, False))
 
 
 # ---------------------------------------------------------------------------
@@ -1392,6 +1617,48 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
             )
             return [TextContent(type="text", text=_json(results))]
 
+        if name == "record_session_outcome":
+            ok = brain_svc.record_session_outcome(
+                session_id=str(arguments["session_id"]),
+                duration_s=int(arguments.get("duration_s", 0)),
+                tokens_used=int(arguments.get("tokens_used", 0)),
+                files_read=int(arguments.get("files_read", 0)),
+                files_modified=int(arguments.get("files_modified", 0)),
+                skills_invoked=int(arguments.get("skills_invoked", 0)),
+            )
+            return [TextContent(type="text", text=_json({"recorded": ok}))]
+
+        if name == "record_skill_usage":
+            ok = brain_svc.record_skill_usage(
+                session_id=str(arguments["session_id"]),
+                skill_name=str(arguments["skill_name"]),
+                timestamp=str(arguments.get("timestamp") or ""),
+            )
+            return [TextContent(type="text", text=_json({"recorded": ok}))]
+
+        if name == "record_outcome":
+            ok = brain_svc.record_outcome(
+                prompt_id=str(arguments["prompt_id"]),
+                persona=str(arguments["persona"]),
+                step_id=str(arguments["step_id"]),
+                metrics=arguments.get("metrics") or {},
+            )
+            return [TextContent(type="text", text=_json({"recorded": ok}))]
+
+        if name == "record_subagent_outcome":
+            ok = brain_svc.record_subagent_outcome(
+                prompt_id=str(arguments["prompt_id"]),
+                validator=str(arguments["validator"]),
+                recommendation=str(arguments["recommendation"]),
+                evidence_count=int(arguments.get("evidence_count", 0)),
+                certificate_complete=int(arguments.get("certificate_complete", 0)),
+                certificate_blocked=int(arguments.get("certificate_blocked", 0)),
+                timed_out=int(arguments.get("timed_out", 0)),
+                tokens_used=int(arguments.get("tokens_used", 0)),
+                duration_s=float(arguments.get("duration_s", 0.0)),
+            )
+            return [TextContent(type="text", text=_json({"recorded": ok}))]
+
         if name == "brain_list":
             docs = brain_svc.list_docs(
                 domain=arguments.get("domain"),
@@ -1420,25 +1687,121 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 brain_db_path=str(ctx._data_dir / "brain.db"),
                 file_hashes=arguments.get("file_hashes"),
             )
+            # #15(c) observability: operators can tell when indexer is busy
+            # without scanning logs. indexing_in_flight counts concurrent
+            # prism_refresh calls currently inside their CPU-bound work.
+            n = indexing_in_flight(project_id)
+            status["indexing_in_flight"] = n
+            status["indexer_busy"] = bool(n)
             return [TextContent(type="text", text=_json(status))]
 
         if name == "prism_refresh":
+            import asyncio as _aio
             ctx = get_project(project_id)
             files = arguments.get("files") or {}
             default_domain = arguments.get("domain") or "code"
+            skip_graph = bool(arguments.get("skip_graph", False))
+            _indexing_begin(project_id)
             indexed = 0
-            for path, content in files.items():
-                if not isinstance(content, str):
-                    continue
-                ctx.brain_svc.index_doc(
-                    path=path, content=content, domain=default_domain,
-                )
-                indexed += 1
-            summary = ctx.graph_svc.rebuild(
-                brain_db_path=str(ctx._data_dir / "brain.db")
-            )
+            cancelled = False
+            try:
+                for path, content in files.items():
+                    if check_and_clear_cancel(project_id):
+                        cancelled = True
+                        break
+                    if not isinstance(content, str):
+                        continue
+                    # asyncio.to_thread releases the event loop so
+                    # concurrent prism_status / brain_search calls
+                    # don't queue behind this CPU-bound ingest.
+                    await _aio.to_thread(
+                        ctx.brain_svc.index_doc,
+                        path=path, content=content, domain=default_domain,
+                    )
+                    indexed += 1
+                if cancelled:
+                    summary = {"cancelled": True, "graph_skipped": True}
+                elif skip_graph:
+                    summary = {"graph_skipped": True}
+                else:
+                    summary = await _aio.to_thread(
+                        ctx.graph_svc.rebuild,
+                        brain_db_path=str(ctx._data_dir / "brain.db"),
+                    )
+            finally:
+                _indexing_end(project_id)
             summary["refreshed_files"] = indexed
             return [TextContent(type="text", text=_json(summary))]
+
+        if name == "prism_bulk_refresh":
+            import asyncio as _aio
+            import os as _os
+            ctx = get_project(project_id)
+            files = arguments.get("files") or {}
+            default_domain = arguments.get("domain") or "code"
+            chunk_size = max(1, int(arguments.get("chunk_size", 25)))
+            skip_graph = bool(arguments.get("skip_graph", False))
+            max_concurrent = int(
+                _os.environ.get("PRISM_MAX_CONCURRENT_REFRESH", "2")
+            )
+            if indexing_in_flight(project_id) >= max_concurrent:
+                return [TextContent(type="text", text=_json({
+                    "busy": True,
+                    "in_flight": indexing_in_flight(project_id),
+                    "max_concurrent": max_concurrent,
+                    "retry_after_s": 30,
+                    "note": "server saturated — back off then retry",
+                }))]
+            _indexing_begin(project_id)
+            indexed = 0
+            cancelled = False
+            chunks = 0
+            try:
+                items = list(files.items())
+                for i in range(0, len(items), chunk_size):
+                    if check_and_clear_cancel(project_id):
+                        cancelled = True
+                        break
+                    batch = items[i:i + chunk_size]
+                    for path, content in batch:
+                        if not isinstance(content, str):
+                            continue
+                        await _aio.to_thread(
+                            ctx.brain_svc.index_doc,
+                            path=path, content=content, domain=default_domain,
+                        )
+                        indexed += 1
+                    chunks += 1
+                if cancelled or skip_graph:
+                    summary = {
+                        "cancelled": cancelled,
+                        "graph_skipped": True,
+                    }
+                else:
+                    summary = await _aio.to_thread(
+                        ctx.graph_svc.rebuild,
+                        brain_db_path=str(ctx._data_dir / "brain.db"),
+                    )
+            finally:
+                _indexing_end(project_id)
+            summary["refreshed_files"] = indexed
+            summary["chunks_processed"] = chunks
+            summary["chunk_size"] = chunk_size
+            return [TextContent(type="text", text=_json(summary))]
+
+        if name == "prism_cancel_pending":
+            in_flight = indexing_in_flight(project_id)
+            if in_flight:
+                request_cancel(project_id)
+                return [TextContent(type="text", text=_json({
+                    "cancelled_requested": True,
+                    "indexing_in_flight": in_flight,
+                }))]
+            return [TextContent(type="text", text=_json({
+                "cancelled_requested": False,
+                "indexing_in_flight": 0,
+                "note": "no in-flight refresh to cancel",
+            }))]
 
         if name == "prism_install":
             # Returns the client-side install manifest so the agent can

@@ -88,16 +88,13 @@ def main():
             f"Files changed:\n{commit['files_changed']}"
         )
 
-        Brain = _load_brain()
-        brain = Brain()
         doc_id = f"git:commit:{commit['hash']}"
-        brain._ingest_single(
-            doc_id,
-            content,
-            source_file=doc_id,
-            domain="git",
-        )
-        brain._brain.commit()
+        from prism_mcp_client import call as _mcp_call
+        _mcp_call("brain_index_doc", {
+            "path": doc_id,
+            "content": content,
+            "domain": "git",
+        })
     except Exception:
         pass  # Fail silently
 
