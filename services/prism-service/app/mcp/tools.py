@@ -1249,6 +1249,9 @@ def _load_asset(filename: str) -> str:
 
 
 _FEEDBACK_HOOK_SCRIPT = _load_asset("feedback_signal_hook.py")
+_STOP_HOOK_SCRIPT = _load_asset("stop_record_hook.py")
+_SUBAGENT_HOOK_SCRIPT = _load_asset("subagent_record_hook.py")
+_SKILL_HOOK_SCRIPT = _load_asset("skill_usage_hook.py")
 
 
 def _install_manifest(project_id: str) -> dict:
@@ -1279,6 +1282,49 @@ def _install_manifest(project_id: str) -> dict:
                     },
                 ],
             },
+            {
+                "matcher": "Skill",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python .claude/hooks/prism-skill-usage.py",
+                        "description": (
+                            "Record skill invocations to scores.db via "
+                            "record_skill_usage — populates /skills."
+                        ),
+                    },
+                ],
+            },
+        ],
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python .claude/hooks/prism-stop.py",
+                        "description": (
+                            "Record session-level metrics (duration, "
+                            "tokens, files, skills) via "
+                            "record_session_outcome — populates /sessions."
+                        ),
+                    },
+                ],
+            },
+        ],
+        "SubagentStop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python .claude/hooks/prism-subagent.py",
+                        "description": (
+                            "Record sub-agent outcome (recommendation, "
+                            "evidence count, timing) via "
+                            "record_subagent_outcome."
+                        ),
+                    },
+                ],
+            },
         ],
     }
     return {
@@ -1288,20 +1334,22 @@ def _install_manifest(project_id: str) -> dict:
         "instructions_for_agent": [
             "Use the Write tool to create each entry in install_files.",
             "If .claude/hooks.json already exists, MERGE each top-level "
-            "array (SessionStart, PostToolUse) by appending — do not "
-            "overwrite the whole file.",
+            "array (SessionStart, PostToolUse, Stop, SubagentStop) by "
+            "appending — do not overwrite the whole file.",
             "After writing, tell the user: 'Restart Claude so the new "
             "PRISM hooks activate.'",
-            "The SessionStart hook auto-syncs Brain/Graph. The PostToolUse "
-            "hook correlates brain_search results with Read/Edit and "
-            "emits implicit feedback via brain_search_feedback — no manual "
-            "thumbs-ups needed.",
+            "SessionStart syncs Brain/Graph drift. PostToolUse covers two "
+            "things: implicit retrieval feedback (brain_search → Read/Edit) "
+            "and skill-usage recording. Stop records session outcomes "
+            "(populates /sessions). SubagentStop records sub-agent outcomes.",
         ],
         "install_files": [
             {
                 "path": ".claude/hooks.json",
                 "action": "create_or_merge",
-                "merge_keys": ["SessionStart", "PostToolUse"],
+                "merge_keys": [
+                    "SessionStart", "PostToolUse", "Stop", "SubagentStop",
+                ],
                 "content": json.dumps(hooks_json, indent=2),
             },
             {
@@ -1316,12 +1364,32 @@ def _install_manifest(project_id: str) -> dict:
                 "content": _FEEDBACK_HOOK_SCRIPT,
                 "mode": "0755",
             },
+            {
+                "path": ".claude/hooks/prism-stop.py",
+                "action": "create",
+                "content": _STOP_HOOK_SCRIPT,
+                "mode": "0755",
+            },
+            {
+                "path": ".claude/hooks/prism-subagent.py",
+                "action": "create",
+                "content": _SUBAGENT_HOOK_SCRIPT,
+                "mode": "0755",
+            },
+            {
+                "path": ".claude/hooks/prism-skill-usage.py",
+                "action": "create",
+                "content": _SKILL_HOOK_SCRIPT,
+                "mode": "0755",
+            },
         ],
         "verification_steps": [
             "After Claude restart, re-invoke any tool and confirm no errors.",
             "Call prism_status with no args — expect stale: false.",
             "Edit any indexed source file, restart Claude, check the hook "
             "logs for '[prism-sync] refreshed 1 drifted file(s)'.",
+            "Finish a Claude response, reload /sessions — expect a new row "
+            "for the session_id just recorded.",
         ],
     }
 
