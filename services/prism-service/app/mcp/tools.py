@@ -382,6 +382,21 @@ TOOLS: list[Tool] = [
         },
     ),
     Tool(
+        name="prism_cancel_pending",
+        description=(
+            "Request cancellation of an in-flight prism_refresh for the "
+            "current project. The request is consumed at the next "
+            "unit-of-work boundary inside the refresh loop (between "
+            "files) — files that have already been indexed stay "
+            "indexed, the remaining batch is skipped, and the graph "
+            "rebuild is skipped. Returns {cancelled_requested: bool}. "
+            "One cancel per one refresh; subsequent refreshes start "
+            "clean. Use together with prism_status.indexing_in_flight "
+            "to confirm the refresh actually ended."
+        ),
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    Tool(
         name="prism_install",
         description=(
             "Return the install manifest a coding agent should apply to "
@@ -1310,6 +1325,23 @@ def indexing_in_flight(project_id: str) -> int:
         return int(_INDEXING_IN_FLIGHT.get(project_id, 0))
 
 
+# Cancellation flag per project. Set by prism_cancel_pending, consumed
+# at the next unit-of-work boundary inside prism_refresh. Pop-on-read
+# so a single cancel request cancels a single in-flight refresh.
+_CANCEL_FLAGS: dict[str, bool] = {}
+
+
+def request_cancel(project_id: str) -> None:
+    with _INDEXING_LOCK:
+        _CANCEL_FLAGS[project_id] = True
+
+
+def check_and_clear_cancel(project_id: str) -> bool:
+    """Return True exactly once if a cancel was requested; clear it."""
+    with _INDEXING_LOCK:
+        return bool(_CANCEL_FLAGS.pop(project_id, False))
+
+
 # ---------------------------------------------------------------------------
 # Tool handler
 # ---------------------------------------------------------------------------
@@ -1637,8 +1669,12 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
             skip_graph = bool(arguments.get("skip_graph", False))
             _indexing_begin(project_id)
             indexed = 0
+            cancelled = False
             try:
                 for path, content in files.items():
+                    if check_and_clear_cancel(project_id):
+                        cancelled = True
+                        break
                     if not isinstance(content, str):
                         continue
                     # asyncio.to_thread releases the event loop so
@@ -1649,7 +1685,9 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                         path=path, content=content, domain=default_domain,
                     )
                     indexed += 1
-                if skip_graph:
+                if cancelled:
+                    summary = {"cancelled": True, "graph_skipped": True}
+                elif skip_graph:
                     summary = {"graph_skipped": True}
                 else:
                     summary = await _aio.to_thread(
@@ -1660,6 +1698,20 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 _indexing_end(project_id)
             summary["refreshed_files"] = indexed
             return [TextContent(type="text", text=_json(summary))]
+
+        if name == "prism_cancel_pending":
+            in_flight = indexing_in_flight(project_id)
+            if in_flight:
+                request_cancel(project_id)
+                return [TextContent(type="text", text=_json({
+                    "cancelled_requested": True,
+                    "indexing_in_flight": in_flight,
+                }))]
+            return [TextContent(type="text", text=_json({
+                "cancelled_requested": False,
+                "indexing_in_flight": 0,
+                "note": "no in-flight refresh to cancel",
+            }))]
 
         if name == "prism_install":
             # Returns the client-side install manifest so the agent can
