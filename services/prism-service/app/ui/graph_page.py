@@ -39,6 +39,8 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 <div id="graph"></div>
 <div id="legend">Scroll to zoom · drag to pan · click a node for details</div>
 <script src="https://unpkg.com/graphology@0.25.4/dist/graphology.umd.min.js"></script>
+<script src="https://unpkg.com/graphology-layout@0.6.1/dist/graphology-layout.min.js"></script>
+<script src="https://unpkg.com/graphology-layout-forceatlas2@0.10.1/dist/graphology-layout-forceatlas2.min.js"></script>
 <script src="https://unpkg.com/sigma@3.0.0/build/sigma.min.js"></script>
 <script>
   const PROJECT_ID = "__PROJECT_ID__";
@@ -52,38 +54,80 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
     const idx = Math.abs(Number(community) || 0) % COMMUNITY_COLORS.length;
     return COMMUNITY_COLORS[idx];
   }
+  // Seed positions on a per-community ring so ForceAtlas2 starts with
+  // cluster structure rather than pure noise — otherwise 35k random
+  // nodes make FA2 converge to a fuzzy blob instead of a readable map.
+  function seedPosition(community, idx) {
+    const c = community === undefined || community === null ? 0 : Number(community) || 0;
+    const clusterR = 50 + (Math.abs(c) % 12) * 8;
+    const theta = ((Math.abs(c) * 2.39996) + idx * 0.0001) % (Math.PI * 2);
+    const jitter = 3;
+    return {
+      x: clusterR * Math.cos(theta) + (Math.random() - 0.5) * jitter,
+      y: clusterR * Math.sin(theta) + (Math.random() - 0.5) * jitter,
+    };
+  }
   fetch(`/graphify-visual/${PROJECT_ID}/graph.json`)
     .then(r => { if (!r.ok) throw new Error("graph.json " + r.status); return r.json(); })
     .then(data => {
       const g = new graphology.Graph();
       const nodes = data.nodes || [];
       const edges = data.links || data.edges || [];
-      statusEl.textContent = `Rendering ${nodes.length.toLocaleString()} nodes, `
+      statusEl.textContent = `Loading ${nodes.length.toLocaleString()} nodes, `
         + `${edges.length.toLocaleString()} edges...`;
+      let nIdx = 0;
       for (const n of nodes) {
         if (g.hasNode(n.id)) continue;
+        const pos = seedPosition(n.community, nIdx++);
         g.addNode(n.id, {
           label: n.label || n.id,
           size: Math.max(2, Math.log(1 + (n.degree || 1)) * 2),
           color: colorFor(n.community),
-          x: Math.random(), y: Math.random(),
+          community: n.community ?? null,
+          x: pos.x, y: pos.y,
         });
       }
       for (const e of edges) {
         const s = e.source, t = e.target;
         if (!g.hasNode(s) || !g.hasNode(t) || s === t) continue;
-        try { g.addEdge(s, t, {size: 0.3, color: "#2a2a4e"}); } catch (_) {}
+        try { g.addEdge(s, t, {size: 0.4, color: "#5b5b8a"}); } catch (_) {}
       }
-      const renderer = new Sigma(g, document.getElementById("graph"), {
-        labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
-        maxCameraRatio: 10, defaultNodeColor: "#6b7280",
-      });
-      statusEl.textContent = `${nodes.length.toLocaleString()} nodes · `
-        + `${edges.length.toLocaleString()} edges · WebGL (sigma.js)`;
-      renderer.on("clickNode", ({ node }) => {
-        const attrs = g.getNodeAttributes(node);
-        statusEl.textContent = `${attrs.label} (community ${attrs.community ?? "—"})`;
-      });
+      // ForceAtlas2: iteration count scales down for huge graphs so the
+      // layout returns in a few seconds. Barnes-Hut + LinLog modes help
+      // community separation and keep it tractable at 35k+ nodes.
+      statusEl.textContent = `Laying out ${nodes.length.toLocaleString()} nodes `
+        + `(ForceAtlas2)...`;
+      const settings = graphologyLibrary.ForceAtlas2.inferSettings(g);
+      settings.barnesHutOptimize = g.order > 2000;
+      settings.barnesHutTheta = 0.8;
+      settings.linLogMode = true;
+      settings.strongGravityMode = true;
+      settings.gravity = 0.8;
+      settings.scalingRatio = 10;
+      settings.adjustSizes = true;
+      const iters = g.order > 20000 ? 120 : g.order > 5000 ? 250 : 400;
+      const t0 = performance.now();
+      // Yield to the browser once so the "Laying out..." status can paint
+      // before the synchronous FA2 pass blocks the main thread.
+      setTimeout(() => {
+        graphologyLibrary.ForceAtlas2.assign(g, { iterations: iters, settings });
+        const dt = ((performance.now() - t0) / 1000).toFixed(1);
+        const renderer = new Sigma(g, document.getElementById("graph"), {
+          labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
+          maxCameraRatio: 10, defaultNodeColor: "#6b7280",
+          defaultEdgeColor: "#5b5b8a",
+          renderEdgeLabels: false,
+          hideEdgesOnMove: g.size > 20000,
+        });
+        statusEl.textContent = `${nodes.length.toLocaleString()} nodes · `
+          + `${edges.length.toLocaleString()} edges · FA2 ${iters}it in ${dt}s`;
+        renderer.on("clickNode", ({ node }) => {
+          const attrs = g.getNodeAttributes(node);
+          statusEl.textContent = `${attrs.label} `
+            + `(community ${attrs.community ?? "—"}, `
+            + `degree ${g.degree(node)})`;
+        });
+      }, 50);
     })
     .catch(err => {
       statusEl.textContent = "Error loading graph: " + err.message;
