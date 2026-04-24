@@ -102,8 +102,12 @@ def _mcp_call(base: str, project: str, tool: str, args: dict) -> None:
     )
     try:
         urllib.request.urlopen(req, timeout=4).read()
-    except Exception:
-        pass
+    except Exception as e:
+        try:
+            from hook_logger import log_hook_failure
+            log_hook_failure(f"mcp_call:{tool}", e)
+        except Exception:
+            pass
 
 
 def _parse_search_response(tool_response) -> list[dict]:
