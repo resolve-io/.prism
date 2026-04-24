@@ -510,6 +510,14 @@ TOOLS: list[Tool] = [
                     "description": "semantic (fact/convention), episodic (specific incident/debug session), procedural (how-to/template). Default: semantic.",
                     "default": "semantic",
                 },
+                "session_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional. When provided, stamps the memory_meta "
+                        "sidecar row with this session so the janitor can "
+                        "tie memories back to the session that wrote them."
+                    ),
+                },
             },
             "required": ["domain", "name", "description", "type", "classification"],
         },
@@ -528,6 +536,126 @@ TOOLS: list[Tool] = [
                 "limit": {"type": "integer", "description": "Max results", "default": 5},
             },
             "required": ["query"],
+        },
+    ),
+    # ------------------------------------------------------------------
+    # LL-08 — Janitor / Layer-B queue endpoints. PRISM schedules the
+    # work; the caller's Claude does the LLM compute via the prism-
+    # reflect sub-agent. See services/janitor_service.py for the
+    # underlying semantics.
+    # ------------------------------------------------------------------
+    Tool(
+        name="janitor_enqueue",
+        description=(
+            "Enqueue a consolidation candidate. Idempotent on "
+            "(task_id, trigger) within a 10-min window. Fire-and-forget "
+            "from the Stop hook."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "session_id": {"type": "string"},
+                "trigger": {"type": "string",
+                             "description": "e.g. session_end, task_done, revert_detected, staleness_sweep"},
+                "scope": {
+                    "type": "object",
+                    "description": "{task_ids, memory_ids, file_paths} — what the session touched",
+                },
+            },
+            "required": ["trigger"],
+        },
+    ),
+    Tool(
+        name="janitor_mark_stale",
+        description=(
+            "Flip pending candidates whose scope overlaps the session's "
+            "activity to status=stale and requeue fresh siblings. Called "
+            "by the Stop hook so the next reflection sees current state."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string"},
+                "scope": {
+                    "type": "object",
+                    "description": "{task_ids, memory_ids, file_paths} session touched",
+                },
+            },
+            "required": ["session_id"],
+        },
+    ),
+    Tool(
+        name="janitor_check",
+        description=(
+            "Return {ready, brief}. Dispenses at most one pending "
+            "candidate per call — if ready, the brief is a subagent "
+            "work packet (question, context, mcps_available, "
+            "investigation_guidance, response_schema). Enforces the 1h "
+            "min queue age and 5-min abandon backoff."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {"session_id": {"type": "string"}},
+            "required": ["session_id"],
+        },
+    ),
+    Tool(
+        name="janitor_submit",
+        description=(
+            "Post the sub-agent's JSON output. Server validates the "
+            "response schema, writes consolidation_runs, enriches "
+            "task_quality_rollup.qualitative_score. Malformed → reject."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "candidate_id": {"type": "string"},
+                "output_json": {"type": "object"},
+            },
+            "required": ["candidate_id", "output_json"],
+        },
+    ),
+    Tool(
+        name="janitor_abandon",
+        description=(
+            "Give up on a dispensed candidate. Increments retry_count; "
+            "hard limit of 3 before status=abandoned."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "candidate_id": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": ["candidate_id"],
+        },
+    ),
+    Tool(
+        name="janitor_status",
+        description=(
+            "Return queue depth by status + last-nudged timestamps. Used "
+            "by the /consolidation UI and by operators debugging why "
+            "nothing is dispensing."
+        ),
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    Tool(
+        name="memory_invalidate",
+        description=(
+            "Soft-delete a memory by flipping its memory_meta row to "
+            "status=invalidated. Row is preserved for audit; the JSONL "
+            "content stays where it is. Called by the prism-reflect "
+            "sub-agent when a reflection determines a memory no longer "
+            "applies."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": ["memory_id"],
         },
     ),
     Tool(
@@ -1906,7 +2034,117 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 importance=arguments.get("importance", 5),
                 memory_type=arguments.get("memory_type", "semantic"),
             )
+            # LL-08: when the caller provides a session_id, stamp a
+            # memory_meta row so the janitor can later correlate this
+            # memory with the session that wrote it. JSONL remains the
+            # source of truth for content; memory_meta is a SQL sidecar
+            # for queryable metadata only.
+            sid = arguments.get("session_id")
+            if sid:
+                # Accept dict, dataclass, or pydantic-like: memory_svc
+                # returns an ExpertiseEntry dataclass today, but keep
+                # attribute+mapping lookup so a future shape change
+                # doesn't silently drop the stamp.
+                mem_id = None
+                for attr in ("id", "entry_id", "memory_id"):
+                    if isinstance(result, dict):
+                        mem_id = result.get(attr)
+                    else:
+                        mem_id = getattr(result, attr, None)
+                    if mem_id:
+                        break
+                if mem_id:
+                    import sqlite3 as _sq3
+                    _c = _sq3.connect(str(ctx._data_dir / "scores.db"))
+                    try:
+                        _c.execute(
+                            "INSERT OR REPLACE INTO memory_meta "
+                            "(memory_id, session_id, status) "
+                            "VALUES (?, ?, 'active')",
+                            (mem_id, sid),
+                        )
+                        _c.commit()
+                    finally:
+                        _c.close()
             return [TextContent(type="text", text=_json(result))]
+
+        if name == "memory_invalidate":
+            import sqlite3 as _sq3
+            mem_id = arguments["memory_id"]
+            reason = arguments.get("reason", "")
+            _c = _sq3.connect(str(ctx._data_dir / "scores.db"))
+            try:
+                # INSERT OR REPLACE so memories that never had a
+                # memory_meta row still get one (invalidated directly
+                # without having been session-tagged first).
+                _c.execute(
+                    "INSERT INTO memory_meta (memory_id, status) "
+                    "VALUES (?, 'invalidated') "
+                    "ON CONFLICT(memory_id) DO UPDATE SET status='invalidated'",
+                    (mem_id,),
+                )
+                _c.commit()
+            finally:
+                _c.close()
+            return [TextContent(type="text", text=_json({
+                "accepted": True, "memory_id": mem_id, "reason": reason,
+            }))]
+
+        # ------------------------------------------------------------------
+        # LL-08 — Janitor / Layer-B queue endpoints
+        # ------------------------------------------------------------------
+        if name == "janitor_enqueue":
+            cid = ctx.janitor_svc.enqueue(
+                task_id=arguments.get("task_id"),
+                session_id=arguments.get("session_id"),
+                trigger=arguments.get("trigger", "manual"),
+                scope=arguments.get("scope"),
+            )
+            return [TextContent(type="text", text=_json({"candidate_id": cid}))]
+
+        if name == "janitor_mark_stale":
+            staled = ctx.janitor_svc.mark_stale(
+                session_id=arguments["session_id"],
+                scope=arguments.get("scope"),
+            )
+            return [TextContent(type="text", text=_json({"staled": staled}))]
+
+        if name == "janitor_check":
+            res = ctx.janitor_svc.check(session_id=arguments["session_id"])
+            return [TextContent(type="text", text=_json(res))]
+
+        if name == "janitor_submit":
+            res = ctx.janitor_svc.submit(
+                candidate_id=arguments["candidate_id"],
+                output_json=arguments["output_json"],
+            )
+            return [TextContent(type="text", text=_json(res))]
+
+        if name == "janitor_abandon":
+            res = ctx.janitor_svc.abandon(
+                candidate_id=arguments["candidate_id"],
+                reason=arguments.get("reason", ""),
+            )
+            return [TextContent(type="text", text=_json(res))]
+
+        if name == "janitor_status":
+            _db = ctx.janitor_svc._db
+            rows = _db.execute(
+                "SELECT status, COUNT(*) AS n FROM consolidation_candidates "
+                "GROUP BY status"
+            ).fetchall()
+            counts = {r["status"]: r["n"] for r in rows}
+            recent_nudge = _db.execute(
+                "SELECT MAX(last_nudged_at) AS ts FROM consolidation_candidates"
+            ).fetchone()
+            return [TextContent(type="text", text=_json({
+                "pending": counts.get("pending", 0),
+                "dispensed": counts.get("dispensed", 0),
+                "completed": counts.get("completed", 0),
+                "abandoned": counts.get("abandoned", 0),
+                "stale": counts.get("stale", 0),
+                "last_nudge_at": recent_nudge["ts"] if recent_nudge else None,
+            }))]
 
         if name == "memory_recall":
             results = memory_svc.recall(

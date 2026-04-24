@@ -29,6 +29,7 @@ class ProjectContext:
         self._memory_svc = None
         self._conductor_svc = None
         self._governance = None
+        self._janitor_svc = None
 
     @property
     def brain_svc(self):
@@ -89,6 +90,15 @@ class ProjectContext:
                 scores_db=str(self._data_dir / "scores.db"),
             )
         return self._conductor_svc
+
+    @property
+    def janitor_svc(self):
+        if self._janitor_svc is None:
+            from app.services.janitor_service import JanitorService
+            self._janitor_svc = JanitorService(
+                scores_db=str(self._data_dir / "scores.db"),
+            )
+        return self._janitor_svc
 
     @property
     def governance(self):
