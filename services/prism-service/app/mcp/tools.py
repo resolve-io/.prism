@@ -1519,17 +1519,24 @@ def _install_manifest(project_id: str) -> dict:
         "version_notes": PRISM_VERSION_NOTES,
         "project_id": project_id,
         "instructions_for_agent": [
-            "Use the Write tool to create each entry in install_files.",
-            "If .claude/settings.json already exists, MERGE by reading it "
-            "first, then deep-merging the 'hooks' object: for each event "
-            "(SessionStart, PostToolUse, Stop, SubagentStop) append the new "
-            "entries to any existing array. Do NOT overwrite other top-level "
-            "keys like 'permissions', 'statusLine', or 'enabledPlugins'.",
-            "Claude Code only reads hooks from settings.json (user, project, "
-            "or local) — a bare .claude/hooks.json is ignored, so writing "
-            "there is a silent no-op. If you find an old .claude/hooks.json "
-            "from a pre-fix install, migrate its contents into settings.json "
-            "under 'hooks' and delete the old file.",
+            "prism_install is idempotent. Safe to re-run on any project — "
+            "the file actions ('upsert' / 'create_or_merge') below describe "
+            "how each file heals drift. Treat this as a migration step, "
+            "not a first-install-only step.",
+            "For every install_file with action='upsert': write the file "
+            "unconditionally with the manifest content (overwriting any "
+            "existing copy). These are server-authoritative artefacts — a "
+            "local edit means the install is stale.",
+            "For .claude/settings.json (action='create_or_merge'): if the "
+            "file exists, read it, deep-merge the 'hooks' object (append new "
+            "entries into each event array without duplicating commands), "
+            "and write it back. Preserve every other top-level key "
+            "('permissions', 'statusLine', 'enabledPlugins', etc). If the "
+            "file does not exist, write the manifest content verbatim.",
+            "Migration: Claude Code only reads hooks from settings.json. If "
+            ".claude/hooks.json exists (from a pre-fix install), its entries "
+            "are dead. Read it, deep-merge its top-level arrays into "
+            "settings.json under 'hooks', then delete .claude/hooks.json.",
             "After writing, tell the user: 'Restart Claude so the new "
             "PRISM hooks activate.'",
             "SessionStart syncs Brain/Graph drift. PostToolUse covers two "
@@ -1546,31 +1553,31 @@ def _install_manifest(project_id: str) -> dict:
             },
             {
                 "path": ".claude/hooks/prism-sync.py",
-                "action": "create",
+                "action": "upsert",
                 "content": hook_script,
                 "mode": "0755",
             },
             {
                 "path": ".claude/hooks/prism-feedback-signal.py",
-                "action": "create",
+                "action": "upsert",
                 "content": _FEEDBACK_HOOK_SCRIPT,
                 "mode": "0755",
             },
             {
                 "path": ".claude/hooks/prism-stop.py",
-                "action": "create",
+                "action": "upsert",
                 "content": _STOP_HOOK_SCRIPT,
                 "mode": "0755",
             },
             {
                 "path": ".claude/hooks/prism-subagent.py",
-                "action": "create",
+                "action": "upsert",
                 "content": _SUBAGENT_HOOK_SCRIPT,
                 "mode": "0755",
             },
             {
                 "path": ".claude/hooks/prism-skill-usage.py",
-                "action": "create",
+                "action": "upsert",
                 "content": _SKILL_HOOK_SCRIPT,
                 "mode": "0755",
             },
@@ -1580,7 +1587,7 @@ def _install_manifest(project_id: str) -> dict:
             # .prism/logs/hooks.log.
             {
                 "path": ".claude/hooks/hook_logger.py",
-                "action": "create",
+                "action": "upsert",
                 "content": _HOOK_LOGGER_SCRIPT,
                 "mode": "0755",
             },
@@ -1590,12 +1597,12 @@ def _install_manifest(project_id: str) -> dict:
             # header from LL-09.
             {
                 "path": ".claude/agents/prism-reflect.md",
-                "action": "create",
+                "action": "upsert",
                 "content": _REFLECT_AGENT_MD,
             },
             {
                 "path": ".claude/commands/prism-reflect.md",
-                "action": "create",
+                "action": "upsert",
                 "content": _REFLECT_COMMAND_MD,
             },
         ],
