@@ -15,7 +15,11 @@ from app.ui.components.nav import create_nav, page_container
 
 
 _SAFE_PROJECT_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
-_ALLOWED_VISUAL_FILES = {"graph.html", "GRAPH_REPORT.md", "graph.json"}
+# Only graph.json is served now — the WebGL viewer is the only frontend.
+# The legacy graphify graph.html / GRAPH_REPORT.md paths were dropped
+# because they capped at ~11K nodes and the Sigma viewer covers every
+# size graphify can produce.
+_ALLOWED_VISUAL_FILES = {"graph.json"}
 
 
 _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
@@ -24,23 +28,61 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 <meta charset="utf-8" />
 <title>PRISM Graph Viewer</title>
 <style>
-  body { margin: 0; font-family: system-ui, sans-serif; background: #0f0f1a; color: #e5e7eb; }
+  html, body { height: 100%; }
+  body { margin: 0; font-family: system-ui, sans-serif;
+         background: #0f0f1a; color: #e5e7eb;
+         display: flex; height: 100vh; overflow: hidden; }
+  #graph-wrap { flex: 1; position: relative; }
   #graph { position: absolute; inset: 0; }
   #status { position: absolute; top: 8px; left: 8px; padding: 6px 10px;
             background: rgba(15,15,26,0.8); border: 1px solid #2a2a4e;
             border-radius: 6px; font-size: 12px; z-index: 10; max-width: 60ch; }
-  #legend { position: absolute; bottom: 8px; left: 8px; padding: 6px 10px;
-            background: rgba(15,15,26,0.8); border: 1px solid #2a2a4e;
-            border-radius: 6px; font-size: 11px; z-index: 10; }
+  #hint { position: absolute; bottom: 8px; left: 8px; padding: 6px 10px;
+          background: rgba(15,15,26,0.8); border: 1px solid #2a2a4e;
+          border-radius: 6px; font-size: 11px; z-index: 10; color: #9ca3af; }
+  /* Right-side legend panel — matches graphify's graph.html styling
+     so users can see cluster labels + toggle communities on/off. */
+  #sidebar { width: 280px; background: #1a1a2e; border-left: 1px solid #2a2a4e;
+             display: flex; flex-direction: column; overflow: hidden; }
+  #sidebar h3 { font-size: 12px; color: #aaa; margin: 0 0 10px 0;
+                text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  #legend-wrap { flex: 1; overflow-y: auto; padding: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 8px;
+                 padding: 5px 4px; cursor: pointer; border-radius: 4px;
+                 font-size: 12px; user-select: none; }
+  .legend-item:hover { background: #2a2a4e; }
+  .legend-item.dimmed { opacity: 0.35; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis;
+                  white-space: nowrap; color: #e0e0e0; }
+  .legend-count { color: #666; font-size: 11px; }
+  #sidebar-stats { padding: 10px 14px; border-top: 1px solid #2a2a4e;
+                   font-size: 11px; color: #666; }
+  * { scrollbar-color: #2a2a4e transparent; scrollbar-width: thin; }
 </style>
 </head>
 <body>
-<div id="status">Loading graph...</div>
-<div id="graph"></div>
-<div id="legend">Scroll to zoom · drag to pan · click a node for details</div>
-<script src="https://unpkg.com/graphology@0.25.4/dist/graphology.umd.min.js"></script>
-<script src="https://unpkg.com/sigma@3.0.0/build/sigma.min.js"></script>
-<script>
+<div id="graph-wrap">
+  <div id="status">Loading graph...</div>
+  <div id="graph"></div>
+  <div id="hint">Scroll to zoom · drag to pan · click a node for details</div>
+</div>
+<aside id="sidebar">
+  <div id="legend-wrap">
+    <h3>Communities</h3>
+    <div id="legend-list"></div>
+  </div>
+  <div id="sidebar-stats">Loading...</div>
+</aside>
+<script type="module">
+  // ESM via esm.sh — avoids the UMD-global naming mess across
+  // graphology's package family. Each import has an explicit name
+  // (Graph, forceAtlas2, Sigma) instead of reaching into a
+  // graphologyLibrary global that different packages register
+  // inconsistently.
+  import Graph from "https://esm.sh/graphology@0.25.4";
+  import forceAtlas2 from "https://esm.sh/graphology-layout-forceatlas2@0.10.1";
+  import Sigma from "https://esm.sh/sigma@3.0.0";
   const PROJECT_ID = "__PROJECT_ID__";
   const statusEl = document.getElementById("status");
   const COMMUNITY_COLORS = [
@@ -52,38 +94,272 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
     const idx = Math.abs(Number(community) || 0) % COMMUNITY_COLORS.length;
     return COMMUNITY_COLORS[idx];
   }
-  fetch(`/graphify-visual/${PROJECT_ID}/graph.json`)
-    .then(r => { if (!r.ok) throw new Error("graph.json " + r.status); return r.json(); })
-    .then(data => {
-      const g = new graphology.Graph();
-      const nodes = data.nodes || [];
+  // Translate #RRGGBB into rgba(R,G,B,a). Used so edges can inherit the
+  // source node's community color at a lower alpha — that way intra-
+  // cluster edges blend into the cluster and cross-cluster bridges read
+  // as a visible contrast line, the same trick vis.js does by default
+  // when edges.color.inherit='from'.
+  function withAlpha(hex, a) {
+    const h = (hex || "#6b7280").replace("#", "");
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  // Random seed inside a unit square. Earlier revisions pre-seeded on
+  // per-community rings, which combined with LinLog + strong gravity
+  // shattered the graph into isolated hairballs (the opposite of
+  // graphify's organic single-component look). Random + inferSettings
+  // matches graphify's output much more closely — FA2 finds the
+  // cluster structure on its own from the edge topology.
+  function seedPosition() {
+    return { x: Math.random(), y: Math.random() };
+  }
+  // communities.json returns DB-derived labels ({id, label, count}) so
+  // the sidebar legend reads like graphify's graph.html did. Loaded in
+  // parallel; if it fails we still render the graph but show ids only.
+  Promise.all([
+    fetch(`/graphify-visual/${PROJECT_ID}/graph.json`)
+      .then(r => { if (!r.ok) throw new Error("graph.json " + r.status); return r.json(); }),
+    fetch(`/graphify-visual/${PROJECT_ID}/communities.json`)
+      .then(r => r.ok ? r.json() : {communities: []})
+      .catch(() => ({communities: []})),
+  ])
+    .then(([data, commData]) => {
+      const g = new Graph();
+      const rawNodes = data.nodes || [];
       const edges = data.links || data.edges || [];
-      statusEl.textContent = `Rendering ${nodes.length.toLocaleString()} nodes, `
-        + `${edges.length.toLocaleString()} edges...`;
+      // Drop graphify's community-summary rationale nodes — they're prose
+      // blobs graphify attaches per community, not actual code, and they
+      // inflate the graph by ~40% while adding no navigational value.
+      // Edges that touched them get skipped by the hasNode guard below.
+      const nodes = rawNodes.filter(n => n.file_type !== "rationale");
+      const dropped = rawNodes.length - nodes.length;
+      statusEl.textContent = `Loading ${nodes.length.toLocaleString()} nodes, `
+        + `${edges.length.toLocaleString()} edges`
+        + (dropped ? ` (hid ${dropped.toLocaleString()} rationale)` : "")
+        + "...";
       for (const n of nodes) {
         if (g.hasNode(n.id)) continue;
+        const pos = seedPosition();
         g.addNode(n.id, {
           label: n.label || n.id,
           size: Math.max(2, Math.log(1 + (n.degree || 1)) * 2),
           color: colorFor(n.community),
-          x: Math.random(), y: Math.random(),
+          community: n.community ?? null,
+          x: pos.x, y: pos.y,
         });
       }
+      let edgesDrawn = 0;
       for (const e of edges) {
         const s = e.source, t = e.target;
         if (!g.hasNode(s) || !g.hasNode(t) || s === t) continue;
-        try { g.addEdge(s, t, {size: 0.3, color: "#2a2a4e"}); } catch (_) {}
+        // Inherit the source node's community color (what graphify's
+        // vis.js graph.html did via edges.color.inherit='from'). Alpha
+        // 0.35 lets intra-cluster edges blend into their cluster while
+        // cross-cluster bridges still read as colored threads.
+        const srcColor = g.getNodeAttribute(s, "color");
+        try {
+          g.addEdge(s, t, {size: 0.25, color: withAlpha(srcColor, 0.35)});
+          edgesDrawn++;
+        } catch (_) {}
       }
-      const renderer = new Sigma(g, document.getElementById("graph"), {
-        labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
-        maxCameraRatio: 10, defaultNodeColor: "#6b7280",
-      });
-      statusEl.textContent = `${nodes.length.toLocaleString()} nodes · `
-        + `${edges.length.toLocaleString()} edges · WebGL (sigma.js)`;
-      renderer.on("clickNode", ({ node }) => {
-        const attrs = g.getNodeAttributes(node);
-        statusEl.textContent = `${attrs.label} (community ${attrs.community ?? "—"})`;
-      });
+      // ForceAtlas2 — tune to match graphify's vis.js Barnes-Hut
+      // output (single organic hairball with visible community
+      // structure). vis.js config we're mimicking:
+      //   gravitationalConstant -60, springLength 120, springConstant
+      //   0.08, damping 0.4.
+      // FA2 equivalents: gravity 1.2 (pulls components together like
+      // vis.js's -60 G-constant does), scalingRatio 2 (moderate
+      // repulsion), adjustSizes FALSE (true creates starburst spokes
+      // around large-degree hubs — the thing we're fighting), and
+      // barnesHut for speed over ~2k nodes.
+      statusEl.textContent = `Laying out ${nodes.length.toLocaleString()} nodes `
+        + `(ForceAtlas2)...`;
+      const settings = forceAtlas2.inferSettings(g);
+      settings.barnesHutOptimize = g.order > 2000;
+      settings.barnesHutTheta = 0.5;
+      settings.gravity = 1.2;
+      settings.scalingRatio = 2;
+      settings.slowDown = 1;
+      settings.adjustSizes = false;
+      settings.outboundAttractionDistribution = false;
+      const iters = g.order > 20000 ? 300 : g.order > 5000 ? 600 : 800;
+      const t0 = performance.now();
+      // Yield to the browser once so the "Laying out..." status can paint
+      // before the synchronous FA2 pass blocks the main thread.
+      setTimeout(() => {
+        forceAtlas2.assign(g, { iterations: iters, settings });
+        const dt = ((performance.now() - t0) / 1000).toFixed(1);
+        // Click-to-focus state: when a node is focused, the node
+        // reducer dims anything that isn't the node or a neighbor, and
+        // the edge reducer dims any edge not incident to it. Using
+        // reducers instead of mutating the graph keeps the state
+        // toggleable with one click-stage.
+        let focusedNode = null;
+        let neighborSet = new Set();
+
+        // Hover state: the hovered node grows 30% and its immediate
+        // graph-space neighborhood is pushed radially outward to
+        // "make space" visually. Push applied inside the node reducer
+        // on each frame, so no mutation and no animation loop needed —
+        // it just snaps on enter/leave which looks clean at this density.
+        let hoveredNode = null;
+        let hoveredX = 0, hoveredY = 0;
+        const HOVER_PUSH_RADIUS = 8;    // graph units
+        const HOVER_PUSH_MAX = 3.5;     // graph units
+        const HOVER_SIZE_MULT = 1.3;
+
+        const renderer = new Sigma(g, document.getElementById("graph"), {
+          labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
+          maxCameraRatio: 10, defaultNodeColor: "#6b7280",
+          defaultEdgeColor: "rgba(107,114,128,0.3)",
+          renderEdgeLabels: false,
+          enableEdgeEvents: false,
+          nodeReducer: (node, data) => {
+            let out = data;
+            // Focus dimming (click) layers first.
+            if (focusedNode) {
+              if (node === focusedNode || neighborSet.has(node)) {
+                out = { ...out, zIndex: 1 };
+              } else {
+                out = { ...out, color: "#2a2a3e", label: "", zIndex: 0 };
+              }
+            }
+            // Hover effects: grow hovered, push nearby away.
+            if (hoveredNode) {
+              if (node === hoveredNode) {
+                out = {
+                  ...out,
+                  size: (out.size || data.size) * HOVER_SIZE_MULT,
+                  forceLabel: true,
+                  zIndex: 3,
+                };
+              } else {
+                const dx = (data.x || 0) - hoveredX;
+                const dy = (data.y || 0) - hoveredY;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d > 0 && d < HOVER_PUSH_RADIUS) {
+                  const t = 1 - (d / HOVER_PUSH_RADIUS);
+                  const push = HOVER_PUSH_MAX * t * t;
+                  out = {
+                    ...out,
+                    x: data.x + (dx / d) * push,
+                    y: data.y + (dy / d) * push,
+                  };
+                }
+              }
+            }
+            return out;
+          },
+          edgeReducer: (edge, data) => {
+            if (!focusedNode) return data;
+            const ext = g.extremities(edge);
+            if (ext[0] === focusedNode || ext[1] === focusedNode) {
+              return { ...data, size: 0.8, zIndex: 1 };
+            }
+            return { ...data, color: "rgba(40,40,60,0.2)", zIndex: 0 };
+          },
+        });
+
+        // Hover enter/leave: cache the hovered node's graph-space
+        // position once so the reducer doesn't re-query per-node.
+        renderer.on("enterNode", ({ node }) => {
+          hoveredNode = node;
+          hoveredX = g.getNodeAttribute(node, "x");
+          hoveredY = g.getNodeAttribute(node, "y");
+          document.body.style.cursor = "pointer";
+          renderer.refresh();
+        });
+        renderer.on("leaveNode", () => {
+          hoveredNode = null;
+          document.body.style.cursor = "";
+          renderer.refresh();
+        });
+        statusEl.textContent = `${nodes.length.toLocaleString()} nodes · `
+          + `${edgesDrawn.toLocaleString()} edges`
+          + (dropped ? ` · ${dropped.toLocaleString()} rationale hidden` : "")
+          + ` · FA2 ${iters}it in ${dt}s`;
+        renderer.on("clickNode", ({ node }) => {
+          focusedNode = node;
+          neighborSet = new Set(g.neighbors(node));
+          const attrs = g.getNodeAttributes(node);
+          statusEl.textContent = `${attrs.label} `
+            + `(community ${attrs.community ?? "—"}, `
+            + `degree ${g.degree(node)}) — `
+            + `click empty space to clear focus`;
+          renderer.refresh();
+        });
+        // Click on the stage (empty space) clears focus highlighting.
+        renderer.on("clickStage", () => {
+          if (!focusedNode) return;
+          focusedNode = null;
+          neighborSet = new Set();
+          statusEl.textContent = `${nodes.length.toLocaleString()} nodes · `
+            + `${edgesDrawn.toLocaleString()} edges`
+            + (dropped ? ` · ${dropped.toLocaleString()} rationale hidden` : "")
+            + ` · FA2 ${iters}it in ${dt}s`;
+          renderer.refresh();
+        });
+
+        // --- Legend / communities sidebar ---------------------------
+        // Rank communities by actual node count in the rendered graph
+        // (post-rationale-filter) instead of raw DB counts, so the
+        // numbers match what's on screen. Fall back to id if no label.
+        const counts = new Map();
+        g.forEachNode((_n, attrs) => {
+          const c = attrs.community;
+          if (c === null || c === undefined) return;
+          counts.set(c, (counts.get(c) || 0) + 1);
+        });
+        const labelMap = new Map();
+        for (const c of (commData.communities || [])) {
+          labelMap.set(c.id, c.label);
+        }
+        const ranked = [...counts.entries()]
+          .map(([cid, n]) => ({
+            cid, n,
+            label: labelMap.get(cid) || `community ${cid}`,
+            color: colorFor(cid),
+          }))
+          .sort((a, b) => b.n - a.n);
+
+        const hidden = new Set();
+        const listEl = document.getElementById("legend-list");
+        listEl.innerHTML = "";
+        for (const c of ranked) {
+          const item = document.createElement("div");
+          item.className = "legend-item";
+          item.innerHTML =
+            `<div class="legend-dot" style="background:${c.color}"></div>`
+            + `<span class="legend-label" title="${c.label.replace(/"/g,'&quot;')}">`
+            + `${c.label}</span>`
+            + `<span class="legend-count">${c.n}</span>`;
+          item.addEventListener("click", () => {
+            if (hidden.has(c.cid)) {
+              hidden.delete(c.cid);
+              item.classList.remove("dimmed");
+            } else {
+              hidden.add(c.cid);
+              item.classList.add("dimmed");
+            }
+            // Sigma respects the `hidden` node attribute; toggling it
+            // and calling refresh() is the cheapest way to dim a whole
+            // community without touching the layout.
+            g.forEachNode((nid, attrs) => {
+              if (attrs.community === c.cid) {
+                g.setNodeAttribute(nid, "hidden", hidden.has(c.cid));
+              }
+            });
+            renderer.refresh();
+          });
+          listEl.appendChild(item);
+        }
+        document.getElementById("sidebar-stats").textContent =
+          `${ranked.length.toLocaleString()} communities · `
+          + `${nodes.length.toLocaleString()} nodes · `
+          + `${edgesDrawn.toLocaleString()} edges`;
+      }, 50);
     })
     .catch(err => {
       statusEl.textContent = "Error loading graph: " + err.message;
@@ -93,10 +369,61 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+@app.get("/graphify-visual/{project_id}/communities.json")
+def _graphify_communities(project_id: str):
+    """Serve DB-derived community labels for the viewer sidebar.
+
+    Joins the `communities` label table with per-community node counts
+    from `entities`, filtering out rationale entries so the counts
+    match what the viewer actually renders client-side.
+    """
+    from fastapi.responses import JSONResponse
+    if not _SAFE_PROJECT_RE.match(project_id or ""):
+        raise HTTPException(status_code=400, detail="invalid project id")
+    ctx = get_project(project_id)
+    db_path = ctx._data_dir / "graph.db"
+    if not db_path.exists():
+        return JSONResponse({"communities": []})
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT e.community AS id, COUNT(*) AS n, "
+                "       c.label AS label "
+                "FROM entities e "
+                "LEFT JOIN communities c ON c.id = e.community "
+                "WHERE e.community IS NOT NULL "
+                "  AND COALESCE(e.file_type,'') != 'rationale' "
+                "GROUP BY e.community "
+                "ORDER BY n DESC"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = conn.execute(
+                "SELECT community AS id, COUNT(*) AS n, NULL AS label "
+                "FROM entities WHERE community IS NOT NULL "
+                "GROUP BY community ORDER BY n DESC"
+            ).fetchall()
+        out = [
+            {
+                "id": int(r["id"]),
+                "label": (r["label"] if "label" in r.keys() else None)
+                         or f"community {r['id']}",
+                "count": int(r["n"]),
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+    return JSONResponse({"communities": out})
+
+
 @app.get("/graphify-visual/{project_id}/{filename}")
 def _graphify_visual(project_id: str, filename: str):
-    """Serve graphify's graph.html (or GRAPH_REPORT.md) for the given project.
-    Project slug is strictly validated to prevent path traversal."""
+    """Serve graph.json for the WebGL viewer. Project slug strictly
+    validated to prevent path traversal. Declared after the specific
+    communities.json route so literal filenames take precedence over
+    this path-parameter fallback."""
     if not _SAFE_PROJECT_RE.match(project_id or ""):
         raise HTTPException(status_code=400, detail="invalid project id")
     if filename not in _ALLOWED_VISUAL_FILES:
@@ -104,14 +431,8 @@ def _graphify_visual(project_id: str, filename: str):
     ctx = get_project(project_id)
     path = ctx._data_dir / "graphify-src" / "graphify-out" / filename
     if not path.exists() or not path.is_file():
-        raise HTTPException(status_code=404, detail="graph.html not generated yet")
-    if filename.endswith(".html"):
-        media = "text/html"
-    elif filename.endswith(".json"):
-        media = "application/json"
-    else:
-        media = "text/markdown"
-    return FileResponse(str(path), media_type=media)
+        raise HTTPException(status_code=404, detail="graph.json not generated yet")
+    return FileResponse(str(path), media_type="application/json")
 
 
 @app.get("/graph/viewer/{project_id}")
@@ -132,66 +453,6 @@ def _graph_viewer(project_id: str):
 
 def _project_id() -> str:
     return app.storage.user.get("project", "default")
-
-
-def _graph_json_node_count(path) -> int | None:
-    """Return node count from graphify's graph.json, or None on error."""
-    try:
-        if not path.exists():
-            return None
-        import json as _json
-        data = _json.loads(path.read_text(encoding="utf-8"))
-        nodes = data.get("nodes") if isinstance(data, dict) else None
-        return len(nodes) if isinstance(nodes, list) else None
-    except Exception:
-        return None
-
-
-def _render_graph_report_fallback(md_path, node_count):
-    """Render a status banner + inline excerpt of GRAPH_REPORT.md.
-
-    Graphify's to_html refuses >~11K nodes and emits GRAPH_REPORT.md
-    instead. Show the user WHY the interactive viz is missing, point at
-    the markdown report, and surface the first few KB inline so they
-    see something useful without a new-tab click.
-    """
-    with ui.row().classes(
-        "w-full items-start gap-3 p-3 rounded-lg "
-        "bg-amber-50 border border-amber-200"
-    ):
-        ui.icon("info", color="#b45309").classes("text-xl mt-1")
-        with ui.column().classes("flex-1"):
-            if node_count is not None:
-                title = (
-                    f"Interactive graph.html not generated — graph has "
-                    f"{node_count:,} nodes (graphify's HTML viz caps at "
-                    f"~11K)."
-                )
-            else:
-                title = (
-                    "Interactive graph.html not generated by graphify. "
-                    "Markdown report available below."
-                )
-            ui.label(title).classes(
-                "text-sm font-medium text-amber-900"
-            )
-            ui.label(
-                "A WebGL-based viewer that handles 100K+ nodes is "
-                "queued (see task 894de777)."
-            ).classes("text-xs text-amber-800")
-    try:
-        excerpt = md_path.read_text(encoding="utf-8")[:8000]
-    except Exception:
-        excerpt = ""
-    if excerpt:
-        with ui.element("pre").style(
-            "width: 100%; max-height: 520px; overflow: auto; "
-            "background: #f9fafb; border: 1px solid #e5e7eb; "
-            "border-radius: 6px; padding: 12px; font-size: 12px; "
-            "line-height: 1.45; color: #1f2937; white-space: pre-wrap; "
-            "word-break: break-word;"
-        ):
-            ui.label(excerpt)
 
 
 def _graph_conn() -> sqlite3.Connection:
@@ -328,70 +589,38 @@ def graph_page():
 
         summary = _summary()
 
-        # --- Interactive visual with GRAPH_REPORT.md fallback ---
-        # graphify's to_html refuses to emit for graphs >~11K nodes
-        # (raises ValueError, generates GRAPH_REPORT.md instead). Pick
-        # the first existing file so the /graph page surfaces whatever
-        # graphify DID produce. See #16 and memory
-        # large-graph-viz-research-2026 for the Sigma.js plan that
-        # will replace this fallback path.
+        # WebGL viewer (Sigma.js) — single visual path. graph.json must
+        # exist before the iframe has anything to render; otherwise show
+        # an empty-state prompt pointing at the Rebuild button below.
         ctx = get_project(_project_id())
-        out_dir = ctx._data_dir / "graphify-src" / "graphify-out"
-        html_path = out_dir / "graph.html"
-        md_path = out_dir / "GRAPH_REPORT.md"
-        json_path = out_dir / "graph.json"
-        node_count = _graph_json_node_count(json_path)
-        visual = (
-            "html" if html_path.exists()
-            else "md" if md_path.exists()
-            else None
-        )
+        json_path = ctx._data_dir / "graphify-src" / "graphify-out" / "graph.json"
         with ui.card().classes("w-full bg-white shadow-sm rounded-lg p-3"):
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label("Interactive visual").classes(
                     "text-sm font-medium text-gray-700"
                 )
-                with ui.row().classes("gap-3"):
-                    # Sigma WebGL viewer works at any size, including
-                    # graphs graphify refused to emit HTML for.
-                    if json_path.exists():
-                        ui.link(
-                            "WebGL viewer (Sigma.js)",
-                            f"/graph/viewer/{_project_id()}",
-                            new_tab=True,
-                        ).classes(
-                            "text-sm text-indigo-600 hover:underline"
-                        )
-                    if visual == "html":
-                        ui.link(
-                            "Open graph.html in new tab",
-                            f"/graphify-visual/{_project_id()}/graph.html",
-                            new_tab=True,
-                        ).classes("text-sm text-indigo-600 hover:underline")
-                    elif visual == "md":
-                        ui.link(
-                            "Open markdown report in new tab",
-                            f"/graphify-visual/{_project_id()}/GRAPH_REPORT.md",
-                            new_tab=True,
-                        ).classes("text-sm text-indigo-600 hover:underline")
-            if visual == "html":
+                if json_path.exists():
+                    ui.link(
+                        "Open full-screen viewer",
+                        f"/graph/viewer/{_project_id()}",
+                        new_tab=True,
+                    ).classes("text-sm text-indigo-600 hover:underline")
+            if json_path.exists():
                 ui.element("iframe").props(
-                    f'src="/graphify-visual/{_project_id()}/graph.html"'
+                    f'src="/graph/viewer/{_project_id()}"'
                 ).style(
                     "width: 100%; height: 600px; border: 0; "
                     "border-radius: 6px; background: #0f0f1a; display: block;"
                 )
-            elif visual == "md":
-                _render_graph_report_fallback(md_path, node_count)
             else:
                 with ui.column().classes(
                     "w-full h-40 items-center justify-center "
                     "bg-gray-50 rounded-lg border border-dashed border-gray-300"
                 ):
                     ui.icon("hub", size="xl").classes("text-gray-300")
-                    ui.label("No graph.html yet — click Rebuild below.").classes(
-                        "text-sm text-gray-400 mt-1"
-                    )
+                    ui.label(
+                        "No graph.json yet — click Rebuild below."
+                    ).classes("text-sm text-gray-400 mt-1")
 
         # --- Summary stats ---
         with ui.card().classes("w-full bg-white shadow-sm rounded-lg p-5"):
