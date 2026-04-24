@@ -106,6 +106,50 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
     const b = parseInt(h.substring(4, 6), 16);
     return `rgba(${r},${g},${b},${a})`;
   }
+  // HSL round-trip utilities. Shading by degree modulates the L
+  // channel while keeping H+S fixed, so every node in a community
+  // shares the base hue and saturation — only perceived lightness
+  // changes with connection count.
+  function hexToHsl(hex) {
+    const h = (hex || "#6b7280").replace("#", "");
+    const r = parseInt(h.substring(0, 2), 16) / 255;
+    const g = parseInt(h.substring(2, 4), 16) / 255;
+    const b = parseInt(h.substring(4, 6), 16) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    const l = (mx + mn) / 2;
+    let hh, ss;
+    if (mx === mn) { hh = 0; ss = 0; }
+    else {
+      const d = mx - mn;
+      ss = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      if (mx === r) hh = ((g - b) / d + (g < b ? 6 : 0));
+      else if (mx === g) hh = ((b - r) / d + 2);
+      else hh = ((r - g) / d + 4);
+      hh *= 60;
+    }
+    return { h: hh, s: ss * 100, l: l * 100 };
+  }
+  function hslToRgb(h, s, l) {
+    // h in [0,360], s/l in [0,100]
+    s /= 100; l /= 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r1, g1, b1;
+    if (h < 60)       [r1, g1, b1] = [c, x, 0];
+    else if (h < 120) [r1, g1, b1] = [x, c, 0];
+    else if (h < 180) [r1, g1, b1] = [0, c, x];
+    else if (h < 240) [r1, g1, b1] = [0, x, c];
+    else if (h < 300) [r1, g1, b1] = [x, 0, c];
+    else              [r1, g1, b1] = [c, 0, x];
+    return `rgb(${Math.round((r1 + m) * 255)},${Math.round((g1 + m) * 255)},${Math.round((b1 + m) * 255)})`;
+  }
+  // Community hue with L modulated in [25, 75] by normalized log-degree.
+  function shadeByDegree(baseHex, norm) {
+    const { h, s } = hexToHsl(baseHex);
+    const L = 25 + 50 * Math.max(0, Math.min(1, norm));
+    return hslToRgb(h, s, L);
+  }
   // Random seed inside a unit square. Earlier revisions pre-seeded on
   // per-community rings, which combined with LinLog + strong gravity
   // shattered the graph into isolated hairballs (the opposite of
@@ -139,13 +183,43 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         + `${edges.length.toLocaleString()} edges`
         + (dropped ? ` (hid ${dropped.toLocaleString()} rationale)` : "")
         + "...";
+      // Visible-subgraph degree: recount edges where both endpoints are
+      // kept so the ~40% hidden rationale nodes don't inflate the base
+      // numbers. Then normalize log-degree PER COMMUNITY: a 200-node
+      // cluster's brightness range shouldn't get swamped by the
+      // 2000-node cluster's range, and "hub-ness" is meaningful relative
+      // to siblings in the same community.
+      const visibleIds = new Set(nodes.map(n => n.id));
+      const visDeg = new Map();
+      for (const n of nodes) visDeg.set(n.id, 0);
+      for (const e of edges) {
+        const s = e.source, t = e.target;
+        if (!visibleIds.has(s) || !visibleIds.has(t) || s === t) continue;
+        visDeg.set(s, (visDeg.get(s) || 0) + 1);
+        visDeg.set(t, (visDeg.get(t) || 0) + 1);
+      }
+      const commLo = new Map(), commHi = new Map();
+      const commKey = n => String(n.community ?? "null");
+      for (const n of nodes) {
+        const k = commKey(n);
+        const v = Math.log(1 + (visDeg.get(n.id) || 0));
+        if (!commLo.has(k) || v < commLo.get(k)) commLo.set(k, v);
+        if (!commHi.has(k) || v > commHi.get(k)) commHi.set(k, v);
+      }
       for (const n of nodes) {
         if (g.hasNode(n.id)) continue;
         const pos = seedPosition();
+        const k = commKey(n);
+        const v = Math.log(1 + (visDeg.get(n.id) || 0));
+        const range = (commHi.get(k) - commLo.get(k)) || 1;
+        const norm = (v - commLo.get(k)) / range;
         g.addNode(n.id, {
           label: n.label || n.id,
-          size: Math.max(2, Math.log(1 + (n.degree || 1)) * 2),
-          color: colorFor(n.community),
+          // Near-uniform size (2.5-3.3). Degree is expressed through
+          // brightness, not radius — large degree→size mappings turn
+          // hubs into canvas-dominating blobs.
+          size: 2.5 + 0.8 * norm,
+          color: shadeByDegree(colorFor(n.community), norm),
           community: n.community ?? null,
           x: pos.x, y: pos.y,
         });
@@ -154,13 +228,17 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       for (const e of edges) {
         const s = e.source, t = e.target;
         if (!g.hasNode(s) || !g.hasNode(t) || s === t) continue;
-        // Inherit the source node's community color (what graphify's
-        // vis.js graph.html did via edges.color.inherit='from'). Alpha
-        // 0.35 lets intra-cluster edges blend into their cluster while
-        // cross-cluster bridges still read as colored threads.
-        const srcColor = g.getNodeAttribute(s, "color");
+        // Edge color = source node's COMMUNITY hue at low alpha, not the
+        // degree-shaded node color. A dim leaf connected to a bright hub
+        // should still contribute a visible community-colored thread —
+        // inheriting the shaded color made leaf-anchored edges fade to
+        // invisible, which killed the webby between-community feel.
+        const srcComm = g.getNodeAttribute(s, "community");
         try {
-          g.addEdge(s, t, {size: 0.25, color: withAlpha(srcColor, 0.35)});
+          g.addEdge(s, t, {
+            size: 0.25,
+            color: withAlpha(colorFor(srcComm), 0.3),
+          });
           edgesDrawn++;
         } catch (_) {}
       }
