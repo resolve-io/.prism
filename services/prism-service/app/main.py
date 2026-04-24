@@ -122,6 +122,7 @@ def start_quality_timer():
 from app.ui import (
     dashboard, brain_page, graph_page, memory_page,
     tasks_page, conductor_page, sessions_page, retrievals_page,
+    learning_page, consolidation_page,
 )
 
 # Guard against double-start using file lock
