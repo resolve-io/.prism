@@ -7,10 +7,7 @@ import sqlite3
 import sys
 from typing import Optional
 
-
-import re as _re
-
-_CAMEL_RE = _re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
+from app.engines.brain_engine import _expand_identifiers
 
 
 def _build_context_header(
@@ -42,26 +39,6 @@ def _build_context_header(
             qual += f" (lines {line_start}-{line_end})"
         lines.append(f"Scope: {qual}")
     return "\n".join(lines)
-
-
-def _expand_identifiers(text: str) -> str:
-    """Expand PascalCase/camelCase identifiers for better FTS matching.
-
-    'FreshnessStatus' → 'FreshnessStatus Freshness Status'
-    'getMatchesHandler' → 'getMatchesHandler get Matches Handler'
-
-    Keeps original term + adds split parts so both exact and partial matches work.
-    """
-    words = text.split()
-    expanded = []
-    for word in words:
-        expanded.append(word)
-        # Only split words that look like identifiers (contain mixed case)
-        if _CAMEL_RE.search(word) and len(word) > 2:
-            parts = _CAMEL_RE.sub(' ', word).split()
-            if len(parts) > 1:
-                expanded.extend(parts)
-    return ' '.join(expanded)
 
 
 class BrainService:
@@ -407,19 +384,23 @@ class BrainService:
                 )
             else:
                 indexed_content = chunk_content
-            # Expand PascalCase/camelCase per chunk for FTS matching.
-            expanded = _expand_identifiers(indexed_content)
             # Hash RAW chunk content so prism_status drift detection still
             # lines up with on-disk sha256 when the file is single-chunk.
             chash = _hashlib.sha256(chunk_content.encode("utf-8")).hexdigest()
 
+            # docs.content stores the RAW chunk (with optional contextual
+            # header). Identifier expansion happens in the FTS5 trigger
+            # via expand_identifiers() — see brain_engine._init_brain_schema.
+            # Fix for resolve-io/.prism#34: previously this wrote the
+            # pre-expanded form, corrupting any consumer of docs.content
+            # (notably graph_service.backfill_from_brain).
             brain_conn.execute(
                 "INSERT INTO docs "
                 "(id, source_file, content, domain, indexed_at, "
                 " entity_name, entity_kind, content_hash, "
                 " line_start, line_end) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (doc_id, path, expanded, domain, now,
+                (doc_id, path, indexed_content, domain, now,
                  chunk["entity_name"], chunk["entity_kind"], chash,
                  chunk["line_start"], chunk["line_end"]),
             )

@@ -1,5 +1,7 @@
 """Sessions history page -- session outcomes, skill usage, and summary stats."""
 
+import json
+
 from nicegui import ui, app
 
 from app.project_context import get_project
@@ -82,16 +84,49 @@ def _build_session_table(container, outcomes: list[dict]):
     container.clear()
     with container:
         if not outcomes:
+            # Empty state is also our canary for a broken Stop hook — the
+            # dogfood loop was silently dead for a month because this spot
+            # just said "No sessions recorded yet." Say what's likely wrong
+            # and where to look.
             with ui.card().classes(
-                'w-full bg-white shadow-sm rounded-lg p-8 text-center'
+                'w-full bg-amber-50 border border-amber-200 '
+                'shadow-sm rounded-lg p-6'
             ):
-                ui.icon("inbox", color="gray").classes("text-4xl mb-3")
-                ui.label("No sessions recorded yet").classes(
-                    "text-base font-medium text-gray-500"
-                )
-                ui.label(
-                    "Sessions appear after PRISM workflow runs produce outcomes."
-                ).classes("text-sm text-gray-400 mt-2")
+                with ui.row().classes('items-start gap-3'):
+                    ui.icon("warning", color="amber").classes("text-3xl")
+                    with ui.column().classes('gap-1'):
+                        ui.label(
+                            "No session_outcomes rows for this project"
+                        ).classes(
+                            "text-base font-semibold text-amber-900"
+                        )
+                        ui.label(
+                            "If you've been using Claude Code on this project, "
+                            "the Stop hook is probably failing."
+                        ).classes("text-sm text-amber-800")
+                        ui.label("Quick checks:").classes(
+                            "text-xs font-semibold text-amber-900 mt-2"
+                        )
+                        ui.html(
+                            "<ul class='list-disc pl-5 text-xs "
+                            "text-amber-800 space-y-0.5'>"
+                            "<li>Confirm the right project is selected in "
+                            "the header — outcomes are scoped per "
+                            "<code>?project=</code>.</li>"
+                            "<li>Tail <code>.prism/logs/hooks.log</code> "
+                            "in your project root for recent hook "
+                            "exceptions.</li>"
+                            "<li>Make sure "
+                            "<code>prism-devtools@prism</code> is on "
+                            ">= 3.14.3 (<code>claude plugin update</code>). "
+                            "Earlier versions wrote to a local DB that "
+                            "nothing reads.</li>"
+                            "<li>Smoke-test the MCP directly: "
+                            "<code>POST /mcp/?project=&lt;id&gt;</code> "
+                            "with <code>record_session_outcome</code> — "
+                            "a row should appear here live via SSE.</li>"
+                            "</ul>"
+                        )
             return
 
         rows = []
@@ -264,6 +299,21 @@ def sessions_page():
 
     create_nav()
 
+    # SSE push: refresh only when MCP writes a session_outcome / skill_usage
+    # event for the active project. No polling, no visible redraws when idle.
+    project_id = app.storage.user.get('project', 'default')
+    ui.add_head_html(
+        '<script>'
+        'document.addEventListener("DOMContentLoaded", () => {'
+        '  const p = ' + json.dumps(project_id) + ';'
+        '  const es = new EventSource('
+        '    "/sse/sessions?project=" + encodeURIComponent(p)'
+        '  );'
+        '  es.onmessage = (ev) => emitEvent("prism_data_changed", ev.data);'
+        '});'
+        '</script>'
+    )
+
     with page_container():
         # Page heading
         ui.label("Session History").classes(
@@ -294,11 +344,24 @@ def sessions_page():
             )
             skill_container = ui.column().classes('w-full')
 
-    # Refresh logic
+    # Refresh logic — runs on page load and on every SSE event.
+    # Signature-skip is belt-and-braces against duplicate event flurries.
+    state: dict = {"sig": None}
+
+    def _signature(outcomes: list[dict], skills: list[dict]) -> tuple:
+        latest_outcome = outcomes[0].get("recorded_at", "") if outcomes else ""
+        latest_skill = skills[0].get("timestamp", "") if skills else ""
+        return (len(outcomes), latest_outcome, len(skills), latest_skill)
+
     def refresh():
         conductor_svc = _conductor_svc()
-
         outcomes = conductor_svc.get_session_outcomes(limit=50)
+        skills = conductor_svc.get_skill_usage()
+
+        sig = _signature(outcomes, skills)
+        if sig == state["sig"]:
+            return
+        state["sig"] = sig
 
         _build_summary_stats(stats_container, outcomes)
         _build_trend_chart(trend_container, outcomes)
@@ -306,4 +369,4 @@ def sessions_page():
         _build_skill_usage(skill_container)
 
     refresh()
-    ui.timer(5.0, refresh)
+    ui.on('prism_data_changed', lambda _e: refresh())

@@ -32,6 +32,36 @@ class BrainCorruptError(Exception):
     """Raised when a Brain database file fails SQLite integrity check."""
 
 
+# Split PascalCase/camelCase boundaries. Registered as a SQLite function
+# ("expand_identifiers") on every brain.db connection so FTS5 triggers can
+# call it to index identifier-split tokens while docs.content stays raw.
+_CAMEL_RE = re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
+
+
+def _expand_identifiers(text: str) -> str:
+    """Expand PascalCase/camelCase identifiers for better FTS matching.
+
+    'FreshnessStatus' -> 'FreshnessStatus Freshness Status'
+    'getMatchesHandler' -> 'getMatchesHandler get Matches Handler'
+
+    Keeps original term + adds split parts so both exact and partial
+    matches work. Used by (a) the FTS5 insert/delete/update triggers to
+    expand docs.content before writing to docs_fts, and (b) query-side
+    expansion in BrainService.search so query tokens match the expanded
+    index.
+    """
+    if not text:
+        return text
+    out = []
+    for word in text.split():
+        out.append(word)
+        if len(word) > 2 and _CAMEL_RE.search(word):
+            parts = _CAMEL_RE.sub(' ', word).split()
+            if len(parts) > 1:
+                out.extend(parts)
+    return ' '.join(out)
+
+
 def encode_task_text(text: str) -> Optional[bytes]:
     """Encode arbitrary text via the loaded MiniLM embedder and return
     packed float32 bytes suitable for storing in a SQLite BLOB column.
@@ -578,6 +608,16 @@ class Brain:
         conn = sqlite3.connect(path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        # Register identifier-expander so FTS5 triggers can call it.
+        # Deterministic: same input always yields same output (pure fn).
+        try:
+            conn.create_function(
+                "expand_identifiers", 1, _expand_identifiers,
+                deterministic=True,
+            )
+        except TypeError:
+            # Older Python sqlite3 without deterministic kwarg.
+            conn.create_function("expand_identifiers", 1, _expand_identifiers)
         return conn
 
     def _check_db_integrity(self) -> None:
@@ -620,19 +660,30 @@ class Brain:
                 content='docs',
                 content_rowid='rowid'
             );
-            CREATE TRIGGER IF NOT EXISTS docs_fts_ai AFTER INSERT ON docs BEGIN
+            -- Drop legacy triggers (pre-#34) that indexed raw docs.content
+            -- without identifier expansion. Replaced below with triggers
+            -- that call expand_identifiers() so docs.content stays raw
+            -- while docs_fts indexes the expanded form.
+            DROP TRIGGER IF EXISTS docs_fts_ai;
+            DROP TRIGGER IF EXISTS docs_fts_ad;
+            DROP TRIGGER IF EXISTS docs_fts_au;
+            CREATE TRIGGER docs_fts_ai AFTER INSERT ON docs BEGIN
                 INSERT INTO docs_fts(rowid, id, content, domain)
-                    VALUES(new.rowid, new.id, new.content, new.domain);
+                    VALUES(new.rowid, new.id,
+                           expand_identifiers(new.content), new.domain);
             END;
-            CREATE TRIGGER IF NOT EXISTS docs_fts_ad AFTER DELETE ON docs BEGIN
+            CREATE TRIGGER docs_fts_ad AFTER DELETE ON docs BEGIN
                 INSERT INTO docs_fts(docs_fts, rowid, id, content, domain)
-                    VALUES('delete', old.rowid, old.id, old.content, old.domain);
+                    VALUES('delete', old.rowid, old.id,
+                           expand_identifiers(old.content), old.domain);
             END;
-            CREATE TRIGGER IF NOT EXISTS docs_fts_au AFTER UPDATE ON docs BEGIN
+            CREATE TRIGGER docs_fts_au AFTER UPDATE ON docs BEGIN
                 INSERT INTO docs_fts(docs_fts, rowid, id, content, domain)
-                    VALUES('delete', old.rowid, old.id, old.content, old.domain);
+                    VALUES('delete', old.rowid, old.id,
+                           expand_identifiers(old.content), old.domain);
                 INSERT INTO docs_fts(rowid, id, content, domain)
-                    VALUES(new.rowid, new.id, new.content, new.domain);
+                    VALUES(new.rowid, new.id,
+                           expand_identifiers(new.content), new.domain);
             END;
             CREATE INDEX IF NOT EXISTS idx_docs_source_file
                 ON docs(source_file);

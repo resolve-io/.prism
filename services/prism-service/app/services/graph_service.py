@@ -364,26 +364,51 @@ class GraphService:
     # ------------------------------------------------------------------
 
     def backfill_from_brain(self, brain_db_path: str) -> int:
-        """Stage every code-suffix doc from the Brain docs table.
-        Returns the number of files staged. Safe to call repeatedly —
-        will overwrite existing staged content with latest from docs."""
+        """Stage every code-suffix file from the Brain docs table.
+
+        Multi-granular chunking emits N rows per source_file
+        (``::win_N``, ``::__file__``, ``::__module__``, ``::EntityName``).
+        Only the ``::__file__`` or ``::main`` rows hold full-file content;
+        chunk rows hold fragments. Fix for resolve-io/.prism#34: the
+        previous implementation iterated all rows and called ``stage_doc``
+        on each, which overwrote the staged file on disk per-chunk —
+        leaving graphify with only the last chunk's fragment per file
+        and producing ~83.5% isolated nodes in the code graph.
+
+        Returns the number of files staged. Safe to call repeatedly.
+        """
         try:
             conn = sqlite3.connect(brain_db_path)
             conn.row_factory = sqlite3.Row
         except sqlite3.Error:
             return 0
-        n = 0
         try:
             rows = conn.execute(
-                "SELECT id, source_file, content FROM docs"
+                "SELECT id, source_file, content FROM docs "
+                "WHERE source_file IS NOT NULL "
+                "ORDER BY source_file, "
+                "  CASE "
+                "    WHEN id LIKE '%::__file__' THEN 0 "
+                "    WHEN id LIKE '%::main' THEN 1 "
+                "    ELSE 2 "
+                "  END"
             ).fetchall()
         except sqlite3.OperationalError:
             rows = []
         finally:
             conn.close()
+        n = 0
+        seen: set[str] = set()
         for row in rows:
-            # doc_id is typically "<path>::main"; source_file is the raw path
-            path = row["source_file"] or row["id"].removesuffix("::main")
+            path = row["source_file"]
+            if path in seen:
+                continue
+            doc_id = row["id"] or ""
+            # Only file-level rows hold full source; skip chunk fragments.
+            if not (doc_id.endswith("::__file__")
+                    or doc_id.endswith("::main")):
+                continue
+            seen.add(path)
             if self.stage_doc(path, row["content"] or ""):
                 n += 1
         return n

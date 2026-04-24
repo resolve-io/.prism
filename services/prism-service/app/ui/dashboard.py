@@ -336,7 +336,12 @@ def dashboard_page():
     if _qs_proj:
         app.storage.user['project'] = _qs_proj
     from pathlib import Path as _Path
-    _html = _Path(f"/data/projects/{_proj}/graphify-src/graphify-out/graph.html")
+    # The dashboard embeds the WebGL viewer (single source of truth for the
+    # interactive graph). We gate on graph.json because that's what the
+    # viewer actually fetches; graph.html is no longer used here.
+    _graph_json = _Path(
+        f"/data/projects/{_proj}/graphify-src/graphify-out/graph.json"
+    )
 
     with page_container(wide=True):
 
@@ -409,15 +414,9 @@ def dashboard_page():
                             ui.link("Full page →", f"/graph?project={_proj}").classes(
                                 "text-sm text-indigo-600 hover:underline"
                             )
-                            if _html.exists():
-                                ui.link(
-                                    "Open visual ↗",
-                                    f"/graphify-visual/{_proj}/graph.html",
-                                    new_tab=True,
-                                ).classes("text-sm text-indigo-600 hover:underline")
-                    if _html.exists():
+                    if _graph_json.exists():
                         ui.element("iframe").props(
-                            f'src="/graphify-visual/{_proj}/graph.html"'
+                            f'src="/graph/viewer/{_proj}"'
                         ).style(
                             # Header (~56px) + search (~70px) + padding = ~260px.
                             # Floor at 600px on short viewports so sidebar still

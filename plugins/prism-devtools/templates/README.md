@@ -2,12 +2,10 @@
 
 YAML templates for creating PRISM artifacts.
 
-## Story & Planning
+## Planning
 
 | Template | Purpose |
 |----------|---------|
-| [Story](./story-tmpl.yaml) | User story structure |
-| [Epic](./epic-tmpl.yaml) | Epic definition |
 | [Dev Task](./dev-task-tmpl.yaml) | Development task |
 | [QA Task](./qa-task-tmpl.yaml) | QA task |
 | [QA Gate](./qa-gate-tmpl.yaml) | Quality gate definition |

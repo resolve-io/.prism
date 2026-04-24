@@ -2,14 +2,10 @@
 
 Auto-activating agent capabilities for PRISM workflows.
 
-## Story Management
+## Issue Management
 
 | Skill | Purpose |
 |-------|---------|
-| [create-epic](./create-epic/SKILL.md) | Create epic definitions |
-| [create-next-story](./create-next-story/SKILL.md) | Generate next story |
-| [story-decomposition](./story-decomposition/SKILL.md) | Break down epics |
-| [review-story](./review-story/SKILL.md) | Validate story quality |
 | [validate-issue](./validate-issue/SKILL.md) | Verify issue structure |
 
 ## Development
@@ -31,12 +27,6 @@ Auto-activating agent capabilities for PRISM workflows.
 | [test-design](./test-design/SKILL.md) | Test strategy design |
 | [risk-profile](./risk-profile/SKILL.md) | Risk assessment |
 | [trace-requirements](./trace-requirements/SKILL.md) | Requirements tracing |
-
-## Estimation
-
-| Skill | Purpose |
-|-------|---------|
-| [story-sizing](./story-sizing/SKILL.md) | PROBE estimation and calibration |
 
 ## Architecture
 
@@ -81,7 +71,6 @@ Auto-activating agent capabilities for PRISM workflows.
 | Resource | Purpose |
 |----------|---------|
 | [shared](./shared/SKILL.md) | Common references |
-| [create-story-tasks](./create-story-tasks/SKILL.md) | Story task generation |
 
 ---
 
