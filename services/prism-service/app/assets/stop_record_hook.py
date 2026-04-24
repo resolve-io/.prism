@@ -155,6 +155,19 @@ def main() -> int:
         "files_modified": metrics["files_modified"],
         "skills_invoked": metrics["skills_invoked"],
     })
+    # LL-10: flip any pending consolidation candidates whose scope
+    # overlaps this session's activity to stale, then requeue fresh.
+    # No subprocess, no LLM — just an MCP write. Scope is best-effort
+    # from transcript metrics; precise file-path extraction is a v2
+    # improvement.
+    _mcp_call(base, project, "janitor_mark_stale", {
+        "session_id": session_id,
+        "scope": {
+            "task_ids": [],
+            "memory_ids": [],
+            "file_paths": [],
+        },
+    })
     return 0
 
 

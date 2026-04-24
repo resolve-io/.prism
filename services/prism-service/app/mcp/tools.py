@@ -1358,6 +1358,49 @@ def main() -> int:
             file=sys.stderr,
         )
 
+    # LL-10: SessionStart reflection check. If a consolidation
+    # candidate is ready, emit hookSpecificOutput.additionalContext so
+    # Claude sees the brief on its first turn and can delegate to the
+    # prism-reflect sub-agent. Silent no-op when nothing is pending.
+    # SessionStart hooks receive a small JSON payload on stdin; extract
+    # session_id so janitor_check can rate-limit and so the emitted
+    # additionalContext can be linked to this session.
+    session_id = ""
+    try:
+        import json as _json
+        import sys as _sys
+        session_id = (
+            _json.loads(_sys.stdin.read() or "{}").get("session_id", "")
+        )
+    except Exception:
+        pass
+    if session_id:
+        try:
+            chk_resp = _mcp_call(
+                base, project, "janitor_check", {"session_id": session_id},
+            )
+            payload = _parse_result(chk_resp) or {}
+            if payload.get("ready") and payload.get("brief"):
+                brief = payload["brief"]
+                additional = (
+                    f"PRISM reflection pending: candidate "
+                    f"{brief.get('candidate_id', '?')}. Spawn the "
+                    f"`prism-reflect` subagent using the brief below — "
+                    f"call `janitor_check` if you need the live version, "
+                    f"submit via `janitor_submit`. Brief: "
+                    f"{json.dumps(brief)[:6000]}"
+                )
+                print(json.dumps({
+                    "hookSpecificOutput": {
+                        "additionalContext": additional,
+                    },
+                }))
+        except Exception as e:
+            print(
+                f"[prism-sync] janitor_check failed: {e!r}",
+                file=sys.stderr,
+            )
+
     return 0
 
 
@@ -1385,6 +1428,11 @@ _FEEDBACK_HOOK_SCRIPT = _load_asset("feedback_signal_hook.py")
 _STOP_HOOK_SCRIPT = _load_asset("stop_record_hook.py")
 _SUBAGENT_HOOK_SCRIPT = _load_asset("subagent_record_hook.py")
 _SKILL_HOOK_SCRIPT = _load_asset("skill_usage_hook.py")
+# LL-10 — subagent definition + slash command shipped alongside the
+# hook scripts so Claude has something to match on when it sees the
+# SessionStart additionalContext nudge or the MCP-response header.
+_REFLECT_AGENT_MD = _load_asset("prism_reflect_agent.md")
+_REFLECT_COMMAND_MD = _load_asset("prism_reflect_command.md")
 
 
 def _install_manifest(project_id: str) -> dict:
@@ -1515,6 +1563,20 @@ def _install_manifest(project_id: str) -> dict:
                 "content": _SKILL_HOOK_SCRIPT,
                 "mode": "0755",
             },
+            # LL-10 — ship the reflection sub-agent + slash command so
+            # Claude has something to match on when it sees the
+            # SessionStart additionalContext nudge or the MCP-response
+            # header from LL-09.
+            {
+                "path": ".claude/agents/prism-reflect.md",
+                "action": "create",
+                "content": _REFLECT_AGENT_MD,
+            },
+            {
+                "path": ".claude/commands/prism-reflect.md",
+                "action": "create",
+                "content": _REFLECT_COMMAND_MD,
+            },
         ],
         "verification_steps": [
             "After Claude restart, re-invoke any tool and confirm no errors.",
@@ -1523,6 +1585,8 @@ def _install_manifest(project_id: str) -> dict:
             "logs for '[prism-sync] refreshed 1 drifted file(s)'.",
             "Finish a Claude response, reload /sessions — expect a new row "
             "for the session_id just recorded.",
+            "After any merged task, run `/prism-reflect` — it should drain "
+            "one pending candidate via the prism-reflect subagent.",
         ],
     }
 
