@@ -156,9 +156,14 @@ class DocumentationScanner:
 
     def scan(self) -> Dict[str, FileNode]:
         """Recursively scan directory for markdown and YAML files"""
+        # Skip third-party caches, worktree clones, model card downloads,
+        # generated graphify mirrors, Python venvs. These are gitignored
+        # and not authored content, so broken links inside them are out
+        # of scope for the gate.
+        SKIP_PARTS = {'node_modules', 'worktrees', 'hf-home', 'graphify-src',
+                      '.venv', '__pycache__', 'site-packages'}
         for file_path in self.root_path.rglob('*'):
-            # Skip node_modules directories (third-party code)
-            if 'node_modules' in file_path.parts:
+            if SKIP_PARTS.intersection(file_path.parts):
                 continue
 
             # Check if it's a file (handle Windows access errors gracefully)

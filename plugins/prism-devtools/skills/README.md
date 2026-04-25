@@ -14,7 +14,6 @@ Auto-activating agent capabilities for PRISM workflows.
 |-------|---------|
 | [create-dev-task](./create-dev-task/SKILL.md) | Generate dev tasks |
 | [create-failing-test](./create-failing-test/SKILL.md) | TDD failing test spec |
-| [prism-loop](./prism-loop/SKILL.md) | TDD workflow loop |
 | [correct-course](./correct-course/SKILL.md) | Handle deviations |
 
 ## Quality Assurance

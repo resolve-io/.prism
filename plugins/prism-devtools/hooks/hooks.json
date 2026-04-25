@@ -1,4 +1,5 @@
 {
+  "_comment": "Plugin hooks bridge Claude Code lifecycle events to the PRISM MCP server (Brain, Janitor, Memory). Workflow orchestration (phase advancement, story gates, agent dispatch) lives in the MCP server, not here.",
   "hooks": {
     "SessionStart": [
       {
@@ -12,16 +13,6 @@
       }
     ],
     "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/enforce-story-context.py",
-            "description": "Ensure workflow commands have required story context"
-          }
-        ]
-      },
       {
         "matcher": "Read",
         "hooks": [
@@ -44,46 +35,6 @@
       }
     ],
     "PostToolUse": [
-      {
-        "matcher": "Edit|Write|Bash|Grep|Glob",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/prism_activity_hook.py",
-            "description": "Update dashboard with real-time activity"
-          }
-        ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/track-current-story.py",
-            "description": "Track story file as current workflow context"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/validate-story-updates.py",
-            "description": "Validate story file updates"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/validate-required-sections.py",
-            "description": "Verify all required PRISM sections exist"
-          }
-        ]
-      },
       {
         "matcher": "Bash",
         "hooks": [
@@ -131,49 +82,6 @@
             "type": "command",
             "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/feedback_signal_hook.py",
             "description": "Implicit retrieval feedback: correlate brain_search results with Read/Edit to emit auto thumbs-up via brain_search_feedback MCP"
-          }
-        ]
-      }
-    ],
-    "SubagentStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/subagent_sfr_inject.py",
-            "description": "Inject SFR certificate template + Brain context into sub-agent"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/subagent_stop_recorder.py",
-            "description": "Record sub-agent outcome for SFR scoring and observability"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/prism_stop_hook.py",
-            "description": "Auto-advance PRISM workflow on response completion",
-            "timeout": 120000
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${PRISM_DEVTOOLS_ROOT}/hooks/consolidate-story-learnings.py",
-            "description": "Consolidate completed story learnings into Mulch"
           }
         ]
       }

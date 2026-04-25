@@ -96,7 +96,7 @@ PRISM is a software engineering methodology that combines proven practices into 
 ### Workflow Automation
 - **[Hooks](hooks/README.md)** - Event-driven enforcement that blocks invalid operations
 - **[Workflows](docs/reference/workflows/README.md)** - Multi-step orchestrated processes with quality gates
-- **[PRISM Loop](skills/prism-loop/SKILL.md)** - Automated TDD workflow with RED/GREEN validation
+- **PRISM Loop** (orchestration in MCP server) - Automated TDD workflow with RED/GREEN validation
 - **[Skills](skills/README.md)** - Reusable operations (estimation, test design, risk assessment, tracing)
 - **[Templates](templates/README.md)** - Document generation (PRD, stories, architecture, QA gates)
 - **[Checklists](skills/execute-checklist/SKILL.md)** - Quality gate validation at workflow checkpoints
@@ -135,7 +135,7 @@ Stop hook compaction resilience — no-progress detection, step-transition debou
 ### Automation & Workflows
 - **[Hooks](hooks/README.md)** - Event-driven scripts that enforce workflow integrity
 - **[Workflows](workflows/)** - YAML-based multi-step orchestration
-- **[PRISM Loop](skills/prism-loop/SKILL.md)** - Automated TDD with validation gates
+- **PRISM Loop** (orchestration in MCP server) - Automated TDD with validation gates
 
 ### Documentation & Standards
 - **[Templates](templates/README.md)** - Document generation patterns
@@ -216,10 +216,10 @@ PRISM follows secure development practices:
 - **[Sub-Agent User Guide](docs/reference/sub-agents/user-guide.md)** - Automated validation
 - **[Sub-Agent Quick Reference](docs/reference/sub-agents/quick-reference.md)** - Cheat sheet
 - **[Claude Code Integration](docs/reference/guides/claude-code-overview.md)** - Architecture guide
-- **[TDD Workflow Loop](skills/prism-loop/SKILL.md)** - Automated RED/GREEN development cycle
+- **TDD Workflow Loop** (orchestration in MCP server) - Automated RED/GREEN development cycle
 
 ### Building Skills
-- **[BYOS](skills/byos/SKILL.md)** - Create project-level skills shared via git with PRISM agent assignment
+- **BYOS** (deprecated — MCP server is the integration surface) - Create project-level skills shared via git with PRISM agent assignment
 - **[Skill Builder](skills/skill-builder/SKILL.md)** - Create efficient skills with progressive disclosure
 - **[Progressive Disclosure](skills/skill-builder/reference/progressive-disclosure.md)** - Token optimization pattern
 
