@@ -78,6 +78,25 @@ def test_context_bundle_persona_changes_role_card_and_template(project):
     assert dev["template"]["id"] != qa["template"]["id"]
 
 
+def test_context_bundle_keeps_single_index_brain_context(project):
+    _call(
+        "brain_index_doc",
+        {
+            "path": "src/context_pack_gate.py",
+            "content": (
+                "Developer context for dev persona.\n"
+                "DEV_CONTEXT_SINGLE_INDEX should remain in system context."
+            ),
+            "domain": "py",
+        },
+        project,
+    )
+
+    payload = _json_text(_call("context_bundle", {"persona": "dev"}, project))
+
+    assert "DEV_CONTEXT_SINGLE_INDEX" in payload["brain_context"]
+
+
 def test_request_context_resets_after_block():
     from app.config import DEFAULT_PROJECT
     from app.mcp.request_context import (

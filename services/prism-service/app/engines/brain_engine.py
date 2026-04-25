@@ -2837,7 +2837,12 @@ class Brain:
             self.last_result_count = 0
             return ""
 
-        results = [r for r in results if r.get("rrf_score", 0.0) >= 0.02]
+        # A single-index exact hit has RRF ~= 1 / (60 + 1) == 0.01639.
+        # The previous 0.02 cutoff dropped valid BM25-only context, which
+        # made context_bundle lose role-specific Brain material in small or
+        # fresh projects. Search ranking already happens before this point;
+        # for system context, keep any positively scored top-K result.
+        results = [r for r in results if r.get("rrf_score", 0.0) > 0.0]
         if not results:
             self.last_result_count = 0
             return ""
