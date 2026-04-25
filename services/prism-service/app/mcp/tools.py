@@ -1410,11 +1410,18 @@ if __name__ == "__main__":
 
 
 def _load_asset(filename: str) -> str:
-    """Read a shipped hook script from app/assets/. The copy shipped by
-    the ``prism-devtools`` Claude Code plugin at
-    ``plugins/prism-devtools/hooks/`` must be kept in sync with the copy
-    in ``services/prism-service/app/assets/``; the assets version is the
-    one served to MCP-only clients via ``prism_install``."""
+    """Read a shipped hook script from ``services/prism-service/app/assets/``.
+
+    The MCP server is the single source of truth for everything
+    ``prism_install`` distributes. ``feedback_signal_hook.py`` is the
+    only asset that also has a sibling copy in
+    ``plugins/prism-devtools/hooks/`` (because the plugin registers it
+    via ``hooks.json``); when that one is updated, both copies must
+    move together. The other assets here (``stop_record_hook.py``,
+    ``subagent_record_hook.py``, ``skill_usage_hook.py``,
+    ``hook_logger.py``, ``prism_reflect_agent.md``,
+    ``prism_reflect_command.md``) are MCP-install-only and have no
+    plugin counterpart."""
     from pathlib import Path as _P
     try:
         return (_P(__file__).parent.parent / "assets" / filename).read_text(
