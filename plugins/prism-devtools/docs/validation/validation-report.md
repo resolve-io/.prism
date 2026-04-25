@@ -1,27 +1,27 @@
 # PRISM Documentation Validation Report
 
-**Generated**: 2026-04-05 21:12:27
+**Generated**: 2026-04-24 23:29:36
 
 ---
 
 ## Executive Summary
 
-- **Files Checked**: 251/276
-- **Coverage**: 90.9%
-- **Total Issues**: 233
+- **Files Checked**: 196/219
+- **Coverage**: 89.5%
+- **Total Issues**: 171
 
 ### Issues by Severity
 
 - **Critical**: 0
-- **Warning**: 116
-- **Info**: 117
+- **Warning**: 71
+- **Info**: 100
 
 ### Issues by Category
 
 - **Cross Reference**: 35
-- **Progressive Disclosure**: 177
+- **Progressive Disclosure**: 130
 - **Claude Code Features**: 1
-- **Terminology**: 20
+- **Terminology**: 5
 
 ---
 
@@ -146,38 +146,6 @@
 - **Issue**: Document starts with H2 instead of H1
 - **Fix**: Start document with a single H1 heading
 
-**PD002**: `agents/templates/sfr-story-content.md`:1
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `hooks/core-steps/draft_story.md`:3
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `hooks/core-steps/implement_tasks.md`:3
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `hooks/core-steps/review_previous_notes.md`:8
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `hooks/core-steps/verify_green_state.md`:3
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `hooks/core-steps/verify_plan.md`:9
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `hooks/core-steps/write_failing_tests.md`:3
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `skills/byos/SKILL.md`:10
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
 **PD002**: `skills/document-project/SKILL.md`:9
 - **Issue**: Document starts with H2 instead of H1
 - **Fix**: Start document with a single H1 heading
@@ -190,10 +158,6 @@
 - **Issue**: Document starts with H2 instead of H1
 - **Fix**: Start document with a single H1 heading
 
-**PD002**: `skills/prism-done/SKILL.md`:10
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
 **PD002**: `skills/risk-profile/SKILL.md`:9
 - **Issue**: Document starts with H2 instead of H1
 - **Fix**: Start document with a single H1 heading
@@ -202,11 +166,7 @@
 - **Issue**: Document starts with H2 instead of H1
 - **Fix**: Start document with a single H1 heading
 
-**PD002**: `skills/story-sizing/SKILL.md`:9
-- **Issue**: Document starts with H2 instead of H1
-- **Fix**: Start document with a single H1 heading
-
-**PD002**: `skills/version-bump/SKILL.md`:14
+**PD002**: `skills/version-bump/SKILL.md`:13
 - **Issue**: Document starts with H2 instead of H1
 - **Fix**: Start document with a single H1 heading
 
@@ -218,7 +178,47 @@
 - **Issue**: Missing recommended section: 'quick start' (immediate action path)
 - **Fix**: Add a section about immediate action path
 
-*... and 74 more Warning issues*
+**SB016**: `skills/apply-qa-fixes/SKILL.md`
+- **Issue**: Missing recommended section: 'when to use' (whenToUse or trigger conditions)
+- **Fix**: Add a section about whenToUse or trigger conditions
+
+**SB016**: `skills/apply-qa-fixes/SKILL.md`
+- **Issue**: Missing recommended section: 'quick start' (immediate action path)
+- **Fix**: Add a section about immediate action path
+
+**SB016**: `skills/brain/SKILL.md`
+- **Issue**: Missing recommended section: 'when to use' (whenToUse or trigger conditions)
+- **Fix**: Add a section about whenToUse or trigger conditions
+
+**SB016**: `skills/brain/SKILL.md`
+- **Issue**: Missing recommended section: 'quick start' (immediate action path)
+- **Fix**: Add a section about immediate action path
+
+**SB016**: `skills/conductor/SKILL.md`
+- **Issue**: Missing recommended section: 'when to use' (whenToUse or trigger conditions)
+- **Fix**: Add a section about whenToUse or trigger conditions
+
+**SB016**: `skills/conductor/SKILL.md`
+- **Issue**: Missing recommended section: 'quick start' (immediate action path)
+- **Fix**: Add a section about immediate action path
+
+**SB016**: `skills/correct-course/SKILL.md`
+- **Issue**: Missing recommended section: 'quick start' (immediate action path)
+- **Fix**: Add a section about immediate action path
+
+**SB016**: `skills/create-dev-task/SKILL.md`
+- **Issue**: Missing recommended section: 'when to use' (whenToUse or trigger conditions)
+- **Fix**: Add a section about whenToUse or trigger conditions
+
+**SB016**: `skills/create-dev-task/SKILL.md`
+- **Issue**: Missing recommended section: 'quick start' (immediate action path)
+- **Fix**: Add a section about immediate action path
+
+**SB016**: `skills/create-failing-test/SKILL.md`
+- **Issue**: Missing recommended section: 'when to use' (whenToUse or trigger conditions)
+- **Fix**: Add a section about whenToUse or trigger conditions
+
+*... and 44 more Warning issues*
 
 ### Info
 
@@ -227,19 +227,15 @@
 - **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
 
 **PD005**: `CLAUDE.md`
-- **Issue**: Long document (642 lines) missing disclosure techniques
+- **Issue**: Long document (479 lines) missing disclosure techniques
 - **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
 
 **PD005**: `README.md`
-- **Issue**: Long document (274 lines) missing disclosure techniques
+- **Issue**: Long document (263 lines) missing disclosure techniques
 - **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
 
 **PD005**: `agents/architecture-compliance-checker.md`
 - **Issue**: Long document (174 lines) missing disclosure techniques
-- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
-
-**PD005**: `agents/epic-analyzer.md`
-- **Issue**: Long document (277 lines) missing disclosure techniques
 - **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
 
 **PD005**: `agents/link-checker.md`
@@ -262,34 +258,6 @@
 - **Issue**: Long document (218 lines) missing disclosure techniques
 - **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
 
-**PD003**: `commands/dev.md`
-- **Issue**: Long document (221 lines) with shallow hierarchy (max depth: 2)
-- **Fix**: Consider breaking into subsections or using deeper heading levels
-
-**PD005**: `commands/dev.md`
-- **Issue**: Long document (221 lines) missing disclosure techniques
-- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
-
-**PD003**: `commands/qa.md`
-- **Issue**: Long document (245 lines) with shallow hierarchy (max depth: 2)
-- **Fix**: Consider breaking into subsections or using deeper heading levels
-
-**PD005**: `commands/qa.md`
-- **Issue**: Long document (245 lines) missing disclosure techniques
-- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
-
-**PD003**: `commands/sm.md`
-- **Issue**: Long document (317 lines) with shallow hierarchy (max depth: 2)
-- **Fix**: Consider breaking into subsections or using deeper heading levels
-
-**PD005**: `commands/sm.md`
-- **Issue**: Long document (317 lines) missing disclosure techniques
-- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
-
-**PD005**: `commands/support.md`
-- **Issue**: Long document (153 lines) missing disclosure techniques
-- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
-
 **PD005**: `hooks/README.md`
 - **Issue**: Long document (232 lines) missing disclosure techniques
 - **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
@@ -302,7 +270,39 @@
 - **Issue**: Long document (293 lines) missing disclosure techniques
 - **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
 
-*... and 63 more Info issues*
+**PD005**: `utils/prism-doc-template.md`
+- **Issue**: Long document (327 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+**PD005**: `skills/agent-builder/reference/agent-examples.md`
+- **Issue**: Long document (628 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+**PD005**: `skills/agent-builder/reference/best-practices.md`
+- **Issue**: Long document (617 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+**PD005**: `skills/agent-builder/reference/configuration-guide.md`
+- **Issue**: Long document (371 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+**PD005**: `skills/agent-builder/reference/instructions.md`
+- **Issue**: Long document (199 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+**PD005**: `skills/agent-builder/reference/prism-agent-strategy.md`
+- **Issue**: Long document (711 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+**PD005**: `skills/agent-builder/reference/troubleshooting.md`
+- **Issue**: Long document (789 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+**PD005**: `skills/apply-qa-fixes/reference/instructions.md`
+- **Issue**: Long document (172 lines) missing disclosure techniques
+- **Fix**: Consider adding: Table of Contents, <details>/<summary> sections, or split into multiple files
+
+*... and 46 more Info issues*
 
 
 ## Claude Code Features Issues
@@ -317,66 +317,6 @@
 ## Terminology Issues
 
 ### Warning
-
-**TC001**: `commands/po.md`:81
-- **Issue**: Skill 'create-epic' referred to as 'task'
-- **Fix**: Replace with '/create-epic' or 'create-epic skill'
-
-**TC001**: `commands/po.md`:83
-- **Issue**: Skill 'correct-course' referred to as 'task'
-- **Fix**: Replace with '/correct-course' or 'correct-course skill'
-
-**TC001**: `commands/qa.md`:90
-- **Issue**: Skill 'test-design' referred to as 'task'
-- **Fix**: Replace with '/test-design' or 'test-design skill'
-
-**TC001**: `commands/qa.md`:115
-- **Issue**: Skill 'nfr-assess' referred to as 'task'
-- **Fix**: Replace with '/nfr-assess' or 'nfr-assess skill'
-
-**TC001**: `commands/qa.md`:116
-- **Issue**: Skill 'nfr-assess' referred to as 'task'
-- **Fix**: Replace with '/nfr-assess' or 'nfr-assess skill'
-
-**TC001**: `commands/qa.md`:193
-- **Issue**: Skill 'risk-profile' referred to as 'task'
-- **Fix**: Replace with '/risk-profile' or 'risk-profile skill'
-
-**TC001**: `commands/qa.md`:194
-- **Issue**: Skill 'risk-profile' referred to as 'task'
-- **Fix**: Replace with '/risk-profile' or 'risk-profile skill'
-
-**TC001**: `commands/qa.md`:195
-- **Issue**: Skill 'test-design' referred to as 'task'
-- **Fix**: Replace with '/test-design' or 'test-design skill'
-
-**TC001**: `commands/sm.md`:102
-- **Issue**: Skill 'create-epic' referred to as 'task'
-- **Fix**: Replace with '/create-epic' or 'create-epic skill'
-
-**TC001**: `commands/sm.md`:186
-- **Issue**: Skill 'create-next-story' referred to as 'task'
-- **Fix**: Replace with '/create-next-story' or 'create-next-story skill'
-
-**TC001**: `commands/sm.md`:286
-- **Issue**: Skill 'correct-course' referred to as 'task'
-- **Fix**: Replace with '/correct-course' or 'correct-course skill'
-
-**TC001**: `commands/sm.md`:289
-- **Issue**: Skill 'execute-checklist' referred to as 'task'
-- **Fix**: Replace with '/execute-checklist' or 'execute-checklist skill'
-
-**TC001**: `commands/support.md`:95
-- **Issue**: Skill 'validate-issue' referred to as 'task'
-- **Fix**: Replace with '/validate-issue' or 'validate-issue skill'
-
-**TC001**: `commands/support.md`:99
-- **Issue**: Skill 'investigate-root-cause' referred to as 'task'
-- **Fix**: Replace with '/investigate-root-cause' or 'investigate-root-cause skill'
-
-**TC001**: `commands/support.md`:103
-- **Issue**: Skill 'create-failing-test' referred to as 'task'
-- **Fix**: Replace with '/create-failing-test' or 'create-failing-test skill'
 
 **TC001**: `utils/jira-integration.md`:270
 - **Issue**: Skill 'validate-issue' referred to as 'task'
