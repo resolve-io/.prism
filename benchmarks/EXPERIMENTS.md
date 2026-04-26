@@ -46,22 +46,25 @@ in `services/bench-service/docker-compose.yml`.
 
 ### 2026-04-25 — metaconductor-policy-gate
 - Added MCP-first Meta-Conductor candidate loop for AutoAgent-style prompt
-  optimization. PRISM now owns candidate storage, evaluation, and promotion;
-  callers can generate prompt text, but cannot self-promote it.
+  optimization. PRISM now owns candidate storage, evaluation, and promotion.
+  It can also generate conservative no-LLM candidates from PSP outcome traces;
+  callers can still supply prompt text, but cannot self-promote it.
 - New MCP tools: `meta_conductor_brief`, `meta_conductor_propose`,
-  `meta_conductor_evaluate`.
+  `meta_conductor_evaluate`, `meta_conductor_auto`.
 - Promotion gate requires: holdout lift >= +0.03, contextpack score = 1.000,
   tests passed, token ratio <= 1.15, sample_n >= 5, and no worse retry,
   follow-up, or revert deltas.
 - Benchmark: `python benchmarks/metaconductor/run.py`
   - decision_accuracy = **1.000**
+  - auto_created = **1**
   - false_promotions = **0**
   - missed_promotions = **0**
 - Regression gates:
   - `python benchmarks/contextpack/run.py` stayed at **1.000** across
     context_recall, Brain, Memory, Tasks, persona, rules, determinism, and noise.
   - `python -m pytest benchmarks/tests` -> **16 passed**
-  - `python -m pytest services/prism-service/tests/unit` -> **101 passed**
+  - `python -m pytest services/prism-service/tests/unit` -> **104 passed**
+  - `python -m pytest services/prism-service/tests/integration` -> **6 passed**
 
 <!-- Append new entries below; keep human-readable and dated. -->
 ### 2026-04-19 — baseline-potion (full, 500 Q)

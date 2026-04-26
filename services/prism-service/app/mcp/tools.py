@@ -357,6 +357,28 @@ TOOLS: list[Tool] = [
         },
     ),
     Tool(
+        name="meta_conductor_auto",
+        description=(
+            "Run PRISM's deterministic no-LLM Meta-Conductor auto-proposer "
+            "for one persona/step. It mines recorded PSP outcome traces and "
+            "stores a conservative prompt candidate. If benchmark metrics are "
+            "provided, it also applies the normal promotion gate."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "persona": {"type": "string"},
+                "step_id": {"type": "string"},
+                "limit": {"type": "integer", "default": 5},
+                "metrics": {
+                    "type": "object",
+                    "description": "Optional metrics for immediate gated evaluation",
+                },
+            },
+            "required": ["persona", "step_id"],
+        },
+    ),
+    Tool(
         name="brain_list",
         description="List all documents indexed in Brain. Returns doc_id, domain, and content length for each.",
         inputSchema={
@@ -2165,6 +2187,16 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
             payload = ctx.conductor_svc.evaluate_meta_candidate(
                 candidate_id=str(arguments["candidate_id"]),
                 metrics=arguments.get("metrics") or {},
+            )
+            return [TextContent(type="text", text=_json(payload))]
+
+        if name == "meta_conductor_auto":
+            ctx = get_project(project_id)
+            payload = ctx.conductor_svc.auto_meta_candidate(
+                persona=str(arguments["persona"]),
+                step_id=str(arguments["step_id"]),
+                limit=int(arguments.get("limit", 5)),
+                metrics=arguments.get("metrics"),
             )
             return [TextContent(type="text", text=_json(payload))]
 

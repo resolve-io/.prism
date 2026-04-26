@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sqlite3
 import sys
 import time
 from dataclasses import dataclass
@@ -124,8 +125,25 @@ def run_cases(work_dir: Path) -> list[dict[str, Any]]:
         shutil.rmtree(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     svc = ConductorService(str(work_dir / "scores.db"), enable_engine=False)
+    _seed_auto_trace(work_dir / "scores.db")
 
     results = []
+    auto = svc.auto_meta_candidate(persona="dev", step_id="green")
+    auto_content = auto.get("candidate", {}).get("content", "")
+    results.append(
+        {
+            "case": "auto-no-llm-proposal",
+            "expected_promoted": False,
+            "actual_promoted": False,
+            "correct": bool(auto.get("created"))
+            and auto.get("candidate", {}).get("generator") == "prism-rule-meta-conductor"
+            and "These deterministic adjustments were generated" in auto_content
+            and "narrowest relevant verification command" in auto_content,
+            "reason": auto.get("reason", "created"),
+            "score_delta": 0.0,
+            "auto_created": bool(auto.get("created")),
+        }
+    )
     for case in CASES:
         proposed = svc.propose_meta_candidate(
             persona="dev",
@@ -151,6 +169,19 @@ def run_cases(work_dir: Path) -> list[dict[str, Any]]:
     return results
 
 
+def _seed_auto_trace(scores_db: Path) -> None:
+    conn = sqlite3.connect(scores_db)
+    conn.execute(
+        "INSERT INTO prompt_scores "
+        "(prompt_id, persona, step_id, score, tokens_used, retries, "
+        " tests_passed, gate_passed, coverage_pct, traceability_pct, timestamp) "
+        "VALUES ('dev/default', 'dev', 'green', 0.42, 7200, 2, 0, 0, 0.4, 0.5, "
+        " '2026-04-25T00:00:00Z')"
+    )
+    conn.commit()
+    conn.close()
+
+
 def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     n = len(results) or 1
     correct = sum(1 for r in results if r["correct"])
@@ -165,6 +196,7 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "case_count": len(results),
         "decision_accuracy": correct / n,
+        "auto_created": any(r.get("auto_created") for r in results),
         "false_promotions": false_promotions,
         "missed_promotions": missed_promotions,
     }
@@ -187,6 +219,8 @@ def main() -> int:
         failures.append(
             f"decision_accuracy {summary['decision_accuracy']:.3f} < 1.000"
         )
+    if not summary["auto_created"]:
+        failures.append("auto_created false")
     if summary["false_promotions"]:
         failures.append(f"false_promotions {summary['false_promotions']}")
     if summary["missed_promotions"]:
@@ -211,6 +245,7 @@ def main() -> int:
     print(
         "RESULT metaconductor "
         f"decision_accuracy={summary['decision_accuracy']:.3f} "
+        f"auto_created={int(summary['auto_created'])} "
         f"false_promotions={len(summary['false_promotions'])} "
         f"missed_promotions={len(summary['missed_promotions'])} "
         f"elapsed={elapsed:.3f}s",

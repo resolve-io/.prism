@@ -129,6 +129,40 @@ def test_meta_brief_returns_thresholds_and_outcome_traces(tmp_path):
     assert brief["promotion_thresholds"]["min_holdout_delta"] == 0.03
 
 
+def test_auto_meta_candidate_generates_no_llm_rules_from_trace_signals(tmp_path):
+    svc = _svc(tmp_path)
+    conn = sqlite3.connect(tmp_path / "scores.db")
+    conn.execute(
+        "INSERT INTO prompt_scores "
+        "(prompt_id, persona, step_id, score, tokens_used, retries, "
+        " tests_passed, gate_passed, coverage_pct, traceability_pct, timestamp) "
+        "VALUES ('dev/default', 'dev', 'green', 0.42, 7200, 2, 0, 0, 0.4, 0.5, "
+        " '2026-04-25T00:00:00Z')"
+    )
+    conn.commit()
+    conn.close()
+
+    result = svc.auto_meta_candidate(persona="dev", step_id="green")
+
+    assert result["created"] is True
+    assert result["candidate"]["generator"] == "prism-rule-meta-conductor"
+    content = result["candidate"]["content"]
+    assert "These deterministic adjustments were generated" in content
+    assert "narrowest relevant verification command" in content
+    assert "Map each requirement" in content
+    assert "Keep context compact" in content
+    assert "avg_retries=2.0" in result["candidate"]["rationale"]
+
+
+def test_auto_meta_candidate_does_not_create_without_outcomes(tmp_path):
+    svc = _svc(tmp_path)
+
+    result = svc.auto_meta_candidate(persona="dev", step_id="green")
+
+    assert result["created"] is False
+    assert result["reason"] == "no outcome traces for persona/step"
+
+
 @pytest.fixture
 def project(tmp_path, monkeypatch):
     from app import config as cfg
@@ -197,3 +231,35 @@ def test_meta_conductor_mcp_round_trip(project):
 
     assert evaluated["promoted"] is True
     assert evaluated["candidate"]["status"] == "promoted"
+
+
+def test_meta_conductor_auto_mcp_round_trip(project):
+    _call(
+        "record_outcome",
+        {
+            "prompt_id": "dev/default",
+            "persona": "dev",
+            "step_id": "green",
+            "metrics": {
+                "retries": 2,
+                "tests_passed": 0,
+                "gate_passed": 0,
+                "tokens_used": 7200,
+                "coverage_pct": 0.4,
+                "traceability_pct": 0.5,
+            },
+        },
+        project,
+    )
+
+    result = _json_text(
+        _call(
+            "meta_conductor_auto",
+            {"persona": "dev", "step_id": "green"},
+            project,
+        )
+    )
+
+    assert result["created"] is True
+    assert result["candidate"]["status"] == "proposed"
+    assert result["candidate"]["generator"] == "prism-rule-meta-conductor"

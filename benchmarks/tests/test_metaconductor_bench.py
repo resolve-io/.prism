@@ -41,6 +41,7 @@ def test_summary_reports_false_and_missed_promotions():
     )
 
     assert summary["decision_accuracy"] == 1 / 3
+    assert summary["auto_created"] is False
     assert summary["false_promotions"] == ["false-positive"]
     assert summary["missed_promotions"] == ["missed"]
 
@@ -52,6 +53,7 @@ def test_run_cases_exercises_promotion_policy(tmp_path):
     summary = mod.summarize(results)
 
     assert summary["decision_accuracy"] == 1.0
+    assert summary["auto_created"] is True
     assert summary["false_promotions"] == []
     assert summary["missed_promotions"] == []
     assert any(r["actual_promoted"] for r in results)

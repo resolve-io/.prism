@@ -18,6 +18,7 @@ META_MAX_FOLLOWUP_DELTA = 0.0
 META_MAX_REVERT_DELTA = 0.0
 META_MIN_SAMPLE_N = 5
 META_REQUIRED_CONTEXTPACK_SCORE = 1.0
+AUTO_MIN_OUTCOMES = 1
 
 # Epsilon constants (mirror conductor_engine values)
 EPSILON_START = 0.3
@@ -324,6 +325,208 @@ class ConductorService:
             "required_contextpack_score": META_REQUIRED_CONTEXTPACK_SCORE,
             "tests_passed_required": True,
         }
+
+    def auto_meta_candidate(
+        self,
+        *,
+        persona: str,
+        step_id: str,
+        limit: int = 5,
+        metrics: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Generate a deterministic prompt candidate from outcome traces.
+
+        This is the no-LLM automatic path. PRISM mines existing scores and
+        failure signals, writes a candidate through the same propose path, and
+        optionally evaluates it if the caller supplies real benchmark metrics.
+        """
+        brief = self.meta_brief(persona=persona, step_id=step_id, limit=limit)
+        stats = self._meta_outcome_stats(persona, step_id)
+        if stats["sample_n"] < AUTO_MIN_OUTCOMES:
+            return {
+                "created": False,
+                "reason": "no outcome traces for persona/step",
+                "brief": brief,
+                "stats": stats,
+            }
+
+        rules = self._auto_prompt_rules(stats)
+        parent = str(brief["current_best"].get("prompt_id") or f"{persona}/default")
+        content = self._render_auto_prompt(
+            persona=persona,
+            step_id=step_id,
+            current_prompt=str(brief.get("current_prompt") or ""),
+            rules=rules,
+        )
+        rationale = (
+            "Deterministic Meta-Conductor candidate from PSP outcome traces: "
+            + "; ".join(stats["signals"])
+        )
+        proposed = self.propose_meta_candidate(
+            persona=persona,
+            step_id=step_id,
+            content=content,
+            parent_prompt_id=parent,
+            rationale=rationale,
+            generator="prism-rule-meta-conductor",
+        )
+        result: dict[str, Any] = {
+            "created": True,
+            "candidate": proposed["candidate"],
+            "rules_applied": rules,
+            "stats": stats,
+            "promotion_thresholds": proposed["promotion_thresholds"],
+        }
+        if metrics is not None:
+            result["evaluation"] = self.evaluate_meta_candidate(
+                proposed["candidate"]["candidate_id"],
+                metrics,
+            )
+        return result
+
+    def _meta_outcome_stats(self, persona: str, step_id: str) -> dict[str, Any]:
+        conn = self._scores_conn()
+        rows = conn.execute(
+            "SELECT score, tokens_used, duration_s, retries, tests_passed, "
+            "gate_passed, coverage_pct, traceability_pct, probe_accuracy "
+            "FROM prompt_scores WHERE persona=? AND step_id=?",
+            (persona, step_id),
+        ).fetchall()
+        conn.close()
+        sample_n = len(rows)
+        if not rows:
+            return {
+                "sample_n": 0,
+                "avg_score": 0.0,
+                "avg_tokens": 0.0,
+                "avg_retries": 0.0,
+                "test_fail_rate": 0.0,
+                "gate_fail_rate": 0.0,
+                "low_traceability_rate": 0.0,
+                "signals": [],
+            }
+
+        def present(name: str) -> list[float]:
+            vals: list[float] = []
+            for row in rows:
+                value = row[name]
+                if value is not None:
+                    vals.append(float(value))
+            return vals
+
+        scores = present("score")
+        tokens = present("tokens_used")
+        retries = present("retries")
+        tests = present("tests_passed")
+        gates = present("gate_passed")
+        traceability = present("traceability_pct")
+        coverage = present("coverage_pct")
+
+        def avg(vals: list[float]) -> float:
+            return sum(vals) / len(vals) if vals else 0.0
+
+        test_fail_rate = (
+            sum(1 for v in tests if v <= 0.0) / len(tests) if tests else 0.0
+        )
+        gate_fail_rate = (
+            sum(1 for v in gates if v <= 0.0) / len(gates) if gates else 0.0
+        )
+        low_traceability_rate = (
+            sum(1 for v in traceability if v < 0.8) / len(traceability)
+            if traceability else 0.0
+        )
+        low_coverage_rate = (
+            sum(1 for v in coverage if v < 0.7) / len(coverage)
+            if coverage else 0.0
+        )
+        stats = {
+            "sample_n": sample_n,
+            "avg_score": round(avg(scores), 4),
+            "avg_tokens": round(avg(tokens), 2),
+            "avg_retries": round(avg(retries), 2),
+            "test_fail_rate": round(test_fail_rate, 4),
+            "gate_fail_rate": round(gate_fail_rate, 4),
+            "low_traceability_rate": round(low_traceability_rate, 4),
+            "low_coverage_rate": round(low_coverage_rate, 4),
+            "signals": [],
+        }
+        signals: list[str] = []
+        if stats["avg_retries"] > 0:
+            signals.append(f"avg_retries={stats['avg_retries']}")
+        if test_fail_rate > 0:
+            signals.append(f"test_fail_rate={test_fail_rate:.2f}")
+        if gate_fail_rate > 0:
+            signals.append(f"gate_fail_rate={gate_fail_rate:.2f}")
+        if low_traceability_rate > 0:
+            signals.append(f"low_traceability_rate={low_traceability_rate:.2f}")
+        if low_coverage_rate > 0:
+            signals.append(f"low_coverage_rate={low_coverage_rate:.2f}")
+        if stats["avg_tokens"] > 6000:
+            signals.append(f"avg_tokens={stats['avg_tokens']}")
+        if stats["avg_score"] < 0.7:
+            signals.append(f"avg_score={stats['avg_score']}")
+        if not signals:
+            signals.append("stable_outcomes")
+        stats["signals"] = signals
+        return stats
+
+    def _auto_prompt_rules(self, stats: dict[str, Any]) -> list[str]:
+        rules = [
+            "Start from the PRISM context pack and preserve MCP tool contracts.",
+        ]
+        if stats["avg_retries"] > 0 or stats["gate_fail_rate"] > 0:
+            rules.append(
+                "Before editing, identify the smallest behavior change and inspect the directly affected files."
+            )
+        if stats["test_fail_rate"] > 0 or stats["gate_fail_rate"] > 0:
+            rules.append(
+                "Before completion, run the narrowest relevant verification command and report the exact result."
+            )
+        if stats["low_traceability_rate"] > 0:
+            rules.append(
+                "Map each requirement to the files or tests that prove it before declaring the task done."
+            )
+        if stats["low_coverage_rate"] > 0:
+            rules.append(
+                "Prefer adding or updating focused regression tests when behavior changes."
+            )
+        if stats["avg_tokens"] > 6000:
+            rules.append(
+                "Keep context compact: cite only source files and PRISM memories that directly affect the change."
+            )
+        if stats["avg_score"] < 0.7:
+            rules.append(
+                "Call out residual risk explicitly and avoid broad refactors unless required by the task."
+            )
+        if len(rules) == 1:
+            rules.append(
+                "Keep the existing working pattern, but make verification and residual risk explicit."
+            )
+        return rules
+
+    def _render_auto_prompt(
+        self,
+        *,
+        persona: str,
+        step_id: str,
+        current_prompt: str,
+        rules: list[str],
+    ) -> str:
+        base = current_prompt.strip()
+        if not base:
+            base = (
+                f"# {persona} {step_id}\n"
+                "Use PRISM MCP context, task state, memory, and Brain results "
+                "before acting."
+            )
+        bullets = "\n".join(f"- {rule}" for rule in rules)
+        return (
+            f"{base}\n\n"
+            "## Meta-Conductor adjustments\n"
+            "These deterministic adjustments were generated from PRISM outcome "
+            "signals, not by an LLM.\n"
+            f"{bullets}"
+        )
 
     def propose_meta_candidate(
         self,
