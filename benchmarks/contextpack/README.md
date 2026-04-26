@@ -8,8 +8,8 @@ gate for the PRISM persona system:
 - correct canonical persona dispatch
 - correct role card and response template
 - required MCP-first rules present
-- relevant Brain, Memory, and Task context included
-- unrelated role-specific context excluded
+- relevant Brain, Memory, and Task context included in the right channel
+- unrelated noise and other personas' role-specific context excluded
 - asset digests stable across repeated calls
 
 Run fast in-process:

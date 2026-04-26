@@ -23,6 +23,9 @@ def test_summary_averages_context_pack_metrics():
             "rules_score": 1.0,
             "determinism_score": 1.0,
             "context_recall": 1.0,
+            "brain_recall": 1.0,
+            "memory_recall": 1.0,
+            "task_recall": 1.0,
             "noise_rejection": 1.0,
         },
         {
@@ -30,6 +33,9 @@ def test_summary_averages_context_pack_metrics():
             "rules_score": 1.0,
             "determinism_score": 0.0,
             "context_recall": 0.5,
+            "brain_recall": 0.0,
+            "memory_recall": 0.5,
+            "task_recall": 1.0,
             "noise_rejection": 1.0,
         },
     ]
@@ -40,6 +46,9 @@ def test_summary_averages_context_pack_metrics():
     assert summary["rules_presence"] == 1.0
     assert summary["determinism"] == 0.5
     assert summary["context_recall"] == 0.75
+    assert summary["brain_recall"] == 0.5
+    assert summary["memory_recall"] == 0.75
+    assert summary["task_recall"] == 1.0
     assert summary["noise_rejection"] == 1.0
 
 
@@ -50,6 +59,9 @@ def test_failed_thresholds_reports_missing_and_leaked_tokens():
         "rules_presence": 1.0,
         "determinism": 1.0,
         "context_recall": 0.75,
+        "brain_recall": 1.0,
+        "memory_recall": 0.5,
+        "task_recall": 1.0,
         "noise_rejection": 0.5,
     }
     per_case = [
@@ -63,9 +75,24 @@ def test_failed_thresholds_reports_missing_and_leaked_tokens():
     failures = mod.failed_thresholds(summary, per_case)
 
     assert any("context_recall" in f for f in failures)
+    assert any("memory_recall" in f for f in failures)
     assert any("noise_rejection" in f for f in failures)
     assert any("missing" in f and "DEV_MEMORY_MCP_FIRST" in f for f in failures)
     assert any("leaked" in f and "SM_SCOPE_AC" in f for f in failures)
+
+
+def test_role_forbidden_tokens_include_other_persona_context():
+    mod = _load_module()
+    dev = next(case for case in mod.CASES if case.name == "dev")
+
+    forbidden = mod._role_forbidden_tokens(dev)
+
+    assert "NOISE_RED_HERRING" in forbidden
+    assert "QA_GATE_MATRIX" in forbidden
+    assert "QA_MEMORY_REGRESSION" in forbidden
+    assert "SM_SCOPE_AC" in forbidden
+    assert "ARCH_MCP_BOUNDARY" in forbidden
+    assert "DEV_REFUND_POLICY" not in forbidden
 
 
 def test_stable_pack_ignores_request_id_only():

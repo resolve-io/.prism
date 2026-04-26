@@ -46,8 +46,14 @@ class Case:
     canonical_persona: str
     role_card_id: str
     template_id: str
-    expected_tokens: tuple[str, ...]
+    brain_tokens: tuple[str, ...]
+    memory_tokens: tuple[str, ...]
+    task_tokens: tuple[str, ...]
     forbidden_tokens: tuple[str, ...] = ()
+
+    @property
+    def expected_tokens(self) -> tuple[str, ...]:
+        return self.brain_tokens + self.memory_tokens + self.task_tokens
 
 
 CASES = [
@@ -57,12 +63,9 @@ CASES = [
         canonical_persona="dev",
         role_card_id="role-card:dev",
         template_id="template:dev-implementation",
-        expected_tokens=(
-            "DEV_REFUND_POLICY",
-            "DEV_MEMORY_MCP_FIRST",
-            "TASK_CONTEXT_BENCH",
-            "NEXT_CONTEXT_TASK",
-        ),
+        brain_tokens=("DEV_REFUND_POLICY",),
+        memory_tokens=("DEV_MEMORY_MCP_FIRST",),
+        task_tokens=("TASK_CONTEXT_BENCH", "NEXT_CONTEXT_TASK"),
         forbidden_tokens=("NOISE_RED_HERRING",),
     ),
     Case(
@@ -71,12 +74,9 @@ CASES = [
         canonical_persona="qa",
         role_card_id="role-card:qa",
         template_id="template:qa-gate",
-        expected_tokens=(
-            "QA_GATE_MATRIX",
-            "QA_MEMORY_REGRESSION",
-            "TASK_CONTEXT_BENCH",
-            "NEXT_CONTEXT_TASK",
-        ),
+        brain_tokens=("QA_GATE_MATRIX",),
+        memory_tokens=("QA_MEMORY_REGRESSION",),
+        task_tokens=("TASK_CONTEXT_BENCH", "NEXT_CONTEXT_TASK"),
         forbidden_tokens=("NOISE_RED_HERRING",),
     ),
     Case(
@@ -85,12 +85,9 @@ CASES = [
         canonical_persona="sm",
         role_card_id="role-card:sm",
         template_id="template:sm-task",
-        expected_tokens=(
-            "SM_SCOPE_AC",
-            "SM_MEMORY_ACCEPTANCE",
-            "TASK_CONTEXT_BENCH",
-            "NEXT_CONTEXT_TASK",
-        ),
+        brain_tokens=("SM_SCOPE_AC",),
+        memory_tokens=("SM_MEMORY_ACCEPTANCE",),
+        task_tokens=("TASK_CONTEXT_BENCH", "NEXT_CONTEXT_TASK"),
         forbidden_tokens=("NOISE_RED_HERRING",),
     ),
     Case(
@@ -99,15 +96,22 @@ CASES = [
         canonical_persona="architect",
         role_card_id="role-card:architect",
         template_id="template:architect-decision",
-        expected_tokens=(
-            "ARCH_MCP_BOUNDARY",
-            "ARCH_MEMORY_SERVICE_OWNED",
-            "TASK_CONTEXT_BENCH",
-            "NEXT_CONTEXT_TASK",
-        ),
+        brain_tokens=("ARCH_MCP_BOUNDARY",),
+        memory_tokens=("ARCH_MEMORY_SERVICE_OWNED",),
+        task_tokens=("TASK_CONTEXT_BENCH", "NEXT_CONTEXT_TASK"),
         forbidden_tokens=("NOISE_RED_HERRING",),
     ),
 ]
+
+
+def _role_forbidden_tokens(case: Case) -> tuple[str, ...]:
+    tokens: list[str] = list(case.forbidden_tokens)
+    for other in CASES:
+        if other.name == case.name:
+            continue
+        tokens.extend(other.brain_tokens)
+        tokens.extend(other.memory_tokens)
+    return tuple(dict.fromkeys(tokens))
 
 
 DOCS = [
@@ -355,9 +359,23 @@ def score_case(client: Client, case: Case) -> dict[str, Any]:
     deterministic_ok = deterministic_ok and stable_first["rules"] == stable_second["rules"]
     deterministic_ok = deterministic_ok and stable_first["template"] == stable_second["template"]
 
-    context_text = _flatten(pack["relevant_context"])
-    hits = [token for token in case.expected_tokens if token in context_text]
-    leaks = [token for token in case.forbidden_tokens if token in context_text]
+    relevant_context = pack["relevant_context"]
+    context_text = _flatten(relevant_context)
+    brain_text = str(relevant_context.get("brain_context", ""))
+    memory_text = _flatten(relevant_context.get("memory", []))
+    task_text = _flatten(relevant_context.get("active_tasks", {}))
+
+    brain_hits = [token for token in case.brain_tokens if token in brain_text]
+    memory_hits = [token for token in case.memory_tokens if token in memory_text]
+    task_hits = [token for token in case.task_tokens if token in task_text]
+    hits = brain_hits + memory_hits + task_hits
+    forbidden_tokens = _role_forbidden_tokens(case)
+    leaks = [token for token in forbidden_tokens if token in context_text]
+    missing_by_channel = {
+        "brain": [token for token in case.brain_tokens if token not in brain_hits],
+        "memory": [token for token in case.memory_tokens if token not in memory_hits],
+        "tasks": [token for token in case.task_tokens if token not in task_hits],
+    }
 
     return {
         "case": case.name,
@@ -367,10 +385,18 @@ def score_case(client: Client, case: Case) -> dict[str, Any]:
         "rules_score": 1.0 if rules_ok else 0.0,
         "determinism_score": 1.0 if deterministic_ok else 0.0,
         "context_recall": len(hits) / len(case.expected_tokens),
-        "noise_rejection": 1.0 - (len(leaks) / len(case.forbidden_tokens) if case.forbidden_tokens else 0.0),
+        "brain_recall": len(brain_hits) / len(case.brain_tokens),
+        "memory_recall": len(memory_hits) / len(case.memory_tokens),
+        "task_recall": len(task_hits) / len(case.task_tokens),
+        "noise_rejection": 1.0 - (len(leaks) / len(forbidden_tokens) if forbidden_tokens else 0.0),
         "expected_hits": hits,
+        "brain_hits": brain_hits,
+        "memory_hits": memory_hits,
+        "task_hits": task_hits,
         "missing_expected": [t for t in case.expected_tokens if t not in hits],
+        "missing_by_channel": missing_by_channel,
         "forbidden_hits": leaks,
+        "forbidden_checked": list(forbidden_tokens),
         "asset_versions": first["asset_versions"],
     }
 
@@ -382,6 +408,9 @@ def summarize(per_case: list[dict[str, Any]]) -> dict[str, Any]:
         "rules_presence": sum(c["rules_score"] for c in per_case) / n,
         "determinism": sum(c["determinism_score"] for c in per_case) / n,
         "context_recall": sum(c["context_recall"] for c in per_case) / n,
+        "brain_recall": sum(c["brain_recall"] for c in per_case) / n,
+        "memory_recall": sum(c["memory_recall"] for c in per_case) / n,
+        "task_recall": sum(c["task_recall"] for c in per_case) / n,
         "noise_rejection": sum(c["noise_rejection"] for c in per_case) / n,
     }
     summary["case_count"] = len(per_case)
@@ -389,9 +418,11 @@ def summarize(per_case: list[dict[str, Any]]) -> dict[str, Any]:
         summary["persona_accuracy"]
         + summary["rules_presence"]
         + summary["determinism"]
-        + summary["context_recall"]
+        + summary["brain_recall"]
+        + summary["memory_recall"]
+        + summary["task_recall"]
         + summary["noise_rejection"]
-    ) / 5
+    ) / 7
     return summary
 
 
@@ -402,6 +433,9 @@ def failed_thresholds(summary: dict[str, float], per_case: list[dict[str, Any]])
         "rules_presence": 1.0,
         "determinism": 1.0,
         "context_recall": 1.0,
+        "brain_recall": 1.0,
+        "memory_recall": 1.0,
+        "task_recall": 1.0,
         "noise_rejection": 1.0,
     }
     for metric, threshold in hard_thresholds.items():
@@ -467,6 +501,9 @@ def main() -> int:
     print(
         "RESULT contextpack "
         f"context_recall={summary['context_recall']:.3f} "
+        f"brain={summary['brain_recall']:.3f} "
+        f"memory={summary['memory_recall']:.3f} "
+        f"tasks={summary['task_recall']:.3f} "
         f"persona={summary['persona_accuracy']:.3f} "
         f"rules={summary['rules_presence']:.3f} "
         f"determinism={summary['determinism']:.3f} "

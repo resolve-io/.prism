@@ -30,13 +30,13 @@ docker compose up -d --build
 
 | Dir | Dataset | Metric | Status |
 |---|---|---|---|
-| `contextpack/` | Seeded PRISM persona/context fixture | persona accuracy, context recall, leakage, determinism | active |
+| `contextpack/` | Seeded PRISM persona/context fixture | persona accuracy, Brain/Memory/Task recall, leakage, determinism | active |
 | `swebench/` | SWE-bench (file localization) | R@k on patched files | planned |
 
 `contextpack/` is the context-management gate: it verifies the actual
 `context_bundle` payload an agent receives has the correct persona frame,
-MCP-first rules, relevant Brain/Memory/Task context, no unrelated noise, and
-stable asset digests.
+MCP-first rules, channel-specific Brain/Memory/Task context, no unrelated
+noise, and stable asset digests.
 
 ## Conventions
 
