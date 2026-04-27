@@ -43,6 +43,14 @@ def start_drift_timer():
     project whose Brain.incremental_reindex returns >0 gets its
     reindexed count logged so ops can see the loop is earning its keep.
     PRISM_DRIFT_INTERVAL=0 disables entirely.
+
+    Per project we keep a *dedicated* Brain instance with its own
+    SQLite connections, distinct from the BrainService that request
+    handlers use. Reindex writes can take seconds (embedding compute +
+    FTS insert + graph mutate) and SQLite serializes operations on a
+    single connection's mutex; sharing connections with the request
+    path produced the customer hang in issue #38 — every MCP worker
+    parked behind the drift thread's open transaction.
     """
     import sys as _sys
     import time
@@ -51,16 +59,28 @@ def start_drift_timer():
               file=_sys.stderr)
         return
     from app.project_context import get_project, get_all_projects
+    from app.engines.brain_engine import Brain
     print(
         f"Drift timer running every {DRIFT_INTERVAL_SECONDS}s",
         file=_sys.stderr,
     )
+    drift_brains: dict[str, Brain] = {}
     while True:
         try:
             for pid in get_all_projects():
                 try:
                     ctx = get_project(pid)
-                    n = ctx.brain_svc.incremental_reindex()
+                    db_dir = ctx._data_dir
+                    brain = drift_brains.get(pid)
+                    if brain is None:
+                        brain = Brain(
+                            brain_db=str(db_dir / "brain.db"),
+                            graph_db=str(db_dir / "graph.db"),
+                            scores_db=str(db_dir / "scores.db"),
+                            tasks_db=str(db_dir / "tasks.db"),
+                        )
+                        drift_brains[pid] = brain
+                    n = brain.incremental_reindex()
                     if n:
                         print(
                             f"[drift] {pid}: reindexed {n} drifted file(s)",
@@ -130,12 +150,47 @@ from app.ui import (
 _LOCK_FILE = DATA_DIR / ".mcp_started"
 
 
+def _install_stackdump_handler() -> None:
+    """Dump every thread's stack to stderr on SIGUSR1.
+
+    Lets operators capture what workers are blocked on without having
+    to ``docker exec`` the container and run py-spy. Requested in
+    issue #38 — the customer hung with all threads parked on a SQLite
+    mutex and there was no way to confirm without external tooling.
+    """
+    import signal
+    import sys as _sys
+    import traceback
+
+    if not hasattr(signal, "SIGUSR1"):
+        # Windows / non-POSIX — silently skip.
+        return
+
+    def _dump(_signum, _frame):
+        frames = _sys._current_frames()
+        out = [f"=== thread stack dump ({len(frames)} threads) ==="]
+        thread_names = {t.ident: t.name for t in threading.enumerate()}
+        for tid, frame in frames.items():
+            name = thread_names.get(tid, "?")
+            out.append(f"\n# Thread {tid} ({name})")
+            out.append("".join(traceback.format_stack(frame)))
+        out.append("=== end stack dump ===\n")
+        print("\n".join(out), file=_sys.stderr, flush=True)
+
+    try:
+        signal.signal(signal.SIGUSR1, _dump)
+    except (ValueError, OSError):
+        # signal.signal raises if not on the main thread — best-effort.
+        pass
+
+
 @app.on_startup
 async def startup():
     if _LOCK_FILE.exists():
         return
     try:
         _LOCK_FILE.write_text(str(threading.get_ident()))
+        _install_stackdump_handler()
         threading.Thread(target=start_mcp_server, daemon=True).start()
         threading.Thread(target=start_governance_timer, daemon=True).start()
         threading.Thread(target=start_drift_timer, daemon=True).start()

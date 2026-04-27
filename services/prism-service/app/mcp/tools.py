@@ -1790,12 +1790,23 @@ _NO_AUGMENT_TOOLS: frozenset[str] = frozenset({
 async def handle_tool(name: str, arguments: dict, *, project_id: str = "default") -> list[TextContent]:
     """Outer MCP entry point. Dispatches to :func:`_dispatch_tool`, then
     lets :func:`_maybe_augment_with_nudge` prepend a pending-reflection
-    header when appropriate (LL-09)."""
-    result = await _dispatch_tool(name, arguments, project_id=project_id)
+    header when appropriate (LL-09).
+
+    All real work runs in the default thread pool — every dispatch arm
+    does sync sqlite I/O, so executing them on uvicorn's event loop
+    would let a slow/contended SQLite call freeze the accept loop and
+    silently drop new MCP requests at the kernel layer (issue #38).
+    """
+    import asyncio as _aio
+    result = await _aio.to_thread(
+        _dispatch_tool, name, arguments, project_id=project_id,
+    )
     if name in _NO_AUGMENT_TOOLS:
         return result
     try:
-        return _maybe_augment_with_nudge(result, project_id=project_id)
+        return await _aio.to_thread(
+            _maybe_augment_with_nudge, result, project_id=project_id,
+        )
     except Exception:
         # Augmentation is strictly advisory — any failure here must not
         # affect the tool result the caller actually needs.
@@ -1832,7 +1843,7 @@ def _maybe_augment_with_nudge(
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(minutes=5)).isoformat()
 
-    conn = _sq3.connect(scores_path)
+    conn = _sq3.connect(scores_path, timeout=5.0)
     conn.row_factory = _sq3.Row
     try:
         # Oldest pending candidate not nudged in the last 5 min.
@@ -1866,10 +1877,13 @@ def _maybe_augment_with_nudge(
     return [TextContent(type="text", text=augmented_text)] + list(result[1:])
 
 
-async def _dispatch_tool(name: str, arguments: dict, *, project_id: str = "default") -> list[TextContent]:
+def _dispatch_tool(name: str, arguments: dict, *, project_id: str = "default") -> list[TextContent]:
     """Dispatch an MCP tool call to the appropriate service method.
 
-    The *project_id* scopes all data access to the correct project.
+    Sync by design — invoked via ``asyncio.to_thread`` from
+    :func:`handle_tool` so the uvicorn event loop is never blocked on
+    SQLite I/O. The *project_id* scopes all data access to the correct
+    project.
     """
     from app.project_context import get_project, get_all_projects, create_project
 
@@ -2237,7 +2251,6 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
             return [TextContent(type="text", text=_json(status))]
 
         if name == "prism_refresh":
-            import asyncio as _aio
             ctx = get_project(project_id)
             files = arguments.get("files") or {}
             default_domain = arguments.get("domain") or "code"
@@ -2252,11 +2265,12 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                         break
                     if not isinstance(content, str):
                         continue
-                    # asyncio.to_thread releases the event loop so
-                    # concurrent prism_status / brain_search calls
-                    # don't queue behind this CPU-bound ingest.
-                    await _aio.to_thread(
-                        ctx.brain_svc.index_doc,
+                    # _dispatch_tool already runs in a worker thread
+                    # (handle_tool wraps it in asyncio.to_thread), so
+                    # concurrent prism_status / brain_search calls run
+                    # on other workers and don't queue behind this
+                    # CPU-bound ingest.
+                    ctx.brain_svc.index_doc(
                         path=path, content=content, domain=default_domain,
                     )
                     indexed += 1
@@ -2265,8 +2279,7 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 elif skip_graph:
                     summary = {"graph_skipped": True}
                 else:
-                    summary = await _aio.to_thread(
-                        ctx.graph_svc.rebuild,
+                    summary = ctx.graph_svc.rebuild(
                         brain_db_path=str(ctx._data_dir / "brain.db"),
                     )
             finally:
@@ -2275,7 +2288,6 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
             return [TextContent(type="text", text=_json(summary))]
 
         if name == "prism_bulk_refresh":
-            import asyncio as _aio
             import os as _os
             ctx = get_project(project_id)
             files = arguments.get("files") or {}
@@ -2307,8 +2319,7 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                     for path, content in batch:
                         if not isinstance(content, str):
                             continue
-                        await _aio.to_thread(
-                            ctx.brain_svc.index_doc,
+                        ctx.brain_svc.index_doc(
                             path=path, content=content, domain=default_domain,
                         )
                         indexed += 1
@@ -2319,8 +2330,7 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                         "graph_skipped": True,
                     }
                 else:
-                    summary = await _aio.to_thread(
-                        ctx.graph_svc.rebuild,
+                    summary = ctx.graph_svc.rebuild(
                         brain_db_path=str(ctx._data_dir / "brain.db"),
                     )
             finally:

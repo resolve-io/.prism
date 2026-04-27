@@ -608,6 +608,10 @@ class Brain:
         conn = sqlite3.connect(path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        # Cap waiters on the per-connection mutex / writer lock so a stuck
+        # transaction surfaces as SQLITE_BUSY instead of stalling the
+        # uvicorn event loop indefinitely (see issue #38).
+        conn.execute("PRAGMA busy_timeout=5000")
         # Register identifier-expander so FTS5 triggers can call it.
         # Deterministic: same input always yields same output (pure fn).
         try:

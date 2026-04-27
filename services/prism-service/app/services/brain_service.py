@@ -467,7 +467,7 @@ class BrainService:
             return result
 
         try:
-            conn = sqlite3.connect(self._brain_db)
+            conn = sqlite3.connect(self._brain_db, timeout=5.0)
             row = conn.execute("SELECT COUNT(*) FROM docs").fetchone()
             result["doc_count"] = row[0] if row else 0
             try:
@@ -482,7 +482,7 @@ class BrainService:
             pass
 
         try:
-            conn = sqlite3.connect(self._graph_db)
+            conn = sqlite3.connect(self._graph_db, timeout=5.0)
             row = conn.execute(
                 "SELECT COUNT(*) FROM entities"
             ).fetchone()

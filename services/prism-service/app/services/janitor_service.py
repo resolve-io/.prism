@@ -82,6 +82,7 @@ class JanitorService:
         self._db = sqlite3.connect(scores_db, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("PRAGMA busy_timeout=5000")
         self._clock: Callable[[], datetime] = clock or _now_utc
 
     # ------------------------------------------------------------------

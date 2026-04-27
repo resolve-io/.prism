@@ -41,7 +41,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           background: rgba(15,15,26,0.8); border: 1px solid #2a2a4e;
           border-radius: 6px; font-size: 11px; z-index: 10; color: #9ca3af; }
   /* Right-side legend panel — matches graphify's graph.html styling
-     so users can see cluster labels + toggle communities on/off. */
+     so users can see cluster labels + toggle clusters on/off. */
   #sidebar { width: 280px; background: #1a1a2e; border-left: 1px solid #2a2a4e;
              display: flex; flex-direction: column; overflow: hidden; }
   #sidebar h3 { font-size: 12px; color: #aaa; margin: 0 0 10px 0;
@@ -69,7 +69,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 </div>
 <aside id="sidebar">
   <div id="legend-wrap">
-    <h3>Communities</h3>
+    <h3>Clusters</h3>
     <div id="legend-list"></div>
   </div>
   <div id="sidebar-stats">Loading...</div>
@@ -161,7 +161,8 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   }
   // communities.json returns DB-derived labels ({id, label, count}) so
   // the sidebar legend reads like graphify's graph.html did. Loaded in
-  // parallel; if it fails we still render the graph but show ids only.
+  // parallel; if it fails we still render the graph but mark clusters as
+  // unlabeled instead of exposing graphify's raw numeric community ids.
   Promise.all([
     fetch(`/graphify-visual/${PROJECT_ID}/graph.json`)
       .then(r => { if (!r.ok) throw new Error("graph.json " + r.status); return r.json(); }),
@@ -173,6 +174,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       const g = new Graph();
       const rawNodes = data.nodes || [];
       const edges = data.links || data.edges || [];
+      const labelMap = new Map();
+      for (const c of (commData.communities || [])) {
+        labelMap.set(c.id, c.label);
+        labelMap.set(String(c.id), c.label);
+      }
+      const clusterLabel = community =>
+        labelMap.get(community) || labelMap.get(String(community))
+        || "unlabeled cluster";
       // Drop graphify's community-summary rationale nodes — they're prose
       // blobs graphify attaches per community, not actual code, and they
       // inflate the graph by ~40% while adding no navigational value.
@@ -221,6 +230,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           size: 2.5 + 0.8 * norm,
           color: shadeByDegree(colorFor(n.community), norm),
           community: n.community ?? null,
+          communityLabel: clusterLabel(n.community),
           x: pos.x, y: pos.y,
         });
       }
@@ -363,7 +373,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           neighborSet = new Set(g.neighbors(node));
           const attrs = g.getNodeAttributes(node);
           statusEl.textContent = `${attrs.label} `
-            + `(community ${attrs.community ?? "—"}, `
+            + `(cluster: ${attrs.communityLabel || "unlabeled cluster"}, `
             + `degree ${g.degree(node)}) — `
             + `click empty space to clear focus`;
           renderer.refresh();
@@ -390,14 +400,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           if (c === null || c === undefined) return;
           counts.set(c, (counts.get(c) || 0) + 1);
         });
-        const labelMap = new Map();
-        for (const c of (commData.communities || [])) {
-          labelMap.set(c.id, c.label);
-        }
         const ranked = [...counts.entries()]
           .map(([cid, n]) => ({
             cid, n,
-            label: labelMap.get(cid) || `community ${cid}`,
+            label: clusterLabel(cid),
             color: colorFor(cid),
           }))
           .sort((a, b) => b.n - a.n);
@@ -434,7 +440,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           listEl.appendChild(item);
         }
         document.getElementById("sidebar-stats").textContent =
-          `${ranked.length.toLocaleString()} communities · `
+          `${ranked.length.toLocaleString()} clusters · `
           + `${nodes.length.toLocaleString()} nodes · `
           + `${edgesDrawn.toLocaleString()} edges`;
       }, 50);

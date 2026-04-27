@@ -443,7 +443,7 @@ class GraphService:
         Returns the number of files staged. Safe to call repeatedly.
         """
         try:
-            conn = sqlite3.connect(brain_db_path)
+            conn = sqlite3.connect(brain_db_path, timeout=5.0)
             conn.row_factory = sqlite3.Row
         except sqlite3.Error:
             return 0
@@ -667,7 +667,7 @@ class GraphService:
             if tgt:
                 in_degree[tgt] = in_degree.get(tgt, 0) + 1
 
-        conn = sqlite3.connect(self._graph_db)
+        conn = sqlite3.connect(self._graph_db, timeout=5.0)
         conn.row_factory = sqlite3.Row
         try:
             _graph_schema_migrations(conn)

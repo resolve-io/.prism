@@ -64,6 +64,7 @@ class TaskService:
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("PRAGMA busy_timeout=5000")
         self._db.executescript(_CREATE_TASKS_SQL)
         self._migrate_task_columns()
         # Optional — when provided, task create/update embeds

@@ -47,6 +47,7 @@ class MemoryService:
         recall_db_path = Path(mulch_dir) / "recall_log.db"
         self._recall_db = sqlite3.connect(str(recall_db_path), check_same_thread=False)
         self._recall_db.execute("PRAGMA journal_mode=WAL")
+        self._recall_db.execute("PRAGMA busy_timeout=5000")
         self._recall_db.executescript(_CREATE_RECALL_LOG_SQL)
 
     # ------------------------------------------------------------------
