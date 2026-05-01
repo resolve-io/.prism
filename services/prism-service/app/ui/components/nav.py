@@ -21,6 +21,32 @@ body, .q-page, .nicegui-content {
 """
 
 
+def resolve_active_project(stored: str | None,
+                           qs_proj: str | None,
+                           projects: list[str]) -> str:
+    """Pick the active project for the nav selector.
+
+    Priority: query-string ?project= (if valid) > stored value (if still
+    valid) > first real project > 'default' sentinel. The sentinel is
+    only used in the truly-empty case where no projects are onboarded —
+    in that case the selector will still complain, which is the right
+    signal for "you have no projects yet."
+
+    Pure function so the resolution logic is unit-testable without
+    standing up NiceGUI. See #43: the previous code seeded the literal
+    string 'default' into storage on first visit, then passed it as the
+    select's `value=` while `options=` was the real project list, which
+    raised `ValueError: Invalid value: default` on every page.
+    """
+    if qs_proj and qs_proj in projects:
+        return qs_proj
+    if stored and stored in projects:
+        return stored
+    if projects:
+        return projects[0]
+    return 'default'
+
+
 def create_nav():
     """Shared navigation header with project selector and page links."""
     from app.project_context import get_all_projects
@@ -34,13 +60,18 @@ def create_nav():
         _qs_proj = _ctx.client.request.query_params.get('project')
     except Exception:
         _qs_proj = None
-    if _qs_proj:
-        app.storage.user['project'] = _qs_proj
-    elif 'project' not in app.storage.user:
-        app.storage.user['project'] = 'default'
 
-    current = app.storage.user['project']
-    projects = get_all_projects() or ['default']
+    projects = get_all_projects()
+    current = resolve_active_project(
+        stored=app.storage.user.get('project'),
+        qs_proj=_qs_proj,
+        projects=projects,
+    )
+    app.storage.user['project'] = current
+    if not projects:
+        # Empty-state fallback so the selector has at least one option.
+        # ui.select would otherwise show an empty dropdown.
+        projects = ['default']
 
     with ui.header().classes('items-center justify-between bg-indigo-700 px-6 shadow-md'):
         with ui.row().classes('items-center gap-3'):
