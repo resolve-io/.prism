@@ -495,7 +495,8 @@ class GraphService:
         except Exception:
             _ver = "unknown"
         out: dict = {"prism_version": _ver,
-                     "docs": 0, "code_docs": 0, "staged_files": 0,
+                     "docs": 0, "code_docs": 0, "code_files": 0,
+                     "staged_files": 0,
                      "entities": 0, "entities_with_graphify_id": 0,
                      "relationships": 0, "communities": 0,
                      "stale": False, "reasons": [],
@@ -503,10 +504,22 @@ class GraphService:
         try:
             b = _sq3.connect(brain_db_path); b.row_factory = _sq3.Row
             out["docs"] = b.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
-            out["code_docs"] = sum(1 for r in b.execute(
-                "SELECT source_file FROM docs"
-            ) if (r["source_file"] or "").lower().rsplit(".", 1)[-1]
-               in {s.lstrip(".") for s in GRAPHIFY_CODE_SUFFIXES})
+            # Multi-granular chunking emits N rows per source_file
+            # (`::__file__`, `::win_N`, `::EntityName`, ...). `code_docs`
+            # is therefore a chunk-row count; `code_files` counts unique
+            # source files. Keep both — the staleness heuristic below has
+            # to compare files-to-files, but operators may still want the
+            # raw row count for observability.
+            code_suffixes = {s.lstrip(".") for s in GRAPHIFY_CODE_SUFFIXES}
+            chunk_rows = 0
+            seen_code_files: set[str] = set()
+            for r in b.execute("SELECT source_file FROM docs"):
+                sf = r["source_file"] or ""
+                if sf.lower().rsplit(".", 1)[-1] in code_suffixes:
+                    chunk_rows += 1
+                    seen_code_files.add(sf)
+            out["code_docs"] = chunk_rows
+            out["code_files"] = len(seen_code_files)
             b.close()
         except _sq3.Error:
             pass
@@ -538,11 +551,14 @@ class GraphService:
         except _sq3.Error:
             pass
 
-        # Staleness heuristics (count-based fallbacks)
-        if out["code_docs"] > 0 and out["staged_files"] == 0:
+        # Staleness heuristics (count-based fallbacks). Both checks compare
+        # files-to-files: `code_docs` is a chunk-row count and would always
+        # exceed `staged_files` by ~10x on any non-trivial project, making
+        # the old heuristic permanently stuck on `stale: true` (#41).
+        if out["code_files"] > 0 and out["staged_files"] == 0:
             out["stale"] = True
             out["reasons"].append(
-                f"{out['code_docs']} code docs in Brain but staging dir is "
+                f"{out['code_files']} code files in Brain but staging dir is "
                 f"empty — call prism_sync to backfill + rebuild"
             )
         if out["entities"] > 0 and out["entities_with_graphify_id"] == 0:
@@ -551,10 +567,10 @@ class GraphService:
                 "graph.db has entities but none carry graphify_id — legacy "
                 "tree-sitter output; call graph_rebuild to refresh"
             )
-        if out["code_docs"] > 0 and out["staged_files"] < out["code_docs"] // 2:
+        if out["code_files"] > 0 and out["staged_files"] < out["code_files"] // 2:
             out["stale"] = True
             out["reasons"].append(
-                f"only {out['staged_files']}/{out['code_docs']} code docs "
+                f"only {out['staged_files']}/{out['code_files']} code files "
                 f"are staged — call prism_sync"
             )
 
