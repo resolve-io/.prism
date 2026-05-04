@@ -160,13 +160,23 @@ TOOLS: list[Tool] = [
             "Each result is {caller_name, caller_kind, caller_file, "
             "relation}. Use find_symbol() on a caller_name to fetch its "
             "chunk content. Replaces 'grep for foo(' with a semantic "
-            "query that respects function boundaries."
+            "query that respects function boundaries. By default skips "
+            "rationale-comment edges; set include_rationale=true to "
+            "include them when surfacing intent metadata."
         ),
         inputSchema={
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
                 "limit": {"type": "integer", "default": 20},
+                "include_rationale": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "Include rationale-comment edges "
+                        "(rationale_for relation). Default false."
+                    ),
+                },
             },
             "required": ["name"],
         },
@@ -175,10 +185,12 @@ TOOLS: list[Tool] = [
         name="brain_call_chain",
         description=(
             "Bounded BFS over the call graph starting at ``entity``. "
-            "Returns a flat edge list [{from, to, kind, relation, hop}] "
-            "so you can reconstruct 'what does this entity transitively "
-            "call'. Use to understand flow without Reading multiple "
-            "files."
+            "Returns a flat edge list [{from, to, kind, relation, hop, "
+            "direction}] so you can reconstruct call flow OR blast "
+            "radius. By default follows only ``calls`` edges and walks "
+            "forward (callees). Set direction='callers' to answer "
+            "'who would break if I change this?' or direction='both' "
+            "for full impact analysis."
         ),
         inputSchema={
             "type": "object",
@@ -187,6 +199,27 @@ TOOLS: list[Tool] = [
                 "depth": {"type": "integer", "default": 2,
                           "description": "max hops (default 2)"},
                 "limit": {"type": "integer", "default": 50},
+                "relation": {
+                    "type": "string",
+                    "default": "calls",
+                    "description": (
+                        "Edge-kind filter: 'calls' (default) follows "
+                        "only call edges; '*' (or empty) includes "
+                        "every relation kind; any other value (e.g. "
+                        "'uses', 'inherits') filters to that one kind."
+                    ),
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": ["callees", "callers", "both"],
+                    "default": "callees",
+                    "description": (
+                        "BFS direction. 'callees' (default) = forward "
+                        "call flow; 'callers' = blast radius (who "
+                        "calls this); 'both' = union, with each edge "
+                        "tagged by how it was discovered."
+                    ),
+                },
             },
             "required": ["entity"],
         },
@@ -391,13 +424,29 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="brain_graph",
-        description="Query the knowledge graph for entity relationships",
+        description=(
+            "Query the knowledge graph for entity relationships. By "
+            "default excludes rationale nodes (kind='rationale') so "
+            "graph traversal returns code-flow targets, not "
+            "graphify-extracted comment metadata."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
-                "entity": {"type": "string", "description": "Entity name to query"},
-                "relation": {"type": "string", "description": "Filter by relation type"},
-                "limit": {"type": "integer", "description": "Max results", "default": 10},
+                "entity": {"type": "string",
+                           "description": "Entity name to query"},
+                "relation": {"type": "string",
+                             "description": "Filter by relation type"},
+                "limit": {"type": "integer",
+                          "description": "Max results", "default": 10},
+                "include_rationale": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "Include rationale nodes (kind='rationale') "
+                        "in results. Default false."
+                    ),
+                },
             },
             "required": ["entity"],
         },
@@ -538,9 +587,27 @@ TOOLS: list[Tool] = [
             "(.claude/settings.json hooks block + hook scripts), step-by-step "
             "instructions, and verification steps. The MCP is self-describing "
             "— no external docs needed. Call this inside project_onboard's "
-            "flow or any time you want to re-install the client-side hooks."
+            "flow or any time you want to re-install the client-side hooks. "
+            "Pass `host_platform` (sys.platform of the host running Claude "
+            "Code) so hook commands use the right Python launcher: "
+            "`python3` on Linux/macOS, `py -3` on Windows. Default is "
+            "POSIX/`python3`."
         ),
-        inputSchema={"type": "object", "properties": {}},
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "host_platform": {
+                    "type": "string",
+                    "description": (
+                        "Host OS where the hooks will run. Accepts "
+                        "`sys.platform` values (`linux`, `darwin`, `win32`) "
+                        "or aliases (`windows`, `macos`, `posix`). Determines "
+                        "whether hook commands use `python3` (POSIX) or "
+                        "`py -3` (Windows, via the PEP 397 launcher)."
+                    ),
+                },
+            },
+        },
     ),
     Tool(
         name="prism_guide",
@@ -914,11 +981,211 @@ TOOLS: list[Tool] = [
                     "items": {"type": "string"},
                     "description": "Known project conventions to seed immediately",
                 },
+                "host_platform": {
+                    "type": "string",
+                    "description": (
+                        "Host OS where Claude Code (and therefore the "
+                        "PRISM hooks) will run. Accepts sys.platform "
+                        "values (`linux`, `darwin`, `win32`) or aliases "
+                        "(`windows`, `macos`, `posix`). Forwarded to "
+                        "prism_install so hook commands use `python3` on "
+                        "POSIX and `py -3` on Windows."
+                    ),
+                },
             },
             "required": ["project_name"],
         },
     ),
+    # ------------------------------------------------------------------
+    # Verifier — outer-harness sensor (Tier 0 tooling, Tier 1 records)
+    # ------------------------------------------------------------------
+    Tool(
+        name="verifier_run",
+        description=(
+            "Run the outer-harness verifier over the current project. "
+            "Tier 0 invokes the project's own tooling (ruff/mypy/pytest "
+            "for Python, eslint/tsc for JS/TS, cargo check for Rust, go "
+            "vet for Go) scoped to git-diff'd files. Tier 1 walks PRISM "
+            "tables (brain_index_doc claims, tasks marked done, memory "
+            "writes) since session start and confirms each claim against "
+            "current state. Returns a structured verdict per claim plus a "
+            "top-line status (pass | fail | partial | error). Designed to "
+            "fire from the Stop hook on every session — typical run is "
+            "<1s when no diff is in scope."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string",
+                    "description": "Claude Code session id; scopes Tier 1 claim collection."},
+                "task_id": {"type": "string",
+                    "description": "Optional task id this run is associated with."},
+                "since_iso": {"type": "string",
+                    "description": "Override start-of-window timestamp; default = "
+                                   "session_outcomes.timestamp or 1h ago."},
+                "baseline_rev": {"type": "string",
+                    "description": "Git revision to diff against for Tier 0 scope; "
+                                   "default = HEAD."},
+                "workspace": {"type": "string",
+                    "description": "Host project directory (${CLAUDE_PROJECT_DIR}). "
+                                   "Required so Tier 0 runs against the real source "
+                                   "tree, not the MCP container's cwd."},
+            },
+        },
+    ),
+    Tool(
+        name="verifier_history",
+        description=(
+            "Recent verifier runs, newest first. Filter by task_id to get "
+            "the per-task flywheel — what got verified, what failed, "
+            "trends in tier statuses over time. Used by the dashboard "
+            "and by agents inspecting their own history before reprompting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "limit": {"type": "integer", "default": 20},
+            },
+        },
+    ),
+    Tool(
+        name="verifier_feedback_summary",
+        description=(
+            "Unresolved improvement seeds from recent verifier runs — "
+            "the human-readable feedback strings the verifier emitted "
+            "for fail/partial claims. Surfaced as additionalContext by "
+            "the SessionStart hook so the agent picks up where the last "
+            "run left off."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "default": 50},
+            },
+        },
+    ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Tool profiles
+# ---------------------------------------------------------------------------
+
+INTERACTIVE_TOOL_NAMES: set[str] = {
+    "brain_search",
+    "brain_find_symbol",
+    "brain_outline",
+    "brain_find_references",
+    "brain_call_chain",
+    "prism_status",
+    "prism_sync",
+    "prism_guide",
+    "memory_store",
+    "memory_recall",
+    "task_create",
+    "task_list",
+    "task_next",
+    "task_update",
+    "workflow_state",
+    "workflow_advance",
+    "context_bundle",
+}
+
+ADMIN_TOOL_NAMES: set[str] = {
+    "project_list",
+    "project_create",
+    "project_onboard",
+    "prism_install",
+    "prism_refresh",
+    "prism_bulk_refresh",
+    "prism_cancel_pending",
+    "brain_index_doc",
+    "brain_list",
+    "brain_graph",
+    "graph_rebuild",
+    "verifier_run",
+    "verifier_history",
+}
+
+HOOK_TOOL_NAMES: set[str] = {
+    "record_session_outcome",
+    "record_skill_usage",
+    "record_outcome",
+    "record_subagent_outcome",
+    "verifier_feedback_summary",
+}
+
+LEARNING_TOOL_NAMES: set[str] = {
+    "brain_search_feedback",
+    "meta_conductor_brief",
+    "meta_conductor_propose",
+    "meta_conductor_evaluate",
+    "meta_conductor_auto",
+    "janitor_enqueue",
+    "janitor_mark_stale",
+    "janitor_check",
+    "janitor_submit",
+    "janitor_abandon",
+    "janitor_status",
+    "memory_invalidate",
+}
+
+AUTOMATION_TOOL_NAMES: set[str] = {
+    "prism_status",
+    "prism_refresh",
+    "graph_rebuild",
+    "task_list",
+    "task_update",
+    "brain_search_feedback",
+    "record_session_outcome",
+    "record_skill_usage",
+    "record_subagent_outcome",
+    "janitor_check",
+    "janitor_mark_stale",
+    "janitor_enqueue",
+    "verifier_run",
+}
+
+TOOL_PROFILE_ALIASES: dict[str, str] = {
+    "all": "all",
+    "default": "interactive",
+    "core": "interactive",
+    "interactive": "interactive",
+    "admin": "admin",
+    "project": "admin",
+    "hooks": "hooks",
+    "telemetry": "hooks",
+    "learning": "learning",
+    "automation": "automation",
+    "hooks_api": "automation",
+}
+
+
+def tool_names_for_profile(profile: str | None) -> set[str]:
+    """Return MCP tool names for a public profile name."""
+    profile_key = TOOL_PROFILE_ALIASES.get(
+        (profile or "interactive").strip().lower(),
+        "interactive",
+    )
+    all_names = {tool.name for tool in TOOLS}
+    if profile_key == "interactive":
+        return INTERACTIVE_TOOL_NAMES & all_names
+    if profile_key == "admin":
+        return ADMIN_TOOL_NAMES & all_names
+    if profile_key == "hooks":
+        return HOOK_TOOL_NAMES & all_names
+    if profile_key == "learning":
+        return LEARNING_TOOL_NAMES & all_names
+    if profile_key == "automation":
+        return AUTOMATION_TOOL_NAMES & all_names
+    return all_names
+
+
+def tools_for_profile(profile: str | None) -> list[Tool]:
+    """Return MCP tool definitions visible for a profile."""
+    allowed = tool_names_for_profile(profile)
+    return [tool for tool in TOOLS if tool.name in allowed]
 
 
 # ---------------------------------------------------------------------------
@@ -1177,6 +1444,8 @@ It's populated by calling `graph_rebuild()` after bulk-ingesting source.
 # Example flows
 
 ## Onboarding a brand-new project (FIRST session)
+Requires a maintenance profile such as `?tool_profile=all`.
+
 1. `project_list` → confirm slug unknown.
 2. `project_onboard(project_name="My App", sub_projects=[
      {"name": "api", "tech": "C#/.NET", "path": "/home/me/api"},
@@ -1197,13 +1466,15 @@ It's populated by calling `graph_rebuild()` after bulk-ingesting source.
 2. `brain_search("user authentication flow", limit=5)` → relevant files.
 3. `memory_recall("auth", limit=5)` → project auth rules.
 4. Write code.
-5. New files → `brain_index_doc` each → `graph_rebuild()` at end.
+5. Let the installed edit-learn hooks ingest changed files; use
+   `prism_status()` to check drift and `prism_sync()` if the graph is stale.
 6. `task_update(id=..., status="done")`.
 
 ## Debugging an incident
 1. `memory_recall("similar failure", limit=10)` — seen it before?
 2. `brain_search("<error message>", limit=5)` — in any doc?
-3. `brain_graph(entity="<suspected component>")` — who uses it?
+3. `brain_call_chain(entity="<suspected component>", direction="callers")` —
+   who uses it?
 4. Fix.
 5. `memory_store(type="failure", name="oauth-null-token", description="Root
     cause was X, observed at file.py:123, fix was Y.",
@@ -1297,7 +1568,7 @@ def _mcp_url_and_project(root: Path) -> tuple[str, str] | None:
 
 
 def _mcp_call(base: str, project: str, tool: str, args: dict) -> dict:
-    url = f"{base}/?project={project}"
+    url = f"{base}/?project={project}&tool_profile=automation"
     payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                "params": {"name": tool, "arguments": args}}
     req = urllib.request.Request(
@@ -1551,6 +1822,7 @@ _HOOK_LOGGER_SCRIPT = _load_asset("hook_logger.py")
 # graph_rebuild flushes them at session end.
 _EDIT_LEARN_HOOK_SCRIPT = _load_asset("edit_learn_hook.py")
 _IDLE_REBUILD_HOOK_SCRIPT = _load_asset("idle_rebuild_hook.py")
+_VERIFIER_HOOK_SCRIPT = _load_asset("verifier_hook.py")
 # LL-10 — subagent definition + slash command shipped alongside the
 # hook scripts so Claude has something to match on when it sees the
 # SessionStart additionalContext nudge or the MCP-response header.
@@ -1558,11 +1830,38 @@ _REFLECT_AGENT_MD = _load_asset("prism_reflect_agent.md")
 _REFLECT_COMMAND_MD = _load_asset("prism_reflect_command.md")
 
 
-def _install_manifest(project_id: str) -> dict:
+def _hook_python_cmd(host_platform: str | None) -> str:
+    """Pick the Python invocation that hook commands should use on the host.
+
+    PEP 394 makes `python3` canonical on POSIX (modern Linux distros and
+    Debian dropped bare `python`; only `/usr/bin/python3` ships).
+    PEP 397 makes `py.exe` canonical on Windows: it is installed by every
+    python.org installer, lives in PATH by default, and routes shebangs.
+    `python3.exe` does NOT ship by default on Windows, so the previous
+    `python3 ...` command broke every Windows host. `py -3 ...` works on
+    every supported Windows install and reads the shebang in our hooks
+    (`#!/usr/bin/env python3`) to pick the right interpreter.
+
+    Caller passes the host's platform (Claude Code knows its own OS).
+    Anything starting with `win` / `nt` is treated as Windows; everything
+    else (including None) falls back to POSIX `python3`.
+    """
+    token = (host_platform or "").strip().lower()
+    if token.startswith(("win", "nt")):
+        return "py -3"
+    return "python3"
+
+
+def _install_manifest(project_id: str, host_platform: str | None = None) -> dict:
     """Return the install manifest the agent should apply on first onboard.
     The PRISM service is the single source of truth — if the hook logic
-    changes in a future release, a re-onboard serves the new version."""
+    changes in a future release, a re-onboard serves the new version.
+
+    `host_platform` is the OS where Claude Code (and therefore the hooks)
+    will run. Pass `sys.platform` from the caller, or `"windows"` /
+    `"linux"` / `"darwin"`. Defaults to POSIX (`python3`)."""
     hook_script = _HOOK_SCRIPT.replace("__PRISM_VERSION__", PRISM_VERSION)
+    py = _hook_python_cmd(host_platform)
     # Claude Code reads hooks from .claude/settings.json under a top-level
     # "hooks" key. A bare .claude/hooks.json is ignored (only plugin-shipped
     # hooks/hooks.json is loaded, via a different code path). Wrap the event
@@ -1571,7 +1870,7 @@ def _install_manifest(project_id: str) -> dict:
         "SessionStart": [
             {
                 "type": "command",
-                "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/prism-sync.py",
+                "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-sync.py",
                 "timeout": 30000,
             },
         ],
@@ -1581,7 +1880,7 @@ def _install_manifest(project_id: str) -> dict:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/prism-feedback-signal.py",
+                        "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-feedback-signal.py",
                         "description": (
                             "Implicit retrieval feedback: correlate "
                             "brain_search results with Read/Edit and emit "
@@ -1595,7 +1894,7 @@ def _install_manifest(project_id: str) -> dict:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/prism-skill-usage.py",
+                        "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-skill-usage.py",
                         "description": (
                             "Record skill invocations to scores.db via "
                             "record_skill_usage — populates /skills."
@@ -1608,7 +1907,7 @@ def _install_manifest(project_id: str) -> dict:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/prism-edit-learn.py",
+                        "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-edit-learn.py",
                         "description": (
                             "Auto-ingest edited source files into Brain via "
                             "prism_refresh (skip_graph) so brain_search "
@@ -1624,7 +1923,7 @@ def _install_manifest(project_id: str) -> dict:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/prism-stop.py",
+                        "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-stop.py",
                         "description": (
                             "Record session-level metrics (duration, "
                             "tokens, files, skills) via "
@@ -1633,12 +1932,27 @@ def _install_manifest(project_id: str) -> dict:
                     },
                     {
                         "type": "command",
-                        "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/prism-idle-rebuild.py",
+                        "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-idle-rebuild.py",
                         "description": (
                             "Flush in-session edits into the code graph via "
                             "graph_rebuild iff the edit-learn hook left a "
                             "graph-dirty sentinel. One rebuild per session, "
                             "not per edit."
+                        ),
+                    },
+                    {
+                        "type": "command",
+                        "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-verifier.py",
+                        "description": (
+                            "Outer-harness verifier sensor. Tier 0 runs "
+                            "the project's own tooling (ruff, mypy, "
+                            "pytest, eslint, tsc, cargo check, go vet) "
+                            "on git-diff'd files; Tier 1 walks PRISM "
+                            "tables (brain_index_doc, tasks done, "
+                            "memory writes) and confirms each claim "
+                            "against current state. Advisory: writes "
+                            "verdict to .prism/verifier.log, never "
+                            "blocks the agent."
                         ),
                     },
                 ],
@@ -1649,7 +1963,7 @@ def _install_manifest(project_id: str) -> dict:
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/prism-subagent.py",
+                        "command": f"{py} ${{CLAUDE_PROJECT_DIR}}/.claude/hooks/prism-subagent.py",
                         "description": (
                             "Record sub-agent outcome (recommendation, "
                             "evidence count, timing) via "
@@ -1744,6 +2058,12 @@ def _install_manifest(project_id: str) -> dict:
                 "path": ".claude/hooks/prism-idle-rebuild.py",
                 "action": "upsert",
                 "content": _IDLE_REBUILD_HOOK_SCRIPT,
+                "mode": "0755",
+            },
+            {
+                "path": ".claude/hooks/prism-verifier.py",
+                "action": "upsert",
+                "content": _VERIFIER_HOOK_SCRIPT,
                 "mode": "0755",
             },
             # Shared logger: hooks call log_hook_failure() instead of the
@@ -2030,7 +2350,8 @@ def _dispatch_tool(name: str, arguments: dict, *, project_id: str = "default") -
 
             # Return direct imperative instructions as plain text.
             # This is NOT a report — Claude must execute these steps.
-            manifest = _install_manifest(project_id)
+            host_platform = arguments.get("host_platform")
+            manifest = _install_manifest(project_id, host_platform)
             files_list = "\n".join(
                 f"  - {f['path']} (action: {f['action']})"
                 for f in manifest["install_files"]
@@ -2169,6 +2490,7 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
             results = brain_svc.find_references(
                 name=arguments["name"],
                 limit=arguments.get("limit", 20),
+                include_rationale=arguments.get("include_rationale", False),
             )
             return [TextContent(type="text", text=_json(results))]
 
@@ -2177,6 +2499,8 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 entity=arguments["entity"],
                 depth=arguments.get("depth", 2),
                 limit=arguments.get("limit", 50),
+                relation=arguments.get("relation", "calls"),
+                direction=arguments.get("direction", "callees"),
             )
             return [TextContent(type="text", text=_json(results))]
 
@@ -2288,6 +2612,7 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 entity=arguments["entity"],
                 relation=arguments.get("relation"),
                 limit=arguments.get("limit", 10),
+                include_rationale=arguments.get("include_rationale", False),
             )
             return [TextContent(type="text", text=_json(results))]
 
@@ -2419,7 +2744,10 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
         if name == "prism_install":
             # Returns the client-side install manifest so the agent can
             # Write the hook files into the user's project directly.
-            return [TextContent(type="text", text=_json(_install_manifest(project_id)))]
+            host_platform = (arguments or {}).get("host_platform")
+            return [TextContent(type="text", text=_json(
+                _install_manifest(project_id, host_platform)
+            ))]
 
         if name == "prism_sync":
             ctx = get_project(project_id)
@@ -2432,6 +2760,36 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
         if name == "prism_guide":
             section = (arguments or {}).get("section", "").strip().lower() or None
             return [TextContent(type="text", text=_prism_guide(section))]
+
+        # ------------------------------------------------------------------
+        # Verifier — outer-harness sensor
+        # ------------------------------------------------------------------
+        if name == "verifier_run":
+            ctx = get_project(project_id)
+            args = arguments or {}
+            result = ctx.verifier_svc.run(
+                session_id=args.get("session_id"),
+                task_id=args.get("task_id"),
+                since_iso=args.get("since_iso"),
+                baseline_rev=args.get("baseline_rev"),
+                workspace=args.get("workspace"),
+            )
+            return [TextContent(type="text", text=_json(result))]
+
+        if name == "verifier_history":
+            ctx = get_project(project_id)
+            args = arguments or {}
+            rows = ctx.verifier_svc.history(
+                task_id=args.get("task_id"),
+                limit=int(args.get("limit", 20)),
+            )
+            return [TextContent(type="text", text=_json({"runs": rows}))]
+
+        if name == "verifier_feedback_summary":
+            ctx = get_project(project_id)
+            limit = int((arguments or {}).get("limit", 50))
+            seeds = ctx.verifier_svc.feedback_summary(limit=limit)
+            return [TextContent(type="text", text=_json({"seeds": seeds}))]
 
         # ------------------------------------------------------------------
         # Memory tools

@@ -9,11 +9,13 @@ If omitted, the "default" project is used.
 from __future__ import annotations
 
 import contextlib
+import json
 import uuid
 from collections.abc import AsyncIterator
 from urllib.parse import parse_qs
 
 import uvicorn
+from mcp.types import TextContent
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
@@ -25,7 +27,7 @@ from app.mcp.request_context import (
     get_request_context,
     use_request_context,
 )
-from app.mcp.tools import TOOLS, handle_tool
+from app.mcp.tools import handle_tool, tool_names_for_profile, tools_for_profile
 
 # ---------------------------------------------------------------------------
 # MCP Server instance
@@ -36,15 +38,22 @@ server = Server("prism-service")
 
 @server.list_tools()
 async def list_tools():
-    """Return all available PRISM tools."""
-    return TOOLS
+    """Return tools enabled for the current request profile."""
+    return tools_for_profile(get_request_context().tool_profile)
 
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict):
     """Dispatch a tool call to the handler, scoped to the current project."""
-    project_id = get_request_context().project_id
-    return await handle_tool(name, arguments, project_id=project_id)
+    ctx = get_request_context()
+    if name not in tool_names_for_profile(ctx.tool_profile):
+        return [TextContent(type="text", text=json.dumps({
+            "error": "Tool is not available for this MCP tool profile.",
+            "tool": name,
+            "tool_profile": ctx.tool_profile,
+            "hint": "Reconnect with ?tool_profile=all for maintenance-only tools.",
+        }, indent=2))]
+    return await handle_tool(name, arguments, project_id=ctx.project_id)
 
 
 # ---------------------------------------------------------------------------
@@ -75,10 +84,12 @@ async def handle_mcp(scope, receive, send):
 
     qs = parse_qs(scope.get("query_string", b"").decode())
     project_id = qs.get("project", [DEFAULT_PROJECT])[0]
+    tool_profile = qs.get("tool_profile", qs.get("profile", ["interactive"]))[0]
     request_ctx = PrismRequestContext(
         project_id=project_id,
         request_id=uuid.uuid4().hex,
         transport="mcp-http",
+        tool_profile=tool_profile,
     )
 
     with use_request_context(request_ctx):

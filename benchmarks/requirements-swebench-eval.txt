@@ -1,0 +1,7 @@
+# Optional SWE-bench evaluator deps.
+# Install only when running official patch scoring:
+#   benchmarks/.venv/Scripts/pip install -r benchmarks/requirements-swebench-eval.txt
+#
+# Official docs use `python -m swebench.harness.run_evaluation` for Docker
+# evaluation and `swebench[modal]` for Modal cloud evaluation.
+swebench>=3.0.0

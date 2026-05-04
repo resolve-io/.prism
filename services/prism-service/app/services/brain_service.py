@@ -174,11 +174,20 @@ class BrainService:
         entity: str,
         relation: Optional[str] = None,
         limit: int = 10,
+        include_rationale: bool = False,
     ) -> list[dict]:
-        """Query the knowledge graph."""
+        """Query the knowledge graph.
+
+        Rationale nodes (kind='rationale', graphify-extracted intent
+        comments) are excluded by default. Pass include_rationale=True
+        to include them.
+        """
         if not self._available or self._brain is None:
             return []
-        return self._brain.graph_query(entity, relation=relation, limit=limit)
+        return self._brain.graph_query(
+            entity, relation=relation, limit=limit,
+            include_rationale=include_rationale,
+        )
 
     def find_symbol(
         self,
@@ -199,20 +208,39 @@ class BrainService:
 
     def find_references(
         self, name: str, limit: int = 20,
+        include_rationale: bool = False,
     ) -> list[dict]:
-        """Return callers of ``name`` from the graph (caller_name/kind/file)."""
+        """Return callers of ``name`` from the graph (caller_name/kind/file).
+
+        Rationale-comment "callers" (rationale_for edges) are excluded
+        by default; pass include_rationale=True to surface them.
+        """
         if not self._available or self._brain is None:
             return []
-        return self._brain.find_references(name=name, limit=limit)
+        return self._brain.find_references(
+            name=name, limit=limit,
+            include_rationale=include_rationale,
+        )
 
     def call_chain(
-        self, entity: str, depth: int = 2, limit: int = 50,
+        self,
+        entity: str,
+        depth: int = 2,
+        limit: int = 50,
+        relation: str | list[str] | tuple[str, ...] | None = "calls",
+        direction: str = "callees",
     ) -> list[dict]:
-        """Bounded BFS over the call graph from ``entity``."""
+        """Bounded BFS over the call graph from ``entity``.
+
+        ``direction`` is the blast-radius primitive — ``"callees"``
+        (default) walks forward, ``"callers"`` walks backward (who would
+        break if I change ``entity``?), ``"both"`` unions the two.
+        """
         if not self._available or self._brain is None:
             return []
         return self._brain.call_chain(
-            entity=entity, depth=depth, limit=limit,
+            entity=entity, depth=depth, limit=limit, relation=relation,
+            direction=direction,
         )
 
     def record_session_outcome(
@@ -354,12 +382,17 @@ class BrainService:
         chunks = self._brain._chunk_source_file(path, content)
 
         first_doc_id = ""
+        seen_doc_ids: dict[str, int] = {}
         for chunk in chunks:
             doc_id = chunk["doc_id"]
             # Non-code files come back with doc_id == filepath (no "::").
             # Normalise to the legacy path::main form for prose compat.
             if "::" not in doc_id:
                 doc_id = f"{path}::main"
+            seen_count = seen_doc_ids.get(doc_id, 0)
+            seen_doc_ids[doc_id] = seen_count + 1
+            if seen_count:
+                doc_id = f"{doc_id}#dup_{seen_count + 1}"
             if not first_doc_id:
                 first_doc_id = doc_id
 
@@ -395,7 +428,7 @@ class BrainService:
             # pre-expanded form, corrupting any consumer of docs.content
             # (notably graph_service.backfill_from_brain).
             brain_conn.execute(
-                "INSERT INTO docs "
+                "INSERT OR REPLACE INTO docs "
                 "(id, source_file, content, domain, indexed_at, "
                 " entity_name, entity_kind, content_hash, "
                 " line_start, line_end) "

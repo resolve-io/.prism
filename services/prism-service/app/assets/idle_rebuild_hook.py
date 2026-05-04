@@ -53,7 +53,7 @@ def _mcp_url_and_project(root: Path) -> tuple[str, str] | None:
 
 def _mcp_call(base: str, project: str, tool: str, args: dict,
               timeout: float = 300.0) -> None:
-    url = f"{base}/?project={project}"
+    url = f"{base}/?project={project}&tool_profile=automation"
     payload = json.dumps({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": tool, "arguments": args},

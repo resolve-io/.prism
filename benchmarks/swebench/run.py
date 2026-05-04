@@ -101,9 +101,19 @@ def ensure_commit_checkout(repo: str, commit: str) -> Path:
     if marker.exists():
         return dest
     dest.mkdir(parents=True, exist_ok=True)
-    _run(["git", "init", "-q"], cwd=dest)
-    _run(["git", "remote", "add", "origin", f"https://github.com/{repo}.git"],
-         cwd=dest)
+    origin_url = f"https://github.com/{repo}.git"
+    if not (dest / ".git").exists():
+        _run(["git", "init", "-q"], cwd=dest)
+    remote = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=str(dest),
+        text=True,
+        capture_output=True,
+    )
+    if remote.returncode != 0:
+        _run(["git", "remote", "add", "origin", origin_url], cwd=dest)
+    elif remote.stdout.strip() != origin_url:
+        _run(["git", "remote", "set-url", "origin", origin_url], cwd=dest)
     # Try shallow fetch of the exact commit; fall back to full fetch if the
     # server disallows by-SHA (some older GitHub configs).
     try:

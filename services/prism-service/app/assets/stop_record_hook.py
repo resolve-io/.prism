@@ -51,7 +51,7 @@ def _mcp_url_and_project(root: Path) -> Optional[tuple[str, str]]:
 
 def _mcp_call(base: str, project: str, tool: str, args: dict,
               timeout: float = 4.0) -> None:
-    url = f"{base}/?project={project}"
+    url = f"{base}/?project={project}&tool_profile=automation"
     payload = json.dumps({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": tool, "arguments": args},
@@ -172,7 +172,98 @@ def main() -> int:
             "file_paths": [],
         },
     })
+    # Issue #49: feed the autonomous-learning loop. /learning and
+    # /consolidation read from task_quality_rollup and
+    # consolidation_candidates, both of which require:
+    #   1. tasks.merge_sha to be set (drives the quality-timer scoring)
+    #   2. janitor_enqueue to be called (drives consolidation candidates)
+    # Without a hook doing this, both pages stay empty forever after a
+    # fresh install. We do it here on Stop: tag every in-progress task
+    # that doesn't yet have a merge_sha with the current git HEAD, then
+    # enqueue it for consolidation. Idempotent — once tagged, skipped.
+    _tag_active_tasks_with_head(base, project, root)
     return 0
+
+
+def _git_head(root: Path) -> Optional[str]:
+    """Return the project's current HEAD commit SHA, or None on failure."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+        return out or None
+    except Exception:
+        return None
+
+
+def _tag_active_tasks_with_head(
+    base: str, project: str, root: Path,
+) -> None:
+    """Issue #49: tag in-progress tasks with HEAD + enqueue for consolidation.
+
+    Reads task_list, finds tasks where status='in_progress' and
+    merge_sha is empty/missing, and for each calls task_update with
+    merge_sha=HEAD then janitor_enqueue. Skips silently when no git
+    repo, no MCP, or no candidate tasks. Best-effort, advisory.
+    """
+    head = _git_head(root)
+    if not head:
+        return
+    # Use a longer timeout than the 4s default — task_list can be
+    # slow on large projects, and we have no UI latency budget here.
+    try:
+        url = f"{base}/?project={project}&tool_profile=automation"
+        payload = json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "task_list", "arguments": {}},
+        }).encode()
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30.0) as resp:
+            raw = resp.read().decode()
+    except Exception:
+        return
+    # Parse SSE wrapper or plain JSON
+    payload_text = raw
+    if "text/event-stream" in raw[:200] or raw.startswith("event:"):
+        for line in raw.splitlines():
+            if line.startswith("data: "):
+                payload_text = line[6:]
+                break
+    try:
+        body = json.loads(payload_text)
+        content = (body.get("result") or {}).get("content") or []
+        text = content[0].get("text", "") if content else ""
+        tasks = json.loads(text) if text else []
+    except Exception:
+        return
+    if not isinstance(tasks, list):
+        return
+    for t in tasks:
+        if not isinstance(t, dict):
+            continue
+        if t.get("status") != "in_progress":
+            continue
+        # Already tagged — skip (idempotency).
+        if t.get("merge_sha"):
+            continue
+        tid = t.get("id")
+        if not tid:
+            continue
+        _mcp_call(base, project, "task_update", {
+            "id": tid, "merge_sha": head,
+        })
+        _mcp_call(base, project, "janitor_enqueue", {
+            "task_id": tid,
+        })
 
 
 if __name__ == "__main__":

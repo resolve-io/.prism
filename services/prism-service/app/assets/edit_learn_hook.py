@@ -71,7 +71,7 @@ def _should_skip(rel_parts: tuple, suffix: str) -> bool:
 
 
 def _mcp_call(base: str, project: str, tool: str, args: dict) -> None:
-    url = f"{base}/?project={project}"
+    url = f"{base}/?project={project}&tool_profile=automation"
     payload = json.dumps({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": tool, "arguments": args},

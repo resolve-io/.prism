@@ -100,5 +100,6 @@ benchmarks/data/
 benchmarks/repos/
 benchmarks/results/
 benchmarks/.venv/
+benchmarks/.venv-wsl/
 services/bench-service/data-bench/
 .prism/feedback-buffer.jsonl

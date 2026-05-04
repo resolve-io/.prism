@@ -8,7 +8,7 @@ Use Brain (MCP) for all project knowledge — do not create static architecture 
 
 - `brain_search` — find code, docs, patterns across the project
 - `memory_recall` — recall conventions, decisions, and expertise
-- `brain_graph` — trace entity relationships (imports, calls, extends)
+- `brain_call_chain` — trace call flow and blast radius from the graph
 
 ## Key Conventions
 
@@ -30,7 +30,9 @@ Use Brain (MCP) for all project knowledge — do not create static architecture 
 
 ## MCP Service
 
-Running at `http://localhost:7777/mcp/?project=prism`. Start with:
+Running at `http://localhost:7777/mcp/?project=prism`. The default MCP profile
+is `interactive`, which exposes the compact agent-facing tool surface; use
+`tool_profile=all` only for admin or maintenance sessions. Start with:
 ```bash
 cd services/prism-service && docker compose up -d
 ```

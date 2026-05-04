@@ -91,6 +91,32 @@ def test_fts_still_finds_camelcase_partials(tmp_path):
     )
 
 
+def test_index_doc_suffixes_duplicate_chunk_ids(tmp_path):
+    """Redefined symbols can produce duplicate chunk IDs. Indexing should
+    keep both chunks instead of failing the whole bulk refresh.
+    """
+    svc = _service(tmp_path)
+    source = (
+        "class Duplicate:\n"
+        "    def first(self):\n"
+        "        return 1\n\n"
+        "class Duplicate:\n"
+        "    def second(self):\n"
+        "        return 2\n"
+    )
+
+    svc.index_doc(path="dupe.py", content=source, domain="code")
+
+    conn = sqlite3.connect(str(tmp_path / "brain.db"))
+    ids = [r[0] for r in conn.execute(
+        "SELECT id FROM docs WHERE source_file = 'dupe.py' ORDER BY id"
+    )]
+    conn.close()
+
+    assert "dupe.py::Duplicate" in ids
+    assert "dupe.py::Duplicate#dup_2" in ids
+
+
 def test_backfill_prefers_file_level_row(tmp_path):
     """Bug B: backfill_from_brain must stage the file-level content
     once per source_file, not overwrite it per chunk.

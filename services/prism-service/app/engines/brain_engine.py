@@ -795,6 +795,21 @@ class Brain:
             CREATE INDEX IF NOT EXISTS idx_rel_src ON relationships(source_id);
             CREATE INDEX IF NOT EXISTS idx_rel_tgt ON relationships(target_id);
         """)
+        # Apply the graphify-side schema extensions (confidence,
+        # confidence_score, weight, source_location, communities,
+        # graphify_id, etc.) so call_chain / graph_query can rely on
+        # those columns existing without depending on _import_graph_json
+        # having run first. Idempotent — each ALTER guards on
+        # PRAGMA table_info.
+        try:
+            from app.services.graph_service import _graph_schema_migrations
+            _graph_schema_migrations(self._graph)
+        except Exception:
+            # Tests with stripped imports / circular-import edge cases
+            # fall through silently — the SELECT will then raise and
+            # the call_chain except-clause returns []. Production has
+            # the import path available.
+            pass
 
     def _init_scores_schema(self) -> None:
         self._scores.executescript("""
@@ -2916,27 +2931,42 @@ class Brain:
         entity: str,
         relation: Optional[str] = None,
         limit: int = 10,
+        include_rationale: bool = False,
     ) -> list[dict]:
-        """Traverse entity relationships and return related entities."""
+        """Traverse entity relationships and return related entities.
+
+        ``include_rationale`` defaults to False so rationale nodes
+        (graphify-extracted ``# WHY:`` / ``# HACK:`` / ``# NOTE:``
+        comments stored as ``kind='rationale'``) don't pollute graph
+        traversal results — they account for ~43% of nodes in a typical
+        graph and answer different questions than code-flow traversal.
+        Pass ``True`` to surface them when intent metadata is the goal.
+        """
         ent_row = self._graph.execute(
             "SELECT id FROM entities WHERE name = ? LIMIT 1", (entity,)
         ).fetchone()
         if not ent_row:
             return []
         eid = ent_row["id"]
+        rat_clause = "" if include_rationale else (
+            " AND COALESCE(e.kind,'') != 'rationale'"
+        )
         try:
             if relation:
                 rows = self._graph.execute(
-                    "SELECT e.name, e.kind, e.file, r.relation FROM relationships r "
+                    "SELECT e.name, e.kind, e.file, r.relation "
+                    "FROM relationships r "
                     "JOIN entities e ON e.id = r.target_id "
-                    "WHERE r.source_id = ? AND r.relation = ? LIMIT ?",
+                    f"WHERE r.source_id = ? AND r.relation = ?{rat_clause} "
+                    "LIMIT ?",
                     (eid, relation, limit),
                 ).fetchall()
             else:
                 rows = self._graph.execute(
-                    "SELECT e.name, e.kind, e.file, r.relation FROM relationships r "
+                    "SELECT e.name, e.kind, e.file, r.relation "
+                    "FROM relationships r "
                     "JOIN entities e ON e.id = r.target_id "
-                    "WHERE r.source_id = ? LIMIT ?",
+                    f"WHERE r.source_id = ?{rat_clause} LIMIT ?",
                     (eid, limit),
                 ).fetchall()
             return [
@@ -3005,6 +3035,7 @@ class Brain:
 
     def find_references(
         self, name: str, limit: int = 20,
+        include_rationale: bool = False,
     ) -> list[dict]:
         """Return call sites referencing ``name`` via the graph.
 
@@ -3012,6 +3043,11 @@ class Brain:
         relationships. For each caller, returns its name/kind/file and
         the relation type. No chunk body — use find_symbol() on the
         returned caller names for content.
+
+        ``include_rationale`` defaults to False so ``rationale_for``
+        edges (rationale-comment → entity-it-explains) don't show up
+        as fake "callers". Pass True when looking for intent metadata
+        attached to ``name``.
         """
         try:
             tgt = self._graph.execute(
@@ -3019,12 +3055,15 @@ class Brain:
             ).fetchone()
             if not tgt:
                 return []
+            rat_clause = "" if include_rationale else (
+                " AND COALESCE(e.kind,'') != 'rationale'"
+            )
             rows = self._graph.execute(
                 "SELECT e.name AS caller_name, e.kind AS caller_kind, "
                 "e.file AS caller_file, r.relation AS relation "
                 "FROM relationships r "
                 "JOIN entities e ON e.id = r.source_id "
-                "WHERE r.target_id = ? LIMIT ?",
+                f"WHERE r.target_id = ?{rat_clause} LIMIT ?",
                 (tgt["id"], int(limit)),
             ).fetchall()
         except Exception:
@@ -3036,53 +3075,193 @@ class Brain:
         entity: str,
         depth: int = 2,
         limit: int = 50,
+        relation: str | list[str] | tuple[str, ...] | None = "calls",
+        direction: str = "callees",
     ) -> list[dict]:
         """Bounded BFS on the relationships graph starting at ``entity``.
 
-        Returns a flat list of edges [{from, to, kind, relation, hop}]
-        so the caller can reconstruct either tree or flat views. Hop 0
-        is the entity itself; hop 1 is direct callees; etc.
+        Returns a flat list of edges [{from, to, kind, relation, hop,
+        direction}] so the caller can reconstruct either tree or flat
+        views. Hop 1 is direct neighbours; hop 2 is neighbours-of-
+        neighbours; etc.
+
+        ``relation`` filters edges by their relation kind. Default is
+        ``"calls"`` so structural edges (``contains``/``method``/``uses``
+        /``imports_from``) don't eat the depth+limit budget. Pass
+        ``None`` or ``"*"`` for every kind; list/tuple for several kinds.
+
+        ``direction`` controls traversal:
+          * ``"callees"`` (default) — walk forward on source_id IN frontier;
+            answers "what does ``entity`` transitively call?"
+          * ``"callers"`` — walk backward on target_id IN frontier; the
+            blast-radius primitive — answers "who would break if I change
+            ``entity``?"
+          * ``"both"`` — union of the two; useful for impact analysis
+            that needs both upstream and downstream edges in one query.
+
+        Each edge carries its ``direction`` so callers of "both" can
+        partition the result.
         """
+        # Normalize the relation filter into a list of allowed kinds
+        # (or None meaning "no filter").
+        allowed: list[str] | None
+        if relation is None or relation == "*" or relation == "":
+            allowed = None
+        elif isinstance(relation, str):
+            allowed = [relation]
+        else:
+            allowed = [str(r) for r in relation if r]
+            if not allowed:
+                allowed = None
+
+        # Normalize direction; tolerate plurals and casing.
+        dir_norm = (direction or "callees").lower().strip()
+        if dir_norm in ("callee", "down", "forward", "out"):
+            dir_norm = "callees"
+        elif dir_norm in ("caller", "up", "reverse", "back", "in",
+                          "blast", "blast_radius"):
+            dir_norm = "callers"
+        elif dir_norm in ("bidirectional", "all", "either"):
+            dir_norm = "both"
+        if dir_norm not in ("callees", "callers", "both"):
+            dir_norm = "callees"
+
         try:
             start = self._graph.execute(
                 "SELECT id, name FROM entities WHERE name = ? LIMIT 1",
                 (entity,),
             ).fetchone()
+            # AC4: fuzzy fallback via norm_label so 'Brain.search()',
+            # 'Brain.search', and 'brain_search' all resolve to the same
+            # entity. norm_label is graphify-emitted (or derived during
+            # _import_graph_json), and the column may be absent on
+            # pre-AC4 graphs — wrap in try/except.
+            if not start:
+                try:
+                    from app.services.graph_service import (
+                        _derive_norm_label as _norm,
+                    )
+                    needle = _norm(entity)
+                    if needle:
+                        start = self._graph.execute(
+                            "SELECT id, name FROM entities "
+                            "WHERE norm_label = ? LIMIT 1",
+                            (needle,),
+                        ).fetchone()
+                except Exception:
+                    start = None
             if not start:
                 return []
-            visited = {start["id"]}
-            frontier = [start["id"]]
             edges: list[dict] = []
-            for hop in range(1, max(1, int(depth)) + 1):
-                if not frontier or len(edges) >= limit:
-                    break
-                placeholders = ",".join("?" * len(frontier))
-                rows = self._graph.execute(
-                    f"SELECT r.source_id AS src_id, "
-                    f"s.name AS src_name, t.name AS tgt_name, "
-                    f"t.kind AS tgt_kind, t.id AS tgt_id, "
-                    f"r.relation AS relation "
-                    f"FROM relationships r "
-                    f"JOIN entities s ON s.id = r.source_id "
-                    f"JOIN entities t ON t.id = r.target_id "
-                    f"WHERE r.source_id IN ({placeholders}) "
-                    f"LIMIT ?",
-                    (*frontier, int(limit) - len(edges)),
-                ).fetchall()
-                next_frontier: list[int] = []
-                for r in rows:
-                    edges.append({
-                        "from": r["src_name"], "to": r["tgt_name"],
-                        "kind": r["tgt_kind"], "relation": r["relation"],
-                        "hop": hop,
-                    })
-                    if r["tgt_id"] not in visited:
-                        visited.add(r["tgt_id"])
-                        next_frontier.append(r["tgt_id"])
-                frontier = next_frontier
+            seen_edges: set[tuple[int, int, str]] = set()
+            directions = (
+                ["callees", "callers"] if dir_norm == "both" else [dir_norm]
+            )
+            for one_dir in directions:
+                self._walk_chain(
+                    start_id=start["id"], depth=depth, limit=limit,
+                    allowed=allowed, direction=one_dir,
+                    edges=edges, seen_edges=seen_edges,
+                )
             return edges
         except Exception:
             return []
+
+    def _walk_chain(
+        self,
+        *,
+        start_id: int,
+        depth: int,
+        limit: int,
+        allowed: list[str] | None,
+        direction: str,
+        edges: list[dict],
+        seen_edges: set[tuple[int, int, str]],
+    ) -> None:
+        """One-direction BFS used by call_chain.
+
+        For ``direction='callees'`` the frontier is on source_id and we
+        advance via target_id (forward call flow). For ``'callers'`` it
+        flips: frontier on target_id, advance via source_id (reverse).
+        Edges are appended to the shared ``edges`` list; ``seen_edges``
+        de-dupes when called twice (direction='both' case).
+        """
+        # Pivot column the frontier matches against, and the column to
+        # advance to next hop.
+        if direction == "callers":
+            frontier_col = "r.target_id"
+            advance_col = "src_id"
+        else:
+            frontier_col = "r.source_id"
+            advance_col = "tgt_id"
+        visited = {start_id}
+        frontier = [start_id]
+        for hop in range(1, max(1, int(depth)) + 1):
+            if not frontier or len(edges) >= limit:
+                break
+            placeholders = ",".join("?" * len(frontier))
+            sql = (
+                "SELECT r.source_id AS src_id, "
+                "s.name AS src_name, t.name AS tgt_name, "
+                "t.kind AS tgt_kind, t.id AS tgt_id, "
+                "s.kind AS src_kind, "
+                "r.relation AS relation, r.target_id AS tgt_id_raw, "
+                "r.confidence AS confidence, "
+                "r.confidence_score AS confidence_score, "
+                "r.call_site_file AS call_site_file, "
+                "r.source_location AS call_site_location "
+                "FROM relationships r "
+                "JOIN entities s ON s.id = r.source_id "
+                "JOIN entities t ON t.id = r.target_id "
+                f"WHERE {frontier_col} IN ({placeholders})"
+            )
+            params: list = [*frontier]
+            if allowed is not None:
+                rel_placeholders = ",".join("?" * len(allowed))
+                sql += f" AND r.relation IN ({rel_placeholders})"
+                params.extend(allowed)
+            sql += " LIMIT ?"
+            params.append(int(limit) - len(edges))
+            rows = self._graph.execute(sql, params).fetchall()
+            next_frontier: list[int] = []
+            for r in rows:
+                key = (r["src_id"], r["tgt_id_raw"], r["relation"])
+                if key in seen_edges:
+                    continue
+                seen_edges.add(key)
+                # 'from' / 'to' always reflect the underlying call edge
+                # direction (caller → callee), regardless of traversal
+                # direction. The 'direction' field marks how this edge
+                # was discovered — useful when the caller passed
+                # direction='both' and wants to partition results.
+                # confidence_score may be NULL for edges from the
+                # legacy tree-sitter pass (graphify started populating
+                # it in v0.4.x). Coerce to a float so the API stays
+                # uniform; treat missing as 1.0 (extracted-with-no-doubt
+                # is the conservative interpretation for legacy edges).
+                conf_raw = r["confidence_score"]
+                conf_score = (
+                    float(conf_raw) if conf_raw is not None else 1.0
+                )
+                edges.append({
+                    "from": r["src_name"], "to": r["tgt_name"],
+                    "kind": r["tgt_kind"] if direction == "callees"
+                    else r["src_kind"],
+                    "relation": r["relation"],
+                    "confidence": r["confidence"] or "EXTRACTED",
+                    "confidence_score": conf_score,
+                    # AC5: per-edge call-site location. Empty string
+                    # for legacy edges that predate the column.
+                    "call_site_file": r["call_site_file"] or "",
+                    "call_site_location": r["call_site_location"] or "",
+                    "hop": hop,
+                    "direction": direction,
+                })
+                advance_id = r[advance_col]
+                if advance_id not in visited:
+                    visited.add(advance_id)
+                    next_frontier.append(advance_id)
+            frontier = next_frontier
 
     # ------------------------------------------------------------------
     # Ingest

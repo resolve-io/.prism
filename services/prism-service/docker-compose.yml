@@ -8,6 +8,14 @@ services:
       - ./data:/data
     environment:
       - PRISM_DATA_DIR=/data
+      # NiceGUI persists per-client storage under cwd/.nicegui by default.
+      # If cwd ever lands on a read-only mount (common when callers bind
+      # /project read-only and set working_dir there for `git diff`-style
+      # access), every storage-using page silently 500s with an
+      # OSError that doesn't surface to the browser. Pin storage to
+      # the writable /data volume so the failure mode can't recur.
+      # Closes resolve-io/.prism#48.
+      - NICEGUI_STORAGE_PATH=/data/.nicegui
       # MiniLM is the +11pt LongMemEval default (vs potion baseline).
       # Override per project if needed: potion | minilm | bge-small | jina-code
       - PRISM_EMBEDDER=${PRISM_EMBEDDER:-minilm}

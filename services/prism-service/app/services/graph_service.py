@@ -51,12 +51,27 @@ def _graph_schema_migrations(conn: sqlite3.Connection) -> None:
         ("file_type",       "ALTER TABLE entities ADD COLUMN file_type TEXT"),
         ("community",       "ALTER TABLE entities ADD COLUMN community INTEGER"),
         ("source_location", "ALTER TABLE entities ADD COLUMN source_location TEXT"),
+        # AC4: graphify emits a normalized label per node
+        # ("brain.search" → "brain_search") for fuzzy entity lookup
+        # when the user-provided name doesn't match the canonical
+        # name exactly. Indexed below for cheap fallback resolution.
+        ("norm_label",      "ALTER TABLE entities ADD COLUMN norm_label TEXT"),
     ):
         if col not in ent_cols:
             try:
                 conn.execute(sql); conn.commit()
             except sqlite3.OperationalError:
                 pass
+    # Index norm_label for the call_chain fallback lookup. Skip if
+    # column never landed (older sqlite returning OperationalError).
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ent_norm_label "
+            "ON entities(norm_label) WHERE norm_label IS NOT NULL"
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     # relationships extensions
     rel_cols = {row[1] for row in conn.execute("PRAGMA table_info(relationships)").fetchall()}
@@ -65,6 +80,12 @@ def _graph_schema_migrations(conn: sqlite3.Connection) -> None:
         ("confidence_score",  "ALTER TABLE relationships ADD COLUMN confidence_score REAL"),
         ("weight",            "ALTER TABLE relationships ADD COLUMN weight REAL"),
         ("source_location",   "ALTER TABLE relationships ADD COLUMN source_location TEXT"),
+        # AC5: graphify emits source_file per edge — the FILE where
+        # the call site lives (distinct from the source ENTITY's
+        # defining file when the entity is defined elsewhere). Store
+        # as call_site_file to disambiguate; surface in call_chain
+        # results so users can jump straight to the call site.
+        ("call_site_file",    "ALTER TABLE relationships ADD COLUMN call_site_file TEXT"),
     ):
         if col not in rel_cols:
             try:
@@ -503,10 +524,18 @@ class GraphService:
         try:
             b = _sq3.connect(brain_db_path); b.row_factory = _sq3.Row
             out["docs"] = b.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
+            # Issue #41: multi-granular chunking emits N rows per
+            # source_file (::win_N, ::__file__, ::__module__, ::EntName).
+            # Comparing chunk-rows vs disk-files (staged_files counts
+            # files) made `stale: true` fire on every project where
+            # chunks-per-file > 1 — typically every project. Count
+            # DISTINCT source_files so the unit matches staged_files.
+            allowed = {s.lstrip(".") for s in GRAPHIFY_CODE_SUFFIXES}
             out["code_docs"] = sum(1 for r in b.execute(
-                "SELECT source_file FROM docs"
+                "SELECT DISTINCT source_file FROM docs "
+                "WHERE source_file IS NOT NULL"
             ) if (r["source_file"] or "").lower().rsplit(".", 1)[-1]
-               in {s.lstrip(".") for s in GRAPHIFY_CODE_SUFFIXES})
+               in allowed)
             b.close()
         except _sq3.Error:
             pass
@@ -686,22 +715,31 @@ class GraphService:
                 community = node.get("community")
                 source_file = node.get("source_file", "")
                 source_location = node.get("source_location", "")
+                # AC4: graphify emits norm_label for fuzzy lookup.
+                # Fall back to a derived form so legacy graph.json
+                # without that field still gets a useful default.
+                norm_label = (
+                    node.get("norm_label")
+                    or _derive_norm_label(label)
+                )
                 # Derive "kind" from file_type or label for legacy queries
                 kind = file_type or "node"
                 cur = conn.execute(
                     "INSERT INTO entities "
                     "(name, kind, file, line, graphify_id, label, file_type, "
-                    " community, source_location) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                    " community, source_location, norm_label) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                     "ON CONFLICT(name, file) DO UPDATE SET "
                     "  kind=excluded.kind, "
                     "  graphify_id=excluded.graphify_id, "
                     "  label=excluded.label, "
                     "  file_type=excluded.file_type, "
                     "  community=excluded.community, "
-                    "  source_location=excluded.source_location",
+                    "  source_location=excluded.source_location, "
+                    "  norm_label=excluded.norm_label",
                     (label, kind, source_file, _extract_line(source_location),
-                     gid, label, file_type, community, source_location),
+                     gid, label, file_type, community, source_location,
+                     norm_label),
                 )
                 # Retrieve id (RETURNING not universally available pre-3.35)
                 row = conn.execute(
@@ -724,14 +762,22 @@ class GraphService:
                 confidence_score = float(link.get("confidence_score", 1.0))
                 weight = float(link.get("weight", 1.0))
                 source_location = link.get("source_location", "")
+                # AC5: per-edge source_file is the FILE where the call
+                # site lives (e.g. for an A→B call where A is defined
+                # in src/a.py but the call site is in src/handler.py
+                # because A was inlined or aliased). Distinct from the
+                # source entity's defining file.
+                call_site_file = link.get("source_file", "")
                 try:
                     conn.execute(
                         "INSERT OR REPLACE INTO relationships "
                         "(source_id, target_id, relation, confidence, "
-                        " confidence_score, weight, source_location) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        " confidence_score, weight, source_location, "
+                        " call_site_file) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (src_id, tgt_id, relation, confidence,
-                         confidence_score, weight, source_location),
+                         confidence_score, weight, source_location,
+                         call_site_file),
                     )
                     result["imported_relationships"] += 1
                 except sqlite3.IntegrityError:
@@ -870,3 +916,20 @@ def _extract_line(source_location: str) -> Optional[int]:
         return int(s)
     except (ValueError, AttributeError):
         return None
+
+
+def _derive_norm_label(label: str) -> str:
+    """Local fallback when graphify doesn't emit norm_label.
+
+    Strips call/dot syntax and lowercases so 'Brain.search()' and
+    'brain.search' both resolve to 'brain_search'. Mirrors graphify's
+    own normalization so the index column remains useful even on
+    pre-norm_label graph.json output.
+    """
+    if not label:
+        return ""
+    import re as _re
+    s = label.strip().rstrip("()")
+    s = _re.sub(r"[.\s]+", "_", s)
+    s = _re.sub(r"[^A-Za-z0-9_]", "", s)
+    return s.lower()

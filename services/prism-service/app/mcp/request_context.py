@@ -19,6 +19,7 @@ class PrismRequestContext:
     project_id: str = DEFAULT_PROJECT
     request_id: str = ""
     transport: str = "mcp-http"
+    tool_profile: str = "interactive"
 
 
 _current_request: ContextVar[PrismRequestContext] = ContextVar(

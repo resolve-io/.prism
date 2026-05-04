@@ -21,6 +21,36 @@ body, .q-page, .nicegui-content {
 """
 
 
+def resolve_active_project(
+    qs_proj: str | None,
+    stored: str | None,
+    projects: list[str],
+) -> str:
+    """Pick the active project from a cascade of signals.
+
+    Issue resolve-io/.prism#43: nav.py used to seed `app.storage.user['project']`
+    to the literal `'default'` sentinel even when real projects existed,
+    then pass that sentinel as `value=` to a `ui.select(options=projects)`
+    where `'default'` was NOT in `options`. NiceGUI raised ValueError and
+    every dashboard page 500'd. Resolve everything against the live
+    `projects` list so the chosen value is guaranteed to be in options.
+
+    Order:
+      1. URL ?project= if it points at a real project
+      2. Stored user value if it points at a real project
+      3. First available project
+      4. ``'default'`` sentinel only if `projects` is empty
+         (matches the `or ['default']` fallback for the options list).
+    """
+    if qs_proj and qs_proj in projects:
+        return qs_proj
+    if stored and stored in projects:
+        return stored
+    if projects:
+        return projects[0]
+    return 'default'
+
+
 def create_nav():
     """Shared navigation header with project selector and page links."""
     from app.project_context import get_all_projects
@@ -34,13 +64,12 @@ def create_nav():
         _qs_proj = _ctx.client.request.query_params.get('project')
     except Exception:
         _qs_proj = None
-    if _qs_proj:
-        app.storage.user['project'] = _qs_proj
-    elif 'project' not in app.storage.user:
-        app.storage.user['project'] = 'default'
 
-    current = app.storage.user['project']
     projects = get_all_projects() or ['default']
+    stored = app.storage.user.get('project')
+    current = resolve_active_project(_qs_proj, stored, projects)
+    # Persist the resolved value so subsequent renders skip the cascade.
+    app.storage.user['project'] = current
 
     with ui.header().classes('items-center justify-between bg-indigo-700 px-6 shadow-md'):
         with ui.row().classes('items-center gap-3'):

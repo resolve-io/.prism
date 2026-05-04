@@ -30,6 +30,7 @@ class ProjectContext:
         self._conductor_svc = None
         self._governance = None
         self._janitor_svc = None
+        self._verifier_svc = None
 
     @property
     def brain_svc(self):
@@ -100,6 +101,23 @@ class ProjectContext:
                 scores_db=str(self._data_dir / "scores.db"),
             )
         return self._janitor_svc
+
+    @property
+    def verifier_svc(self):
+        if self._verifier_svc is None:
+            from app.services.verifier_service import VerifierService
+            # Workspace is the host project root, not the container's
+            # data dir — Tier 0 needs to run linters against the actual
+            # source tree. Hook script will pass workspace via the MCP
+            # call when the SessionStart hook knows ${CLAUDE_PROJECT_DIR}.
+            self._verifier_svc = VerifierService(
+                scores_db=str(self._data_dir / "scores.db"),
+                brain_db=str(self._data_dir / "brain.db"),
+                tasks_db=str(self._data_dir / "tasks.db"),
+                memory_dir=str(self._data_dir / "mulch"),
+                workspace=None,   # set per-call by run() arg
+            )
+        return self._verifier_svc
 
     @property
     def governance(self):
