@@ -708,7 +708,39 @@ class ConductorService:
             "score_delta": score_delta,
         }
 
-    def get_session_outcomes(self, limit: int = 50) -> list[dict]:
+    # Session-id prefixes used by smoke tests, dogfood probes, and the
+    # bench harness. Rows with these ids carry near-zero token counts
+    # and aren't real sessions — including them in averages drags the
+    # mean toward zero and makes real work look like inflation. Filter
+    # them out by default; pass include_smoke=True to see everything.
+    _SMOKE_SESSION_PREFIXES: tuple[str, ...] = (
+        "test-",
+        "manual-",
+        "sse-smoke-",
+        "bridge-",
+        "dogfood-",
+        "hook-migration-",
+        "diagnose-",
+        "smoke-",
+        "probe-",
+    )
+
+    @classmethod
+    def _is_smoke_session(cls, row: dict) -> bool:
+        """True if this row is a smoke/probe test, not a real session."""
+        sid = (row.get("session_id") or "").lower()
+        if any(sid.startswith(p) for p in cls._SMOKE_SESSION_PREFIXES):
+            return True
+        # Rows with zero tokens are incomplete/aborted records — the Stop
+        # hook fired but never read the transcript. They aren't useful
+        # signal, just noise on the mean.
+        if (row.get("tokens_used") or 0) == 0:
+            return True
+        return False
+
+    def get_session_outcomes(
+        self, limit: int = 50, include_smoke: bool = False,
+    ) -> list[dict]:
         """Query recent session outcomes from scores.db.
 
         Reads the ``session_outcomes`` table populated by
@@ -716,14 +748,23 @@ class ConductorService:
         Stop hook that prism_install ships). Maps DB columns onto the
         keys the /sessions UI expects (id, session_id, duration,
         tokens, files_modified, recorded_at).
+
+        When ``include_smoke`` is False (default) rows whose session_id
+        matches a known smoke/probe prefix or whose tokens_used is zero
+        are dropped — those rows don't represent real sessions and skew
+        the mean toward zero.
         """
         try:
             conn = self._scores_conn()
+            # Pull a wider window when filtering so the post-filter list
+            # still has up to ``limit`` real sessions. 4x is enough given
+            # the observed smoke-row ratio in dogfood.
+            db_limit = limit if include_smoke else limit * 4
             rows = conn.execute(
                 "SELECT session_id, duration_s, tokens_used, files_read, "
                 "files_modified, skills_invoked, timestamp "
                 "FROM session_outcomes ORDER BY timestamp DESC LIMIT ?",
-                (limit,),
+                (db_limit,),
             ).fetchall()
             conn.close()
         except Exception:
@@ -731,12 +772,26 @@ class ConductorService:
         out: list[dict] = []
         for r in rows:
             d = dict(r)
+            if not include_smoke and self._is_smoke_session(d):
+                continue
             # Normalise keys to what sessions_page.py expects.
             d["id"] = d["session_id"]
             d["duration"] = d.get("duration_s")
             d["tokens"] = d.get("tokens_used")
             d["recorded_at"] = d.get("timestamp")
+            # Honest per-work-unit metric. Tokens per session are
+            # dominated by session scope; tokens per file edited
+            # normalises by output and is a better proxy for retrieval
+            # efficiency. None when files_modified is 0/missing so the
+            # caller can show a dash instead of dividing.
+            files_m = d.get("files_modified") or 0
+            d["tokens_per_file"] = (
+                int((d.get("tokens_used") or 0) / files_m)
+                if files_m > 0 else None
+            )
             out.append(d)
+            if len(out) >= limit:
+                break
         return out
 
     def get_skill_usage(self, session_id: Optional[str] = None) -> list[dict]:

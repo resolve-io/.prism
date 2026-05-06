@@ -32,40 +32,70 @@ def _has_plotly() -> bool:
 
 # -- Section Builders ------------------------------------------------------
 
+def _percentile(values: list[int | float], pct: float) -> float:
+    """Nearest-rank percentile. Returns 0 on empty input."""
+    if not values:
+        return 0.0
+    s = sorted(values)
+    k = max(0, min(len(s) - 1, int(round(pct / 100.0 * (len(s) - 1)))))
+    return float(s[k])
+
+
 def _build_summary_stats(container, outcomes: list[dict]):
-    """Render summary statistic cards."""
+    """Render summary statistic cards.
+
+    Token/duration distributions across Claude Code sessions are
+    heavy-tailed — one 33-hour session dominates the mean. We show
+    median + p95 instead so the long tail is visible and the typical
+    session isn't hidden by it. We also show tokens-per-file-edited as
+    a per-work-unit proxy that doesn't scale with session length
+    (the headline question on this page is "is PRISM efficient?",
+    which raw avg-tokens-per-session can't answer).
+    """
     container.clear()
     with container:
         total = len(outcomes)
 
         # Extract numeric values safely
-        tokens_list = []
-        durations = []
+        tokens_list: list[int] = []
+        durations: list[float] = []
+        tokens_per_file: list[int] = []
         for o in outcomes:
             tok = o.get("tokens", o.get("total_tokens", 0))
-            if tok:
-                try:
+            try:
+                if tok:
                     tokens_list.append(int(tok))
-                except (ValueError, TypeError):
-                    pass
+            except (ValueError, TypeError):
+                pass
             dur = o.get("duration", o.get("duration_seconds", 0))
-            if dur:
-                try:
+            try:
+                if dur:
                     durations.append(float(dur))
-                except (ValueError, TypeError):
-                    pass
+            except (ValueError, TypeError):
+                pass
+            tpf = o.get("tokens_per_file")
+            if isinstance(tpf, (int, float)) and tpf > 0:
+                tokens_per_file.append(int(tpf))
 
-        avg_tokens = (sum(tokens_list) / len(tokens_list)) if tokens_list else 0
-        avg_duration = (sum(durations) / len(durations)) if durations else 0
+        median_tokens = _percentile(tokens_list, 50)
+        p95_tokens = _percentile(tokens_list, 95)
+        median_tpf = _percentile(tokens_per_file, 50)
+        median_duration = _percentile(durations, 50)
 
         cards = [
-            ("Total Sessions", str(total), "history", "#4f46e5"),
-            ("Avg Tokens", f"{avg_tokens:,.0f}", "token", "#7c3aed"),
-            ("Avg Duration", f"{avg_duration:.1f}s", "timer", "#0d9488"),
+            ("Sessions", str(total), "history", "#4f46e5",
+             "real sessions only — smoke/probe rows excluded"),
+            ("Median Tokens", f"{median_tokens:,.0f}", "data_usage", "#7c3aed",
+             f"p95 {p95_tokens:,.0f}"),
+            ("Tokens / File Edited", f"{median_tpf:,.0f}" if median_tpf else "—",
+             "edit_note", "#0d9488",
+             f"median across {len(tokens_per_file)} sessions w/ edits"),
+            ("Median Duration", f"{median_duration:.0f}s", "timer", "#52525b",
+             "half of sessions shorter than this"),
         ]
 
         with ui.row().classes('w-full gap-5 flex-wrap'):
-            for title, value, icon_name, color in cards:
+            for title, value, icon_name, color, hint in cards:
                 with ui.card().classes(
                     'flex-1 min-w-[200px] bg-white shadow-sm rounded-lg p-5'
                 ):
@@ -77,6 +107,10 @@ def _build_summary_stats(container, outcomes: list[dict]):
                     ui.label(value).classes(
                         'text-2xl font-bold text-gray-900'
                     )
+                    if hint:
+                        ui.label(hint).classes(
+                            'text-xs text-gray-500 mt-1'
+                        )
 
 
 def _build_session_table(container, outcomes: list[dict]):
@@ -132,6 +166,7 @@ def _build_session_table(container, outcomes: list[dict]):
         rows = []
         for o in outcomes:
             session_id = o.get("session_id", o.get("id", "-"))
+            tpf = o.get("tokens_per_file")
             rows.append({
                 "session_id": (
                     session_id[:12] + "..."
@@ -149,6 +184,14 @@ def _build_session_table(container, outcomes: list[dict]):
                 "files_modified": str(
                     o.get("files_modified", o.get("files_changed", "-"))
                 ),
+                # Tokens per file edited — None when no files were
+                # modified (rendered as "—"). Better proxy for retrieval
+                # efficiency than total tokens, which scales with
+                # session length not output.
+                "tokens_per_file": (
+                    f"{tpf:,}" if isinstance(tpf, (int, float)) and tpf > 0
+                    else "—"
+                ),
                 "skills_invoked": str(
                     o.get("skills_invoked", o.get("skills_used", "-"))
                 ),
@@ -164,6 +207,9 @@ def _build_session_table(container, outcomes: list[dict]):
             {"name": "tokens", "label": "Tokens", "field": "tokens",
              "align": "right", "sortable": True},
             {"name": "files_modified", "label": "Files", "field": "files_modified",
+             "align": "right", "sortable": True},
+            {"name": "tokens_per_file", "label": "Tokens / File",
+             "field": "tokens_per_file",
              "align": "right", "sortable": True},
             {"name": "skills_invoked", "label": "Skills", "field": "skills_invoked",
              "align": "right", "sortable": True},
@@ -256,7 +302,10 @@ def _build_trend_chart(container, outcomes: list[dict]):
             return
 
         dates = sorted(daily.keys())
-        avg_tokens = [sum(daily[d]) / len(daily[d]) for d in dates]
+        # Median, not mean — tokens-per-session is heavy-tailed (one
+        # 33-hour session dominates a daily average). Median tracks the
+        # typical session and the long tail shows up in p95 instead.
+        median_tokens = [_percentile(daily[d], 50) for d in dates]
         session_counts = [len(daily[d]) for d in dates]
 
         fig = go.Figure()
@@ -265,7 +314,7 @@ def _build_trend_chart(container, outcomes: list[dict]):
             marker_color="rgba(79, 70, 229, 0.5)",
         ))
         fig.add_trace(go.Scatter(
-            x=dates, y=avg_tokens, name="Avg Tokens",
+            x=dates, y=median_tokens, name="Median Tokens",
             yaxis="y2", mode="lines+markers",
             line=dict(color="#7c3aed", width=2),
             marker=dict(size=6),
@@ -274,12 +323,12 @@ def _build_trend_chart(container, outcomes: list[dict]):
         fig.update_layout(
             template="plotly_white",
             title=dict(
-                text="Session Trends",
+                text="Session Trends (median per day)",
                 font=dict(size=16, color="#111827"),
             ),
             xaxis_title="Date",
             yaxis=dict(title="Sessions", side="left"),
-            yaxis2=dict(title="Avg Tokens", side="right", overlaying="y"),
+            yaxis2=dict(title="Median Tokens", side="right", overlaying="y"),
             height=340,
             margin=dict(l=50, r=50, t=60, b=50),
             legend=dict(orientation="h", y=-0.2),
