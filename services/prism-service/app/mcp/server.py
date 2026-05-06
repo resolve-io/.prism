@@ -92,8 +92,32 @@ async def handle_mcp(scope, receive, send):
         tool_profile=tool_profile,
     )
 
+    # Force `Connection: close` on every MCP response so uvicorn closes
+    # the TCP socket and sends FIN immediately after the response body
+    # — instead of holding the socket in keep-alive and stranding it in
+    # CLOSE_WAIT when the (short-lived hook) client closes its side
+    # first. See issue #64: stateless StreamableHTTP doesn't reuse
+    # connections anyway, and ~3-5 requests per session-start hook
+    # otherwise leak a socket apiece.
     with use_request_context(request_ctx):
-        await session_manager.handle_request(scope, receive, send)
+        await session_manager.handle_request(
+            scope, receive, _wrap_send_with_close(send)
+        )
+
+
+def _wrap_send_with_close(send):
+    """Return an ASGI ``send`` wrapper that injects ``Connection: close``
+    on every ``http.response.start`` message. See issue #64."""
+    async def _send(message):
+        if message.get("type") == "http.response.start":
+            headers = [
+                (k, v) for k, v in (message.get("headers") or [])
+                if k.lower() != b"connection"
+            ]
+            headers.append((b"connection", b"close"))
+            message = {**message, "headers": headers}
+        await send(message)
+    return _send
 
 
 @contextlib.asynccontextmanager

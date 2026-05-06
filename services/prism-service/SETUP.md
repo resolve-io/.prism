@@ -20,13 +20,15 @@ In your project root, create `.mcp.json`:
   "mcpServers": {
     "prism": {
       "type": "url",
-      "url": "http://localhost:7777/mcp?project=my-project-slug"
+      "url": "http://127.0.0.1:7777/mcp?project=my-project-slug"
     }
   }
 }
 ```
 
 Replace `my-project-slug` with a short name for your project (e.g. `talentsync`, `my-api`). Each project gets its own isolated brain, tasks, memory, and workflow — nothing bleeds between projects.
+
+> **Use `127.0.0.1`, not `localhost`.** On Windows, `localhost` resolves to `::1` first, where `wslrelay.exe` listens to proxy WSL2 traffic and intercepts MCP traffic before Docker's `0.0.0.0:7777` binding can handle it. Forcing IPv4 with `127.0.0.1` bypasses the relay. (Issue #64.)
 
 ## 3. Onboard your project
 
@@ -136,9 +138,41 @@ docker compose logs
 
 **MCP not connecting?**
 ```bash
-curl -X POST http://localhost:7777/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+curl -X POST http://127.0.0.1:7777/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 # Should return a JSON-RPC response with server capabilities
 ```
+
+**MCP not connecting on Windows after `docker restart`?**
+On Windows + Docker Desktop, `docker restart` does NOT reinitialize
+Docker Desktop's port proxy (`com.docker.backend`) — TCP connects but
+HTTP responses never come back. Use `stop` + `start` instead:
+```bash
+docker stop prism-service-prism-service-1 && docker start prism-service-prism-service-1
+```
+Symptom check: container logs show no `172.x.x.x:* GET /mcp/` entries
+after the restart, and `Test-NetConnection 127.0.0.1:7777` reports
+`True` while `curl` hangs or returns no response. (Issue #64.)
+
+**MCP server stops responding after many sessions?**
+If the server has been running a long time and starts refusing
+HTTP requests (TCP still accepts), check for CLOSE_WAIT socket
+exhaustion inside the container:
+```bash
+docker exec prism-service-prism-service-1 python3 -c "
+data = open('/proc/net/tcp').readlines()[1:]
+states = {}
+for line in data:
+    parts = line.split()
+    if len(parts) > 3:
+        states[parts[3]] = states.get(parts[3], 0) + 1
+print({'01': 'ESTABLISHED', '08': 'CLOSE_WAIT', '0A': 'LISTEN'})
+print(states)
+"
+```
+Healthy: CLOSE_WAIT count stays in single digits across many
+sessions. The fix in #64 (`Connection: close` on every MCP response)
+should keep this near zero — if you see it growing again, file a
+new issue.
 
 **Brain search returns 0 results?**
 The project hasn't been onboarded yet. Tell Claude to onboard it.
