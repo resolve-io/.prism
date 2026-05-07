@@ -114,6 +114,44 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
     const b = parseInt(h.substring(4, 6), 16);
     return `rgba(${r},${g},${b},${a})`;
   }
+  // Multiply an existing color (hex OR rgba(...)) by `a`. Used by the
+  // LOD reducers to blend whichever color the node/edge already has —
+  // hex super-node fills, rgba leaf-edge tints — through a level
+  // boundary without losing its underlying hue.
+  function multiplyAlpha(color, a) {
+    if (a >= 0.999) return color;
+    if (!color) return `rgba(107,114,128,${a})`;
+    if (color[0] === "#") return withAlpha(color, a);
+    const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (!m) return color;
+    const a0 = m[4] !== undefined ? parseFloat(m[4]) : 1;
+    return `rgba(${m[1]},${m[2]},${m[3]},${a0 * a})`;
+  }
+  // smoothAlphas → [a0, a1, a2, a3] for a given camera ratio.
+  // Adjacent levels share a smoothstep crossfade through their
+  // boundary so wheel-zoom flows continuously instead of snapping.
+  // Width tuned so the fade reads at ~60fps but is brief enough that
+  // the active level dominates most of its band.
+  function smoothAlphas(r) {
+    const T01 = 1.5, W01 = 0.5;
+    const T12 = 0.7, W12 = 0.25;
+    const T23 = 0.3, W23 = 0.12;
+    const fade = (T, W) => {
+      const t = (r - (T - W / 2)) / W;
+      if (t <= 0) return 0;
+      if (t >= 1) return 1;
+      return t * t * (3 - 2 * t);
+    };
+    const f01 = fade(T01, W01);
+    const f12 = fade(T12, W12);
+    const f23 = fade(T23, W23);
+    return [
+      f01,
+      (1 - f01) * f12,
+      (1 - f01) * (1 - f12) * f23,
+      (1 - f01) * (1 - f12) * (1 - f23),
+    ];
+  }
   // HSL round-trip utilities. Shading by degree modulates the L
   // channel while keeping H+S fixed, so every node in a community
   // shares the base hue and saturation — only perceived lightness
@@ -201,6 +239,19 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       const levelForRatio = r => (
         r > 1.5 ? 0 : r > 0.7 ? 1 : r > 0.3 ? 2 : 3
       );
+      // Click-to-drill focus stack. Each entry is {level, key} — the
+      // ancestor a click pushed down to. Reducers + legend render only
+      // descendants of the deepest entry. Wheeling out past a focus
+      // level pops it; clicking empty space clears the stack.
+      let focusPath = [];
+      const focusKey = () => focusPath.length > 0
+        ? focusPath[focusPath.length - 1] : null;
+      // Latest camera ratio cached for the LOD reducer. Sigma calls
+      // the reducer during its own constructor (before `camera` is
+      // assigned), so we can't read getState() in the closure — read
+      // this mirror instead and refresh it from the camera "updated"
+      // handler, which fires on every animation frame.
+      let currentRatio = 1.8;
       // Drop graphify's community-summary rationale nodes — they're prose
       // blobs graphify attaches per community, not actual code, and they
       // inflate the graph by ~40% while adding no navigational value.
@@ -381,6 +432,18 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // Larger labels at higher abstraction levels so the L0 view
           // reads instantly. Sigma honors per-node labelSize.
           const labelSizeForLevel = lvl === 0 ? 22 : lvl === 1 ? 18 : 15;
+          // Each super-node carries the ancestor keys at every level
+          // ABOVE its own — focus filtering then reduces to "show
+          // nodes where l<focusLevel> === focusKey", which works for
+          // both descendants of a path super-node and L3 leaves.
+          const keyParts = key.split("/");
+          const ancL0 = keyParts[0] || key;
+          const ancL1 = keyParts.length >= 2
+            ? keyParts.slice(0, 2).join("/")
+            : ancL0;
+          const ancL2 = keyParts.length >= 3
+            ? keyParts.slice(0, 3).join("/")
+            : ancL1;
           g.addNode(`__super__${lvl}__${key}`, {
             label: labelText,
             level: lvl,
@@ -393,9 +456,9 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             communityLabel: labelText,
             memberCount: n,
             labelSize: labelSizeForLevel,
-            l0: lvl === 0 ? key : null,
-            l1: lvl === 1 ? key : null,
-            l2: lvl === 2 ? key : null,
+            l0: ancL0,
+            l1: lvl >= 1 ? ancL1 : null,
+            l2: lvl >= 2 ? ancL2 : null,
           });
         }
         return groups.size;
@@ -509,14 +572,32 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // called, so click handlers reading the status get the right text.
       let layoutElapsed = "...";
       const LEVEL_NAMES = ["domains", "services", "modules", "symbols"];
+      // Counts items the LOD reducer would paint right now — i.e., at
+      // currentLevel and inside the active focus subtree if any. So
+      // status reads what the user actually sees, not raw level totals.
+      function visibleCount() {
+        const fk = focusKey();
+        let c = 0;
+        g.forEachNode((_id, attrs) => {
+          if (attrs.level !== currentLevel) return;
+          if (fk && attrs["l" + fk.level] !== fk.key) return;
+          c++;
+        });
+        return c;
+      }
       const baseStatus = () => {
-        const showing = lodCount[currentLevel];
-        const where = currentLevel === 3
-          ? `${nodes.length.toLocaleString()} symbols`
-          : `${(showing || 0).toLocaleString()} ${LEVEL_NAMES[currentLevel]}`;
-        return `L${currentLevel} · ${where}`
-          + ` · ${edgesDrawn.toLocaleString()} edges total`
-          + ` · FA2 ${layoutElapsed}s · scroll to zoom`;
+        const showing = visibleCount();
+        const where = `${showing.toLocaleString()} ${LEVEL_NAMES[currentLevel]}`;
+        // Breadcrumb of focused ancestors — rightmost is the deepest.
+        const trail = focusPath.length > 0
+          ? " · " + focusPath
+              .map(f => (f.key.split("/").pop() || f.key))
+              .join(" › ")
+          : "";
+        const hint = focusPath.length > 0
+          ? " · click empty to back out"
+          : " · scroll to zoom";
+        return `L${currentLevel}${trail} · ${where} · FA2 ${layoutElapsed}s${hint}`;
       };
 
       const renderer = new Sigma(g, document.getElementById("graph"), {
@@ -533,14 +614,22 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         labelSize: 13,
         labelFont: "system-ui, -apple-system, sans-serif",
         nodeReducer: (node, data) => {
-          // LOD: hide everything not at the current zoom level so the
-          // canvas only ever paints one abstraction at a time. Mousewheel
-          // crosses a threshold → camera "updated" handler bumps
-          // currentLevel → reducer re-evaluates → swap is instant.
-          if (data.level !== currentLevel) {
+          // Smooth LOD blend — alpha is interpolated through level
+          // boundaries (smoothstep) so wheeling produces a continuous
+          // crossfade between adjacent layers rather than a snap.
+          const a = smoothAlphas(currentRatio)[data.level];
+          if (a <= 0.01) return { ...data, hidden: true };
+          // Drill-down focus: only render descendants of the deepest
+          // focus item. Each super-node + leaf carries ancestor keys at
+          // every level above its own, so this is a single attribute
+          // compare regardless of depth.
+          const fk = focusKey();
+          if (fk && data["l" + fk.level] !== fk.key) {
             return { ...data, hidden: true };
           }
-          let out = data;
+          let out = a < 0.999
+            ? { ...data, color: multiplyAlpha(data.color, a) }
+            : data;
           // Focus dimming (click) layers first.
           if (focusedNode) {
             if (node === focusedNode || neighborSet.has(node)) {
@@ -582,15 +671,31 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           return out;
         },
         edgeReducer: (edge, data) => {
-          if (data.level !== currentLevel) {
-            return { ...data, hidden: true };
+          // Same smoothstep crossfade as nodes so super-edges fade
+          // alongside super-nodes through the threshold.
+          const a = smoothAlphas(currentRatio)[data.level];
+          if (a <= 0.01) return { ...data, hidden: true };
+          // Same drill-down filter as nodeReducer: hide edges that
+          // would connect across the focus boundary.
+          const fk = focusKey();
+          if (fk) {
+            const ext = g.extremities(edge);
+            const fld = "l" + fk.level;
+            const sa = g.getNodeAttribute(ext[0], fld);
+            const ta = g.getNodeAttribute(ext[1], fld);
+            if (sa !== fk.key || ta !== fk.key) {
+              return { ...data, hidden: true };
+            }
           }
-          if (!focusedNode) return data;
+          let out = a < 0.999
+            ? { ...data, color: multiplyAlpha(data.color, a) }
+            : data;
+          if (!focusedNode) return out;
           const ext = g.extremities(edge);
           if (ext[0] === focusedNode || ext[1] === focusedNode) {
-            return { ...data, size: 0.8, zIndex: 1 };
+            return { ...out, size: 0.8, zIndex: 1 };
           }
-          return { ...data, color: "rgba(40,40,60,0.2)", zIndex: 0 };
+          return { ...out, color: "rgba(40,40,60,0.2)", zIndex: 0 };
         },
       });
 
@@ -604,6 +709,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // super-nodes radially around the leaf-graph centroid.
       const camera = renderer.getCamera();
       camera.setState({ ratio: 1.8 });
+      currentRatio = 1.8;
       currentLevel = 0;
       // Debug hooks — expose graph + renderer so devtools can inspect
       // node attributes, drive the camera, or smoke-test LOD swaps
@@ -612,11 +718,27 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       window.__prismSigma = renderer;
       camera.on("updated", () => {
         const r = camera.getState().ratio;
+        currentRatio = r;
+        // Force the reducer to re-run this frame so the smooth crossfade
+        // alphas track the live ratio. Without this, Sigma may skip a
+        // render between camera updates and the fade looks choppy.
+        renderer.refresh();
         const newLevel = levelForRatio(r);
         if (newLevel !== currentLevel) {
+          const oldLevel = currentLevel;
           currentLevel = newLevel;
-          // Focus state is meaningless across a level change — the
-          // focused node may not even exist at the new level. Clear it.
+          // Wheeling out past a focus level pops it — going from L2 of
+          // benchmarks/cli back out to L1 should drop the L2 focus and
+          // resume the L1 view of benchmarks. Wheel-in keeps focus
+          // intact (that's how click-to-drill descends through the
+          // tree without losing its trail).
+          if (newLevel < oldLevel) {
+            while (focusPath.length > 0
+                   && focusPath[focusPath.length - 1].level >= newLevel) {
+              focusPath.pop();
+            }
+          }
+          // Leaf focus is meaningless across a level change.
           if (focusedNode) {
             focusedNode = null;
             neighborSet = new Set();
@@ -643,11 +765,19 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       });
       renderer.on("clickNode", ({ node }) => {
         const attrs = g.getNodeAttributes(node);
-        // Click a super-node → animate camera into the next level. Pans
-        // to the super-node's centroid and shrinks the ratio just past
-        // the next threshold so the LOD swap fires automatically.
+        // Click a super-node → push it onto the focus stack so the
+        // next level only paints its descendants, then animate camera
+        // through the LOD threshold so the swap fires on its own.
         if (attrs.level !== undefined && attrs.level < 3) {
           const tgtLvl = attrs.level + 1;
+          // Own ancestor key at its own level — that's what we filter
+          // descendants against.
+          const ownKey = attrs["l" + attrs.level];
+          if (ownKey) {
+            focusPath.push({ level: attrs.level, key: ownKey });
+          }
+          statusEl.textContent = baseStatus();
+          rebuildLegend();
           // Land just inside the next band so the LOD swap fires once
           // the camera animation completes. Stay clear of band edges
           // so a small wobble doesn't bounce us back.
@@ -676,12 +806,23 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           + `click empty space to clear focus`;
         renderer.refresh();
       });
-      // Click on the stage (empty space) clears focus highlighting.
+      // Click on the stage (empty space) clears both the leaf-focus
+      // dim-highlight and the drill-down focus stack — i.e. backs all
+      // the way out to the L0 unfiltered view.
       renderer.on("clickStage", () => {
-        if (!focusedNode) return;
-        focusedNode = null;
-        neighborSet = new Set();
+        let changed = false;
+        if (focusedNode) {
+          focusedNode = null;
+          neighborSet = new Set();
+          changed = true;
+        }
+        if (focusPath.length > 0) {
+          focusPath = [];
+          changed = true;
+        }
+        if (!changed) return;
         statusEl.textContent = baseStatus();
+        rebuildLegend();
         renderer.refresh();
       });
 
@@ -699,10 +840,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       function rebuildLegend() {
         const listEl = document.getElementById("legend-list");
         listEl.innerHTML = "";
+        const fk = focusKey();
+        const inFocus = (attrs) =>
+          !fk || attrs["l" + fk.level] === fk.key;
         let items = [];
         if (currentLevel < 3) {
           g.forEachNode((id, attrs) => {
             if (attrs.level !== currentLevel) return;
+            if (!inFocus(attrs)) return;
             items.push({
               kind: "super", id,
               label: attrs.label,
@@ -714,6 +859,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           const counts = new Map();
           g.forEachNode((_n, attrs) => {
             if (attrs.level !== 3) return;
+            if (!inFocus(attrs)) return;
             const c = attrs.community;
             if (c === null || c === undefined) return;
             counts.set(c, (counts.get(c) || 0) + 1);
