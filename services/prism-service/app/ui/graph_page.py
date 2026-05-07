@@ -444,10 +444,23 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           const ancL2 = keyParts.length >= 3
             ? keyParts.slice(0, 3).join("/")
             : ancL1;
+          // Spawn position: a small random jitter very close to the
+          // graph centroid (or leaf-graph center for L0). The centroid
+          // itself is the *target* — physics adds an attraction force
+          // that pulls the super-node toward target while repulsion
+          // pushes it away from overlapping siblings. Net effect: the
+          // user sees clusters bloom outward from the centre and
+          // settle into their natural homes.
+          const targetX = grp.sx / n;
+          const targetY = grp.sy / n;
+          const jx = (Math.random() - 0.5) * 8;
+          const jy = (Math.random() - 0.5) * 8;
           g.addNode(`__super__${lvl}__${key}`, {
             label: labelText,
             level: lvl,
-            x: grp.sx / n, y: grp.sy / n,
+            x: targetX * 0.18 + jx,
+            y: targetY * 0.18 + jy,
+            targetX, targetY,
             // Super-node radius scales sublinearly with member count so
             // a 5000-member cluster doesn't swamp a 200-member one.
             size: 8 + 4 * Math.log(1 + n),
@@ -486,7 +499,11 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             g.addEdgeWithKey(`__se__${lvl}__${v.a}__${v.b}`, sId, tId, {
               level: lvl,
               size: 0.6 + 0.5 * Math.log(1 + v.count),
-              color: "rgba(170,180,210,0.55)",
+              // Quiet default — edges fade into the background so
+              // super-nodes own the eye. The edge reducer brightens
+              // them when their endpoints are involved in a hover,
+              // which is when the connections are actually relevant.
+              color: "rgba(60,68,90,0.35)",
               aggregateCount: v.count,
             });
             added++;
@@ -503,13 +520,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       buildSuperEdges("l1", 1);
       buildSuperEdges("l2", 2);
 
-      // Spread super-nodes radially outward from the leaf-graph center.
-      // FA2 puts most leaves into a dense central cluster, which makes
-      // raw centroids cluster tight at the middle and overlap at L0/L1.
-      // Pushing each super-node outward by a level-specific factor
-      // separates them while preserving relative direction, so the
-      // visual flow on zoom-in (L0 → L3) reads as "drill into" the
-      // matching leaf cluster.
+      // Leaf-graph bbox — needed both by the SPREAD pass below and
+      // by labelRadius() for the physics tick that runs alongside.
+      // Computed once after super-node assembly and treated as
+      // immutable for the lifetime of the viewer.
       let lminX = Infinity, lmaxX = -Infinity;
       let lminY = Infinity, lmaxY = -Infinity;
       g.forEachNode((id, attrs) => {
@@ -521,14 +535,130 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       });
       const leafCx = (lminX + lmaxX) / 2;
       const leafCy = (lminY + lmaxY) / 2;
-      // SPREAD pushes each super-node outward from the leaf-graph
-      // center by the level's factor, so L0 super-nodes (~7-10 in a
-      // small repo) don't pile on top of each other where their member
-      // centroids cluster. The factor is applied in graph coords;
-      // larger spread + correspondingly lower ratio thresholds keeps
-      // the active level filling the viewport rather than shrinking to
-      // a tiny island in the center of an empty canvas.
-      const SPREAD = { 0: 3.0, 1: 1.8, 2: 1.0 };
+
+      // ----- Label-overlap relaxation physics --------------------
+      // Approximate each super-node as a circle whose radius covers
+      // its node + the right-side label. When two circles overlap
+      // we push them apart by an amount proportional to the overlap;
+      // running this in a RAF tick gives the user a smooth settling
+      // animation as the canvas transitions from "spawn" to "no
+      // labels overlapping".
+      const GRAPH_PER_PX = (() => {
+        const ext = Math.max(lmaxX - lminX, lmaxY - lminY);
+        return ext > 0 ? ext / 700 : 0.5;
+      })();
+      // labelRadius ≈ half the diagonal of the node-plus-label AABB.
+      // The label paints to the right, so the AABB is asymmetric
+      // (node radius on the left, label width + node radius on the
+      // right); the diagonal gives us a single conservative number
+      // that, when used as a soft-repulsion circle radius, keeps
+      // labels well clear of one another regardless of orientation.
+      function labelRadius(attrs) {
+        const text = attrs.label || "";
+        const labelPx = attrs.labelSize || 14;
+        const widthPx = text.length * labelPx * 0.6 + 28;
+        const heightPx = labelPx * 1.4 + 6;
+        const sz = attrs.size || 5;
+        const wG = sz + (widthPx + 8) * GRAPH_PER_PX;
+        const hG = Math.max(sz, heightPx * 0.5 * GRAPH_PER_PX);
+        // Half-diagonal of the (full-width × full-height) box,
+        // scaled down a touch so we don't spread further than the
+        // visual footprint actually requires.
+        return Math.sqrt(wG * wG + hG * hG) * 0.55;
+      }
+      function labelRelaxStep() {
+        let totalMove = 0;
+        for (const lvl of [0, 1, 2]) {
+          const ids = [];
+          g.forEachNode((id, attrs) => {
+            if (attrs.level === lvl) ids.push(id);
+          });
+          if (ids.length < 2) continue;
+          // Pull current positions into a mutable buffer; we'll
+          // apply attraction + hard overlap correction here, then
+          // write the final positions back to the graph in one pass.
+          const px = new Float64Array(ids.length);
+          const py = new Float64Array(ids.length);
+          const tx = new Float64Array(ids.length);
+          const ty = new Float64Array(ids.length);
+          const radii = new Float64Array(ids.length);
+          for (let i = 0; i < ids.length; i++) {
+            const a = g.getNodeAttributes(ids[i]);
+            px[i] = a.x; py[i] = a.y;
+            tx[i] = a.targetX !== undefined ? a.targetX : a.x;
+            ty[i] = a.targetY !== undefined ? a.targetY : a.y;
+            radii[i] = labelRadius(a);
+          }
+          // Phase 1 — attraction: each super-node steps a small
+          // fraction toward its leaf-centroid home. This is the
+          // visible motion the user perceives as "alive".
+          for (let i = 0; i < ids.length; i++) {
+            px[i] += (tx[i] - px[i]) * 0.045;
+            py[i] += (ty[i] - py[i]) * 0.045;
+          }
+          // Phase 2 — pairwise circle repulsion using the diagonal
+          // labelRadius so the collision footprint covers the full
+          // node + label AABB. Force ∝ overlap, so heavily-clumped
+          // pairs unfold faster than gently-touching ones. Soft
+          // (not hard PBD) so attraction can still influence the
+          // final layout — equilibrium settles a few units past
+          // touching, biased toward each super-node's centroid.
+          for (let i = 0; i < ids.length; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+              const ddx = px[i] - px[j];
+              const ddy = py[i] - py[j];
+              const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
+              const minD = radii[i] + radii[j];
+              if (d >= minD) continue;
+              const overlap = minD - d;
+              const push = overlap * 0.30;
+              const ux = ddx / d, uy = ddy / d;
+              px[i] += ux * push; py[i] += uy * push;
+              px[j] -= ux * push; py[j] -= uy * push;
+            }
+          }
+          for (let i = 0; i < ids.length; i++) {
+            const oldX = g.getNodeAttribute(ids[i], "x");
+            const oldY = g.getNodeAttribute(ids[i], "y");
+            const dxv = px[i] - oldX, dyv = py[i] - oldY;
+            if (dxv === 0 && dyv === 0) continue;
+            g.setNodeAttribute(ids[i], "x", px[i]);
+            g.setNodeAttribute(ids[i], "y", py[i]);
+            totalMove += Math.abs(dxv) + Math.abs(dyv);
+          }
+        }
+        return totalMove;
+      }
+      let physicsRaf = null;
+      let physicsIdleFrames = 0;
+      function startPhysics() {
+        if (physicsRaf !== null) return;
+        physicsIdleFrames = 0;
+        const tick = () => {
+          const moved = labelRelaxStep();
+          if (moved > 0.001) {
+            physicsIdleFrames = 0;
+            renderer.refresh();
+          } else {
+            physicsIdleFrames++;
+          }
+          // Stop after ~1s of stillness so we're not burning RAF
+          // cycles when nothing is moving. Long enough that brief
+          // overlap-resolutions don't kick the loop off prematurely.
+          if (physicsIdleFrames > 60) {
+            physicsRaf = null;
+            return;
+          }
+          physicsRaf = requestAnimationFrame(tick);
+        };
+        physicsRaf = requestAnimationFrame(tick);
+      }
+
+      // No pre-spread — super-nodes spawn at their member centroids
+      // (clumped) and physics relaxation alone slides them outward.
+      // The user watches the clusters move from where they spawn,
+      // which is the requested behaviour.
+      const SPREAD = { 0: 1.0, 1: 1.0, 2: 1.0 };
       g.forEachNode((id, attrs) => {
         const lvl = attrs.level;
         if (lvl === undefined || lvl === 3) return;
@@ -733,6 +863,21 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           let out = a < 0.999
             ? { ...data, color: multiplyAlpha(data.color, a) }
             : data;
+          // Hover: any super-edge incident to the hovered cluster
+          // gets boosted brightness + thickness so the user can
+          // trace its connections at a glance. Edges to other
+          // clusters stay at their dim default.
+          if (hoveredNode) {
+            const ext = g.extremities(edge);
+            if (ext[0] === hoveredNode || ext[1] === hoveredNode) {
+              return {
+                ...out,
+                color: "rgba(220,228,250,0.92)",
+                size: (out.size || data.size) * 1.8,
+                zIndex: 2,
+              };
+            }
+          }
           if (!focusedNode) return out;
           const ext = g.extremities(edge);
           if (ext[0] === focusedNode || ext[1] === focusedNode) {
@@ -789,6 +934,9 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           statusEl.textContent = baseStatus();
           rebuildLegend();
           renderer.refresh();
+          // Newly-visible level can have its own label overlap —
+          // kick physics so its super-nodes spread out smoothly.
+          startPhysics();
         }
       });
 
@@ -836,6 +984,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           }
           statusEl.textContent = baseStatus();
           rebuildLegend();
+          startPhysics();
           // Land just inside the next band so the LOD swap fires once
           // the camera animation completes. Stay clear of band edges
           // so a small wobble doesn't bounce us back.
@@ -882,6 +1031,9 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         statusEl.textContent = baseStatus();
         rebuildLegend();
         renderer.refresh();
+        // Visible set just expanded back to the unfocused view —
+        // re-run physics in case its layout has drifted.
+        startPhysics();
       });
 
       // --- Legend / categories sidebar ----------------------------
@@ -1022,6 +1174,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       }
       layoutElapsed = ((performance.now() - t0) / 1000).toFixed(1);
       statusEl.textContent = baseStatus();
+      // Kick the label-relax physics so super-nodes settle into a
+      // non-overlapping layout. Visible motion is the point — users
+      // watch the clusters spread from where they spawned.
+      startPhysics();
   }
   loadGraph().catch(err => {
     statusEl.textContent = "Error loading graph: " + err.message;
