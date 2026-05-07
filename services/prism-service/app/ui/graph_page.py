@@ -760,7 +760,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           (settings.labelColor && settings.labelColor.color) || "#f1f3f8";
         context.fillText(data.label, x, y);
       };
-      const drawNodeLabel = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1);
+      // Sigma paints labels on the labels canvas AND hover labels on
+      // the hoverNodes canvas — both stay visible, so without this
+      // skip the smaller regular label bleeds through under the
+      // bigger hover label and reads as jumbled doubled text.
+      const drawNodeLabel = (ctx, d, s) => {
+        if (d.__hovered) return;
+        drawNodeLabelOutlined(ctx, d, s, 1);
+      };
       const drawNodeHover = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1.15);
 
       const renderer = new Sigma(g, document.getElementById("graph"), {
@@ -826,6 +833,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
                   (out.labelSize || data.labelSize || 13) * 1.15,
                 forceLabel: true,
                 zIndex: 3,
+                // Marker the label drawer reads to skip painting the
+                // regular (un-grown) label for this node — only the
+                // hover renderer paints it during hover.
+                __hovered: true,
               };
             } else {
               const dx = (data.x || 0) - hoveredX;
