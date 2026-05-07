@@ -16,11 +16,13 @@ gate. Installed PRISM hooks use a separate `automation` profile with 13
 hook-owned tools, so the compact default surface does not break the learning
 loop.
 
-The tracked public bars currently include SWE-bench Verified, SWE-rebench fresh
-PRs, Terminal-Bench 2.0, and BFCL V4. PRISM does not yet have comparable
-official scores for those bars, so public-best claims are blocked.
+The tracked public bars currently include SWE-bench Verified up to 93.9%,
+SWE-rebench fresh PRs at 62.1%, Terminal-Bench 2.0 at 82%, BFCL V4 at
+77.47% overall accuracy, and Scale MCP Atlas at 82.4% public-subset pass rate.
+PRISM does not yet have comparable official scores for those bars, so
+public-best claims are blocked.
 
-For the current answer, run:
+For the current direct "where do we stand vs the best" answer, run:
 
 ```bash
 benchmarks/.venv/Scripts/python.exe benchmarks/status/run.py --format text --no-write
@@ -28,11 +30,14 @@ benchmarks/.venv/Scripts/python.exe benchmarks/status/run.py --format text --no-
 
 The decisive next proof run is the planned 30-pair PRISM-on/off SWE-bench Lite
 campaign. It requires explicit confirmation because it plans 60 agent runs and
-60 evaluator runs with a conservative 50-hour timeout bound:
+60 evaluator runs with a conservative 50-hour timeout bound. The first command
+below is plan-only; the next two start generation and evaluation only because
+they include `--confirm-expensive-run`:
 
 ```bash
-benchmarks/.venv/Scripts/python.exe benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --run-generation --confirm-expensive-run
-benchmarks/.venv/Scripts/python.exe benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --run-evaluation --run-comparison --confirm-expensive-run
+benchmarks/.venv/Scripts/python.exe benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json
+benchmarks/.venv/Scripts/python.exe benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json --run-generation --confirm-expensive-run
+benchmarks/.venv/Scripts/python.exe benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json --run-evaluation --run-comparison --confirm-expensive-run
 ```
 
 Related artifacts:
@@ -72,8 +77,14 @@ docker compose up -d --build
 |---|---|---|---|
 | `status/` | Current benchmark artifacts | claim policy, public-best blockers, campaign readiness | active |
 | `standings/` | Current benchmark artifacts | PRISM values versus tracked public bars | active |
+| `publicbars/` | Current benchmark artifacts | source-backed public-best rows and claim-gating metadata | active |
 | `proofplan/` | Current benchmark artifacts | next proof actions and blocked claims | active |
 | `objective_audit/` | Current benchmark artifacts | objective coverage and missing requirements | active |
+| `swerebench/` | SWE-rebench fresh PRs | official public bar and PRISM fresh-PR patch evaluation contract | active |
+| `bfcl/` | BFCL V4 | official public bar and PRISM tool-use evaluation contract | active |
+| `terminalbench/` | Terminal-Bench 2.0 | official public bar and PRISM terminal-agent evaluation contract | active |
+| `mcpatlas/` | Scale MCP Atlas | official public bar and PRISM real-MCP-server tool-use evaluation contract | active |
+| registry watch | MCPToolBench++, MCPAgentBench, MCP-RADAR | MCP-specific tool-use benchmark families tracked for future adapters | watch |
 | `scorecard/` | Cheap local gates | pass/fail status for non-expensive checks | active |
 | `toolprofiles/` | MCP tool registry | default, full, interactive, and automation tool surfaces | active |
 | `agentsetup/` | Synthetic setup scenarios | PRISM-on/off context and tool availability score | active |
@@ -96,6 +107,22 @@ retry/follow-up/revert signals.
 `swebench/` contains both the older file-localization benchmark and the
 PRISM-on/off patch-resolution harness. The patch-resolution path is the
 required evidence for claiming that PRISM improves a coding agent.
+
+`swerebench/` is the fresh-PR coding-agent planning gate: it pins the SWE-rebench
+public bar and records the PRISM-on/off contract needed before fresh-PR patch
+resolution claims are allowed.
+
+`bfcl/` is the tool-use planning gate: it pins the official BFCL V4 public bar
+and records the PRISM-on/off contract needed before MCP tool-use claims are
+allowed.
+
+`terminalbench/` is the terminal-agent planning gate: it pins the Terminal-Bench
+2.0 public bar and records the PRISM-on/off contract needed before terminal task
+success claims are allowed.
+
+`mcpatlas/` is the real-MCP tool-use planning gate: it pins the Scale MCP Atlas
+public bar and records the PRISM-on/off contract needed before multi-server MCP
+tool orchestration claims are allowed.
 
 ## Conventions
 

@@ -48,6 +48,7 @@ def _planned_actions(
         })
 
     campaign = status.get("campaign_progress", {})
+    budget = status.get("campaign_budget", {})
     improvement = policy.get("prism_improves_agent", {})
     if improvement.get("allowed_now") is not True:
         actions.insert(0, {
@@ -59,6 +60,13 @@ def _planned_actions(
             "remaining_generation": campaign.get("remaining_generation"),
             "remaining_evaluation": campaign.get("remaining_evaluation"),
             "remaining_comparison": campaign.get("remaining_comparison"),
+            "budget": {
+                "pairs": budget.get("pairs"),
+                "agent_runs": budget.get("agent_runs"),
+                "evaluator_runs": budget.get("evaluator_runs"),
+                "conservative_timeout_hours": budget.get("conservative_timeout_hours"),
+                "requires_explicit_confirmation": budget.get("requires_explicit_confirmation"),
+            },
             "next_action": status.get("next_required_evidence"),
             "commands": status.get("next_commands") or [],
         })

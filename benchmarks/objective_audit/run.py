@@ -56,8 +56,13 @@ def main() -> int:
     standings = _read(RESULTS / "standings" / "latest.json")
     status = _read(RESULTS / "status" / "latest.json")
     proofplan = _read(RESULTS / "proofplan" / "latest.json")
+    publicbars = _read(RESULTS / "publicbars" / "latest.json")
     toolprofiles = _read(RESULTS / "toolprofiles" / "latest.json")
     scorecard = _read(RESULTS / "scorecard" / "latest.json")
+    bfcl = _read(RESULTS / "bfcl" / "latest.json")
+    swerebench = _read(RESULTS / "swerebench" / "latest.json")
+    terminalbench = _read(RESULTS / "terminalbench" / "latest.json")
+    mcpatlas = _read(RESULTS / "mcpatlas" / "latest.json")
 
     standings_rows = {row["id"]: row for row in standings.get("rows", [])}
     swebench_patch = standings_rows.get("swebench_verified_patch_resolution", {})
@@ -121,6 +126,13 @@ def main() -> int:
                     "benchmarks/README.md",
                     "benchmarks/status/run.py --format text --no-write",
                 ),
+                "benchmark_readme_public_bars": {
+                    "swebench_verified_93_9": _text_contains("benchmarks/README.md", "93.9%"),
+                    "swe_rebench_62_1": _text_contains("benchmarks/README.md", "62.1%"),
+                    "terminal_bench_82": _text_contains("benchmarks/README.md", "82%"),
+                    "bfcl_77_47": _text_contains("benchmarks/README.md", "77.47%"),
+                    "mcp_atlas_82_4": _text_contains("benchmarks/README.md", "82.4%"),
+                },
                 "overall_status": standings.get("overall_status"),
                 "claim": status.get("claim"),
                 "paired_sample_size": paired.get("sample_size"),
@@ -141,6 +153,10 @@ def main() -> int:
                 "proofplan_exists": _exists("benchmarks/results/proofplan/latest.json"),
                 "proofplan_passed": proofplan.get("passed"),
                 "proofplan_actions_total": proofplan.get("actions_total"),
+                "publicbars_exists": _exists("benchmarks/results/publicbars/latest.json"),
+                "publicbars_passed": publicbars.get("passed"),
+                "publicbars_total": publicbars.get("public_bars_total"),
+                "publicbars_failed": publicbars.get("failed_public_bars"),
             },
             "satisfied": (
                 standings.get("overall_status") == "not_proven_best_until_official_patch_resolution"
@@ -154,7 +170,10 @@ def main() -> int:
                 and claim_policy.get("better_than_public_best", {}).get("allowed_now") is False
                 and "swebench_verified_patch_resolution" in standings.get("missing_or_not_comparable", [])
                 and proofplan.get("passed") is True
-                and proofplan.get("actions_total", 0) >= 5
+                and proofplan.get("actions_total", 0) >= 6
+                and publicbars.get("passed") is True
+                and publicbars.get("public_bars_total") == 5
+                and publicbars.get("failed_public_bars") == []
                 and _text_contains(
                     "benchmarks/README.md",
                     "PRISM is benchmark-ready, but not yet proven better than the best public coding agents.",
@@ -163,6 +182,11 @@ def main() -> int:
                     "benchmarks/README.md",
                     "benchmarks/status/run.py --format text --no-write",
                 )
+                and _text_contains("benchmarks/README.md", "93.9%")
+                and _text_contains("benchmarks/README.md", "62.1%")
+                and _text_contains("benchmarks/README.md", "82%")
+                and _text_contains("benchmarks/README.md", "77.47%")
+                and _text_contains("benchmarks/README.md", "82.4%")
             ),
         },
         {
@@ -203,6 +227,181 @@ def main() -> int:
                     "benchmarks/swebench/make_eval_bundle.py",
                 ]
             ) and campaign.get("ready") is True and preflight.get("ready") is True,
+        },
+        {
+            "requirement": "Provide a path to PRISM-on versus PRISM-off BFCL-style MCP tool-use scoring.",
+            "artifact": "benchmarks/bfcl/run.py and benchmarks/results/bfcl/latest.json",
+            "evidence": {
+                "bfcl_script": _exists("benchmarks/bfcl/run.py"),
+                "bfcl_result": _exists("benchmarks/results/bfcl/latest.json"),
+                "passed": bfcl.get("passed"),
+                "claim": bfcl.get("claim"),
+                "external_best_value": (
+                    bfcl.get("official_public_bar", {}).get("external_best_value")
+                ),
+                "missing_comparable_result": (
+                    bfcl.get("prism_current", {}).get("missing_comparable_result")
+                ),
+                "required_profile": (
+                    bfcl.get("mcp_profile_under_test", {}).get("required_profile")
+                ),
+                "default_tool_count": (
+                    bfcl.get("mcp_profile_under_test", {}).get("default_tool_count")
+                ),
+                "required_metrics": (
+                    bfcl.get("evaluation_contract", {}).get("required_metrics")
+                ),
+                "claim_requires": (
+                    bfcl.get("evaluation_contract", {}).get("public_claim_requires")
+                ),
+            },
+            "satisfied": (
+                _exists("benchmarks/bfcl/run.py")
+                and bfcl.get("passed") is True
+                and bfcl.get("claim") == "not_comparable_yet"
+                and bfcl.get("official_public_bar", {}).get("external_best_value") == 0.7747
+                and bfcl.get("prism_current", {}).get("missing_comparable_result") is True
+                and bfcl.get("mcp_profile_under_test", {}).get("required_profile") == "interactive"
+                and bfcl.get("mcp_profile_under_test", {}).get("default_tool_count") == 17
+                and "tool_choice_accuracy" in (
+                    bfcl.get("evaluation_contract", {}).get("required_metrics") or []
+                )
+                and "PRISM-on run using MCP tool_profile=interactive" in (
+                    bfcl.get("evaluation_contract", {}).get("public_claim_requires") or []
+                )
+            ),
+        },
+        {
+            "requirement": "Provide a path to PRISM-on versus PRISM-off SWE-rebench fresh-PR scoring.",
+            "artifact": "benchmarks/swerebench/run.py and benchmarks/results/swerebench/latest.json",
+            "evidence": {
+                "swerebench_script": _exists("benchmarks/swerebench/run.py"),
+                "swerebench_result": _exists("benchmarks/results/swerebench/latest.json"),
+                "passed": swerebench.get("passed"),
+                "claim": swerebench.get("claim"),
+                "external_best_value": (
+                    swerebench.get("official_public_bar", {}).get("external_best_value")
+                ),
+                "missing_comparable_result": (
+                    swerebench.get("prism_current", {}).get("missing_comparable_result")
+                ),
+                "required_profile": (
+                    swerebench.get("mcp_profile_under_test", {}).get("required_profile")
+                ),
+                "default_tool_count": (
+                    swerebench.get("mcp_profile_under_test", {}).get("default_tool_count")
+                ),
+                "required_metrics": (
+                    swerebench.get("evaluation_contract", {}).get("required_metrics")
+                ),
+                "claim_requires": (
+                    swerebench.get("evaluation_contract", {}).get("public_claim_requires")
+                ),
+            },
+            "satisfied": (
+                _exists("benchmarks/swerebench/run.py")
+                and swerebench.get("passed") is True
+                and swerebench.get("claim") == "not_comparable_yet"
+                and swerebench.get("official_public_bar", {}).get("external_best_value") == 0.621
+                and swerebench.get("prism_current", {}).get("missing_comparable_result") is True
+                and swerebench.get("mcp_profile_under_test", {}).get("required_profile") == "interactive"
+                and swerebench.get("mcp_profile_under_test", {}).get("default_tool_count") == 17
+                and "percent_resolved" in (
+                    swerebench.get("evaluation_contract", {}).get("required_metrics") or []
+                )
+                and "PRISM-on run using MCP tool_profile=interactive" in (
+                    swerebench.get("evaluation_contract", {}).get("public_claim_requires") or []
+                )
+            ),
+        },
+        {
+            "requirement": "Provide a path to PRISM-on versus PRISM-off Terminal-Bench-style agentic terminal scoring.",
+            "artifact": "benchmarks/terminalbench/run.py and benchmarks/results/terminalbench/latest.json",
+            "evidence": {
+                "terminalbench_script": _exists("benchmarks/terminalbench/run.py"),
+                "terminalbench_result": _exists("benchmarks/results/terminalbench/latest.json"),
+                "passed": terminalbench.get("passed"),
+                "claim": terminalbench.get("claim"),
+                "external_best_value": (
+                    terminalbench.get("official_public_bar", {}).get("external_best_value")
+                ),
+                "missing_comparable_result": (
+                    terminalbench.get("prism_current", {}).get("missing_comparable_result")
+                ),
+                "required_profile": (
+                    terminalbench.get("mcp_profile_under_test", {}).get("required_profile")
+                ),
+                "default_tool_count": (
+                    terminalbench.get("mcp_profile_under_test", {}).get("default_tool_count")
+                ),
+                "required_metrics": (
+                    terminalbench.get("evaluation_contract", {}).get("required_metrics")
+                ),
+                "claim_requires": (
+                    terminalbench.get("evaluation_contract", {}).get("public_claim_requires")
+                ),
+            },
+            "satisfied": (
+                _exists("benchmarks/terminalbench/run.py")
+                and terminalbench.get("passed") is True
+                and terminalbench.get("claim") == "not_comparable_yet"
+                and terminalbench.get("official_public_bar", {}).get("external_best_value") == 0.82
+                and terminalbench.get("prism_current", {}).get("missing_comparable_result") is True
+                and terminalbench.get("mcp_profile_under_test", {}).get("required_profile") == "interactive"
+                and terminalbench.get("mcp_profile_under_test", {}).get("default_tool_count") == 17
+                and "terminal_task_success_rate" in (
+                    terminalbench.get("evaluation_contract", {}).get("required_metrics") or []
+                )
+                and "PRISM-on run using MCP tool_profile=interactive" in (
+                    terminalbench.get("evaluation_contract", {}).get("public_claim_requires") or []
+                )
+            ),
+        },
+        {
+            "requirement": "Provide a path to PRISM-on versus PRISM-off MCP Atlas real-world MCP tool-use scoring.",
+            "artifact": "benchmarks/mcpatlas/run.py and benchmarks/results/mcpatlas/latest.json",
+            "evidence": {
+                "mcpatlas_script": _exists("benchmarks/mcpatlas/run.py"),
+                "mcpatlas_result": _exists("benchmarks/results/mcpatlas/latest.json"),
+                "passed": mcpatlas.get("passed"),
+                "claim": mcpatlas.get("claim"),
+                "external_best_value": (
+                    mcpatlas.get("official_public_bar", {}).get("external_best_value")
+                ),
+                "missing_comparable_result": (
+                    mcpatlas.get("prism_current", {}).get("missing_comparable_result")
+                ),
+                "required_profile": (
+                    mcpatlas.get("mcp_profile_under_test", {}).get("required_profile")
+                ),
+                "default_tool_count": (
+                    mcpatlas.get("mcp_profile_under_test", {}).get("default_tool_count")
+                ),
+                "required_metrics": (
+                    mcpatlas.get("evaluation_contract", {}).get("required_metrics")
+                ),
+                "claim_requires": (
+                    mcpatlas.get("evaluation_contract", {}).get("public_claim_requires")
+                ),
+            },
+            "satisfied": (
+                _exists("benchmarks/mcpatlas/run.py")
+                and mcpatlas.get("passed") is True
+                and mcpatlas.get("claim") == "not_comparable_yet"
+                and mcpatlas.get("official_public_bar", {}).get("external_best_value") == 0.824
+                and mcpatlas.get("prism_current", {}).get("missing_comparable_result") is True
+                and mcpatlas.get("mcp_profile_under_test", {}).get("required_profile") == "interactive"
+                and mcpatlas.get("mcp_profile_under_test", {}).get("default_tool_count") == 17
+                and "pass_rate" in (
+                    mcpatlas.get("evaluation_contract", {}).get("required_metrics") or []
+                )
+                and "mean_coverage" in (
+                    mcpatlas.get("evaluation_contract", {}).get("required_metrics") or []
+                )
+                and "PRISM-on run using MCP tool_profile=interactive" in (
+                    mcpatlas.get("evaluation_contract", {}).get("public_claim_requires") or []
+                )
+            ),
         },
         {
             "requirement": "Actually prove PRISM is better than top public agents.",

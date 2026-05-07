@@ -441,6 +441,16 @@ def test_paired_campaign_manifest_plans_resumable_offsets(tmp_path):
     result = json.loads(proc.stdout)
     assert result["benchmark"] == "swebench_paired_campaign"
     assert result["limit"] == 2
+    assert result["budget"] == {
+        "pairs": 2,
+        "agent_runs": 4,
+        "evaluator_runs": 4,
+        "agent_timeout_sec_each": 1200,
+        "evaluator_timeout_sec_each": 1800,
+        "conservative_timeout_hours": 3.33,
+        "large_execution_requires_confirmation": False,
+        "excludes_setup_and_indexing_overhead": True,
+    }
     assert len(result["pairs"]) == 2
     assert result["pairs"][0]["offset"] == 3
     assert "patch_run.py" in result["pairs"][0]["commands"]["generate_prism_on"]

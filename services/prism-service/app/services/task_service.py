@@ -54,6 +54,11 @@ _LL_TASK_COLUMNS: list[tuple[str, str]] = [
     ("embedding", "BLOB"),
     ("merge_sha", "TEXT"),
     ("merged_at", "TEXT"),
+    # story_file was added to the CREATE TABLE schema later than embedding/
+    # merge_sha/merged_at, so DBs created before the rename land here without
+    # it. Adding to the migration list so existing tasks.db files self-heal
+    # on next service start.
+    ("story_file", "TEXT DEFAULT ''"),
 ]
 
 
@@ -65,6 +70,14 @@ class TaskService:
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA busy_timeout=5000")
+        # Forces WAL frames to be merged into the main DB file on a small
+        # page budget. Without this, on Docker Desktop on Windows
+        # (9P/virtiofs bind mounts) the WAL stayed visible to the live
+        # connection but did not flush to the host-visible file, so
+        # writes vanished on container rebuild. See memory
+        # mx-b44176 (prism-task-write-loss-windows-docker-2026-05-05).
+        # 64 pages ≈ 256KB; checkpoint cost is small per commit.
+        self._db.execute("PRAGMA wal_autocheckpoint=64")
         self._db.executescript(_CREATE_TASKS_SQL)
         self._migrate_task_columns()
         # Optional — when provided, task create/update embeds
@@ -74,6 +87,15 @@ class TaskService:
         # (e.g. hook smoke tests); create/update still succeeds, the
         # row just lacks an embedding until re-indexed.
         self._embed_fn: Optional[EmbedFn] = embed_fn
+
+    def _commit_and_checkpoint(self) -> None:
+        """Commit + force a WAL checkpoint so writes survive a container
+        rebuild on Docker Desktop on Windows. See memory mx-b44176."""
+        self._db.commit()
+        try:
+            self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.OperationalError:
+            pass
 
     # ------------------------------------------------------------------
     # LL-03 helper: write an embedding for the given task if we can
@@ -95,7 +117,7 @@ class TaskService:
         self._db.execute(
             "UPDATE tasks SET embedding=? WHERE id=?", (blob, task_id)
         )
-        self._db.commit()
+        self._commit_and_checkpoint()
 
     def _migrate_task_columns(self) -> None:
         """Backfill LL-01 columns on tasks.db files created before the
@@ -112,7 +134,7 @@ class TaskService:
                 self._db.execute(
                     f"ALTER TABLE tasks ADD COLUMN {col} {col_type}"
                 )
-                self._db.commit()
+                self._commit_and_checkpoint()
             except sqlite3.OperationalError:
                 pass
 
@@ -148,7 +170,7 @@ class TaskService:
             "VALUES (?, ?, ?, ?, ?)",
             (task_id, actor, action, details, now),
         )
-        self._db.commit()
+        self._commit_and_checkpoint()
 
     # ------------------------------------------------------------------
     # CRUD
@@ -196,7 +218,7 @@ class TaskService:
                 json.dumps(task.tags),
             ),
         )
-        self._db.commit()
+        self._commit_and_checkpoint()
         self._record_history(task.id, "created", f"title={title!r}")
         # LL-03: embed title+description so LL-06's similarity retrieval
         # has something to search over. Silent on embedder-offline —
@@ -292,7 +314,7 @@ class TaskService:
                 task.id,
             ),
         )
-        self._db.commit()
+        self._commit_and_checkpoint()
         self._record_history(task.id, "updated", "; ".join(changes))
         # LL-03: re-embed only when the title or description changed.
         # Priority / status / tag-only updates don't move the vector.

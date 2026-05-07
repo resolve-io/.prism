@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from collections import Counter
@@ -11,6 +12,7 @@ from fastapi.responses import FileResponse
 from nicegui import app, ui
 
 from app.project_context import get_project
+from app.services.graph_service import compute_node_hierarchy
 from app.ui.components.nav import create_nav, page_container
 
 
@@ -65,7 +67,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 <div id="graph-wrap">
   <div id="status">Loading graph...</div>
   <div id="graph"></div>
-  <div id="hint">Scroll to zoom · drag to pan · click a node for details</div>
+  <div id="hint">Scroll to zoom L0→L3 · drag to pan · click a super-node to drill in</div>
 </div>
 <aside id="sidebar">
   <div id="legend-wrap">
@@ -82,7 +84,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   // inconsistently.
   import Graph from "https://esm.sh/graphology@0.25.4";
   import forceAtlas2 from "https://esm.sh/graphology-layout-forceatlas2@0.10.1";
+  import FA2Layout from "https://esm.sh/graphology-layout-forceatlas2@0.10.1/worker";
   import Sigma from "https://esm.sh/sigma@3.0.0";
+  // Yield to the browser between batches of synchronous work so paint /
+  // input can run. requestAnimationFrame is the right primitive here —
+  // it lines us up with the next frame, which is the moment Sigma will
+  // try to redraw too.
+  const yieldToBrowser = () => new Promise(r => requestAnimationFrame(r));
   const PROJECT_ID = "__PROJECT_ID__";
   const statusEl = document.getElementById("status");
   const COMMUNITY_COLORS = [
@@ -106,6 +114,20 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
     const b = parseInt(h.substring(4, 6), 16);
     return `rgba(${r},${g},${b},${a})`;
   }
+  // Multiply an existing color (hex OR rgba(...)) by `a`. Used by the
+  // LOD reducers to blend whichever color the node/edge already has —
+  // hex super-node fills, rgba leaf-edge tints — through a level
+  // boundary without losing its underlying hue.
+  function multiplyAlpha(color, a) {
+    if (a >= 0.999) return color;
+    if (!color) return `rgba(107,114,128,${a})`;
+    if (color[0] === "#") return withAlpha(color, a);
+    const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (!m) return color;
+    const a0 = m[4] !== undefined ? parseFloat(m[4]) : 1;
+    return `rgba(${m[1]},${m[2]},${m[3]},${a0 * a})`;
+  }
+  const LEVEL_FADE_MS = 240;
   // HSL round-trip utilities. Shading by degree modulates the L
   // channel while keeping H+S fixed, so every node in a community
   // shares the base hue and saturation — only perceived lightness
@@ -159,29 +181,71 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   function seedPosition() {
     return { x: Math.random(), y: Math.random() };
   }
-  // communities.json returns DB-derived labels ({id, label, count}) so
-  // the sidebar legend reads like graphify's graph.html did. Loaded in
-  // parallel; if it fails we still render the graph but mark clusters as
-  // unlabeled instead of exposing graphify's raw numeric community ids.
-  Promise.all([
-    fetch(`/graphify-visual/${PROJECT_ID}/graph.json`)
-      .then(r => { if (!r.ok) throw new Error("graph.json " + r.status); return r.json(); }),
-    fetch(`/graphify-visual/${PROJECT_ID}/communities.json`)
-      .then(r => r.ok ? r.json() : {communities: []})
-      .catch(() => ({communities: []})),
-  ])
-    .then(([data, commData]) => {
+  // hierarchy.json returns leaves tagged with l0/l1/l2 parent keys + the
+  // DB-derived community labels for the legend. One fetch primes both
+  // the LOD super-node assembly (after FA2) and the legend.
+  async function loadGraph() {
+      statusEl.textContent = "Fetching graph data...";
+      const data = await fetch(`/graphify-visual/${PROJECT_ID}/hierarchy.json`)
+        .then(r => {
+          if (!r.ok) throw new Error("hierarchy " + r.status);
+          return r.json();
+        });
       const g = new Graph();
       const rawNodes = data.nodes || [];
-      const edges = data.links || data.edges || [];
-      const labelMap = new Map();
-      for (const c of (commData.communities || [])) {
-        labelMap.set(c.id, c.label);
-        labelMap.set(String(c.id), c.label);
+      const edges = data.edges || data.links || [];
+      const commLabelsMap = new Map();
+      for (const [k, v] of Object.entries(data.community_labels || {})) {
+        commLabelsMap.set(Number(k), v);
+        commLabelsMap.set(String(k), v);
       }
       const clusterLabel = community =>
-        labelMap.get(community) || labelMap.get(String(community))
+        commLabelsMap.get(community) || commLabelsMap.get(String(community))
         || "unlabeled cluster";
+      // Track which abstraction level the camera ratio currently maps to.
+      // Declared up here so the Sigma reducer closure (built farther down)
+      // captures the live binding.
+      //
+      // Threshold tuning notes:
+      //   The bbox Sigma normalizes against includes the spread super-
+      //   nodes (3× leaf extent at L0), so ratio=1.0 = "fit super-node
+      //   spread to viewport." Lower thresholds keep the active level
+      //   filling the canvas instead of shrinking into a tiny island.
+      let currentLevel = 0;
+      let prevLevel = 0;
+      let levelTransitionStart = 0;
+      // Per-level alpha for the LOD reducer. Exactly one level is
+      // visible at any settled moment — the previous wide-ratio
+      // crossfade caused a confusing mix where, e.g., L2 super-nodes
+      // ghosted on top of the L3 leaf mesh. When currentLevel
+      // changes (via click-drill or 80%-bbox auto-drill) a short
+      // smoothstep fade interpolates from the old layer to the new.
+      function smoothAlphas() {
+        const out = [0, 0, 0, 0];
+        const elapsed = performance.now() - levelTransitionStart;
+        if (elapsed >= LEVEL_FADE_MS) {
+          out[currentLevel] = 1;
+          return out;
+        }
+        const t = elapsed / LEVEL_FADE_MS;
+        const eased = t * t * (3 - 2 * t);
+        out[currentLevel] = eased;
+        out[prevLevel] = 1 - eased;
+        return out;
+      }
+      // Click-to-drill focus stack. Each entry is {level, key} — the
+      // ancestor a click pushed down to. Reducers + legend render only
+      // descendants of the deepest entry. Wheeling out past a focus
+      // level pops it; clicking empty space clears the stack.
+      let focusPath = [];
+      const focusKey = () => focusPath.length > 0
+        ? focusPath[focusPath.length - 1] : null;
+      // Latest camera ratio cached for the LOD reducer. Sigma calls
+      // the reducer during its own constructor (before `camera` is
+      // assigned), so we can't read getState() in the closure — read
+      // this mirror instead and refresh it from the camera "updated"
+      // handler, which fires on every animation frame.
+      let currentRatio = 1.8;
       // Drop graphify's community-summary rationale nodes — they're prose
       // blobs graphify attaches per community, not actual code, and they
       // inflate the graph by ~40% while adding no navigational value.
@@ -215,55 +279,83 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         if (!commLo.has(k) || v < commLo.get(k)) commLo.set(k, v);
         if (!commHi.has(k) || v > commHi.get(k)) commHi.set(k, v);
       }
-      for (const n of nodes) {
-        if (g.hasNode(n.id)) continue;
-        const pos = seedPosition();
-        const k = commKey(n);
-        const v = Math.log(1 + (visDeg.get(n.id) || 0));
-        const range = (commHi.get(k) - commLo.get(k)) || 1;
-        const norm = (v - commLo.get(k)) / range;
-        g.addNode(n.id, {
-          label: n.label || n.id,
-          // Near-uniform size (2.5-3.3). Degree is expressed through
-          // brightness, not radius — large degree→size mappings turn
-          // hubs into canvas-dominating blobs.
-          size: 2.5 + 0.8 * norm,
-          color: shadeByDegree(colorFor(n.community), norm),
-          community: n.community ?? null,
-          communityLabel: clusterLabel(n.community),
-          x: pos.x, y: pos.y,
-        });
-      }
-      let edgesDrawn = 0;
-      for (const e of edges) {
-        const s = e.source, t = e.target;
-        if (!g.hasNode(s) || !g.hasNode(t) || s === t) continue;
-        // Edge color = source node's COMMUNITY hue at low alpha, not the
-        // degree-shaded node color. A dim leaf connected to a bright hub
-        // should still contribute a visible community-colored thread —
-        // inheriting the shaded color made leaf-anchored edges fade to
-        // invisible, which killed the webby between-community feel.
-        const srcComm = g.getNodeAttribute(s, "community");
-        try {
-          g.addEdge(s, t, {
-            size: 0.25,
-            color: withAlpha(colorFor(srcComm), 0.3),
+      // Stream node insertion in ~2k batches, yielding to the browser
+      // between batches. graphology's addNode runs ~5-10K/sec; processing
+      // 50K nodes in one synchronous loop locks the tab for several
+      // seconds. Batched + RAF gives the user a live progress count and
+      // keeps input responsive.
+      const NODE_BATCH = 2000;
+      for (let i = 0; i < nodes.length; ) {
+        const end = Math.min(i + NODE_BATCH, nodes.length);
+        for (; i < end; i++) {
+          const n = nodes[i];
+          if (g.hasNode(n.id)) continue;
+          const pos = seedPosition();
+          const k = commKey(n);
+          const v = Math.log(1 + (visDeg.get(n.id) || 0));
+          const range = (commHi.get(k) - commLo.get(k)) || 1;
+          const norm = (v - commLo.get(k)) / range;
+          g.addNode(n.id, {
+            label: n.label || n.id,
+            // Near-uniform size (2.5-3.3). Degree expressed through
+            // brightness, not radius — large degree→size mappings turn
+            // hubs into canvas-dominating blobs.
+            size: 2.5 + 0.8 * norm,
+            color: shadeByDegree(colorFor(n.community), norm),
+            community: n.community ?? null,
+            communityLabel: clusterLabel(n.community),
+            // L3 = leaf. Parent keys at L0/L1/L2 are emitted by the
+            // server from the file path; the LOD pass below uses them
+            // to assemble super-nodes after FA2 settles.
+            level: 3,
+            l0: n.l0 || null,
+            l1: n.l1 || null,
+            l2: n.l2 || null,
+            x: pos.x, y: pos.y,
           });
-          edgesDrawn++;
-        } catch (_) {}
+        }
+        statusEl.textContent =
+          `Loading nodes ${i.toLocaleString()} / ${nodes.length.toLocaleString()}...`;
+        await yieldToBrowser();
       }
-      // ForceAtlas2 — tune to match graphify's vis.js Barnes-Hut
-      // output (single organic hairball with visible community
-      // structure). vis.js config we're mimicking:
-      //   gravitationalConstant -60, springLength 120, springConstant
-      //   0.08, damping 0.4.
-      // FA2 equivalents: gravity 1.2 (pulls components together like
-      // vis.js's -60 G-constant does), scalingRatio 2 (moderate
-      // repulsion), adjustSizes FALSE (true creates starburst spokes
-      // around large-degree hubs — the thing we're fighting), and
-      // barnesHut for speed over ~2k nodes.
-      statusEl.textContent = `Laying out ${nodes.length.toLocaleString()} nodes `
-        + `(ForceAtlas2)...`;
+      // Stream edge insertion — addEdge is cheaper than addNode so the
+      // batch is larger, but the principle is the same: never block the
+      // main thread for more than a frame.
+      let edgesDrawn = 0;
+      const EDGE_BATCH = 5000;
+      for (let i = 0; i < edges.length; ) {
+        const end = Math.min(i + EDGE_BATCH, edges.length);
+        for (; i < end; i++) {
+          const e = edges[i];
+          const s = e.source, t = e.target;
+          if (!g.hasNode(s) || !g.hasNode(t) || s === t) continue;
+          // Edge color = source node's COMMUNITY hue at low alpha, not the
+          // degree-shaded node color. A dim leaf connected to a bright hub
+          // should still contribute a visible community-colored thread —
+          // inheriting the shaded color made leaf-anchored edges fade to
+          // invisible, which killed the webby between-community feel.
+          const srcComm = g.getNodeAttribute(s, "community");
+          try {
+            g.addEdge(s, t, {
+              size: 0.25,
+              color: withAlpha(colorFor(srcComm), 0.3),
+              level: 3,
+            });
+            edgesDrawn++;
+          } catch (_) {}
+        }
+        statusEl.textContent =
+          `Loading edges ${i.toLocaleString()} / ${edges.length.toLocaleString()}...`;
+        await yieldToBrowser();
+      }
+      // ----- ForceAtlas2 in a Web Worker (fully invisible) ----------
+      // FA2 is mathematically chaotic during early iterations — watching
+      // it live looks like a spazz attack and even post-warmup the per-
+      // iteration jitter doesn't read as "smooth". The fix: compute the
+      // layout fully off-screen (worker keeps the main thread responsive),
+      // capture the converged positions, then play back a clean cluster-
+      // by-cluster reveal animation that doesn't depend on FA2's frame
+      // timing at all.
       const settings = forceAtlas2.inferSettings(g);
       settings.barnesHutOptimize = g.order > 2000;
       settings.barnesHutTheta = 0.5;
@@ -272,182 +364,868 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       settings.slowDown = 1;
       settings.adjustSizes = false;
       settings.outboundAttractionDistribution = false;
-      const iters = g.order > 20000 ? 300 : g.order > 5000 ? 600 : 800;
+      const computeMs = g.order > 20000 ? 5000 : g.order > 5000 ? 4000 : 3000;
+      const layout = new FA2Layout(g, { settings });
       const t0 = performance.now();
-      // Yield to the browser once so the "Laying out..." status can paint
-      // before the synchronous FA2 pass blocks the main thread.
-      setTimeout(() => {
-        forceAtlas2.assign(g, { iterations: iters, settings });
-        const dt = ((performance.now() - t0) / 1000).toFixed(1);
-        // Click-to-focus state: when a node is focused, the node
-        // reducer dims anything that isn't the node or a neighbor, and
-        // the edge reducer dims any edge not incident to it. Using
-        // reducers instead of mutating the graph keeps the state
-        // toggleable with one click-stage.
-        let focusedNode = null;
-        let neighborSet = new Set();
+      layout.start();
 
-        // Hover state: the hovered node grows 30% and its immediate
-        // graph-space neighborhood is pushed radially outward to
-        // "make space" visually. Push applied inside the node reducer
-        // on each frame, so no mutation and no animation loop needed —
-        // it just snaps on enter/leave which looks clean at this density.
-        let hoveredNode = null;
-        let hoveredX = 0, hoveredY = 0;
-        const HOVER_PUSH_RADIUS = 8;    // graph units
-        const HOVER_PUSH_MAX = 3.5;     // graph units
-        const HOVER_SIZE_MULT = 1.3;
+      // Click the (still-empty) canvas to skip straight to the result.
+      let skipped = false;
+      const graphEl = document.getElementById("graph");
+      graphEl.style.cursor = "wait";
+      const skipHandler = () => { skipped = true; };
+      graphEl.addEventListener("click", skipHandler, { once: true });
+      statusEl.textContent =
+        `Computing layout (${(computeMs / 1000).toFixed(1)}s)...`;
+      const cStart = performance.now();
+      while (performance.now() - cStart < computeMs && !skipped) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+      graphEl.removeEventListener("click", skipHandler);
+      graphEl.style.cursor = "";
+      layout.stop();
+      layout.kill();
 
-        const renderer = new Sigma(g, document.getElementById("graph"), {
-          labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
-          maxCameraRatio: 10, defaultNodeColor: "#6b7280",
-          defaultEdgeColor: "rgba(107,114,128,0.3)",
-          renderEdgeLabels: false,
-          enableEdgeEvents: false,
-          nodeReducer: (node, data) => {
-            let out = data;
-            // Focus dimming (click) layers first.
-            if (focusedNode) {
-              if (node === focusedNode || neighborSet.has(node)) {
-                out = { ...out, zIndex: 1 };
-              } else {
-                out = { ...out, color: "#2a2a3e", label: "", zIndex: 0 };
-              }
+      // ----- Super-node assembly (LOD hierarchy) ----------------------
+      // For each abstraction level, group the L3 leaves by their l0/l1/l2
+      // parent and add a super-node at the centroid of its members.
+      // Super-edges aggregate leaf edges between matching parent groups.
+      // The level attribute on every node + edge is what the LOD reducer
+      // below keys on to show only one zoom level at a time.
+      function buildSupers(levelKey, lvl) {
+        const groups = new Map();
+        g.forEachNode((id, attrs) => {
+          if (attrs.level !== 3) return;
+          const k = attrs[levelKey];
+          if (!k) return;
+          if (!groups.has(k)) groups.set(k,
+            { ids: [], sx: 0, sy: 0, comm: new Map() });
+          const grp = groups.get(k);
+          grp.ids.push(id);
+          grp.sx += attrs.x; grp.sy += attrs.y;
+          const c = attrs.community ?? "_";
+          grp.comm.set(c, (grp.comm.get(c) || 0) + 1);
+        });
+        for (const [key, grp] of groups) {
+          const n = grp.ids.length;
+          let bestC = null, bestN = -1;
+          for (const [c, cnt] of grp.comm)
+            if (cnt > bestN) { bestN = cnt; bestC = c === "_" ? null : c; }
+          // Strip path parents to the rightmost segment for a readable
+          // label. comm:<id> fallback (flat repos) resolves to the
+          // DB-derived community label, then truncated at the first
+          // " · " separator so legend / canvas don't show the
+          // graphify "<file> · <hub>" suffix as a mashed-up string.
+          const rawLabel = key.startsWith("comm:")
+            ? (clusterLabel(Number(key.slice(5))) || ("cluster " + key.slice(5)))
+            : (key.split("/").pop() || key);
+          const labelText = (() => {
+            const dot = rawLabel.indexOf(" · ");
+            return dot > 0 ? rawLabel.substring(0, dot) : rawLabel;
+          })();
+          // Larger labels at higher abstraction levels so the L0 view
+          // reads instantly. Sigma honors per-node labelSize.
+          const labelSizeForLevel = lvl === 0 ? 22 : lvl === 1 ? 18 : 15;
+          // Each super-node carries the ancestor keys at every level
+          // ABOVE its own — focus filtering then reduces to "show
+          // nodes where l<focusLevel> === focusKey", which works for
+          // both descendants of a path super-node and L3 leaves.
+          const keyParts = key.split("/");
+          const ancL0 = keyParts[0] || key;
+          const ancL1 = keyParts.length >= 2
+            ? keyParts.slice(0, 2).join("/")
+            : ancL0;
+          const ancL2 = keyParts.length >= 3
+            ? keyParts.slice(0, 3).join("/")
+            : ancL1;
+          // Spawn position: a small random jitter very close to the
+          // graph centroid (or leaf-graph center for L0). The centroid
+          // itself is the *target* — physics adds an attraction force
+          // that pulls the super-node toward target while repulsion
+          // pushes it away from overlapping siblings. Net effect: the
+          // user sees clusters bloom outward from the centre and
+          // settle into their natural homes.
+          const targetX = grp.sx / n;
+          const targetY = grp.sy / n;
+          const jx = (Math.random() - 0.5) * 8;
+          const jy = (Math.random() - 0.5) * 8;
+          g.addNode(`__super__${lvl}__${key}`, {
+            label: labelText,
+            level: lvl,
+            x: targetX * 0.18 + jx,
+            y: targetY * 0.18 + jy,
+            targetX, targetY,
+            // Super-node radius scales sublinearly with member count so
+            // a 5000-member cluster doesn't swamp a 200-member one.
+            size: 8 + 4 * Math.log(1 + n),
+            color: colorFor(bestC),
+            community: bestC,
+            communityLabel: labelText,
+            memberCount: n,
+            labelSize: labelSizeForLevel,
+            l0: ancL0,
+            l1: lvl >= 1 ? ancL1 : null,
+            l2: lvl >= 2 ? ancL2 : null,
+          });
+        }
+        return groups.size;
+      }
+      function buildSuperEdges(levelKey, lvl) {
+        const agg = new Map();
+        g.forEachEdge((eid, attrs, src, tgt) => {
+          if (attrs.level !== 3) return;
+          const sKey = g.getNodeAttribute(src, levelKey);
+          const tKey = g.getNodeAttribute(tgt, levelKey);
+          if (!sKey || !tKey || sKey === tKey) return;
+          const a = sKey < tKey ? sKey : tKey;
+          const b = sKey < tKey ? tKey : sKey;
+          const key = `${a}${b}`;
+          const cur = agg.get(key);
+          if (cur) cur.count++;
+          else agg.set(key, { a, b, count: 1 });
+        });
+        let added = 0;
+        for (const v of agg.values()) {
+          const sId = `__super__${lvl}__${v.a}`;
+          const tId = `__super__${lvl}__${v.b}`;
+          if (!g.hasNode(sId) || !g.hasNode(tId)) continue;
+          try {
+            g.addEdgeWithKey(`__se__${lvl}__${v.a}__${v.b}`, sId, tId, {
+              level: lvl,
+              size: 0.6 + 0.5 * Math.log(1 + v.count),
+              // Quiet default — edges fade into the background so
+              // super-nodes own the eye. The edge reducer brightens
+              // them when their endpoints are involved in a hover,
+              // which is when the connections are actually relevant.
+              color: "rgba(60,68,90,0.35)",
+              aggregateCount: v.count,
+            });
+            added++;
+          } catch (_) {}
+        }
+        return added;
+      }
+      const lodCount = {
+        0: buildSupers("l0", 0),
+        1: buildSupers("l1", 1),
+        2: buildSupers("l2", 2),
+      };
+      buildSuperEdges("l0", 0);
+      buildSuperEdges("l1", 1);
+      buildSuperEdges("l2", 2);
+
+      // Leaf-graph bbox — needed both by the SPREAD pass below and
+      // by labelRadius() for the physics tick that runs alongside.
+      // Computed once after super-node assembly and treated as
+      // immutable for the lifetime of the viewer.
+      let lminX = Infinity, lmaxX = -Infinity;
+      let lminY = Infinity, lmaxY = -Infinity;
+      g.forEachNode((id, attrs) => {
+        if (attrs.level !== 3) return;
+        if (attrs.x < lminX) lminX = attrs.x;
+        if (attrs.x > lmaxX) lmaxX = attrs.x;
+        if (attrs.y < lminY) lminY = attrs.y;
+        if (attrs.y > lmaxY) lmaxY = attrs.y;
+      });
+      const leafCx = (lminX + lmaxX) / 2;
+      const leafCy = (lminY + lmaxY) / 2;
+
+      // ----- Label-overlap relaxation physics --------------------
+      // Approximate each super-node as a circle whose radius covers
+      // its node + the right-side label. When two circles overlap
+      // we push them apart by an amount proportional to the overlap;
+      // running this in a RAF tick gives the user a smooth settling
+      // animation as the canvas transitions from "spawn" to "no
+      // labels overlapping".
+      const GRAPH_PER_PX = (() => {
+        const ext = Math.max(lmaxX - lminX, lmaxY - lminY);
+        return ext > 0 ? ext / 700 : 0.5;
+      })();
+      // labelRadius ≈ half the diagonal of the node-plus-label AABB.
+      // The label paints to the right, so the AABB is asymmetric
+      // (node radius on the left, label width + node radius on the
+      // right); the diagonal gives us a single conservative number
+      // that, when used as a soft-repulsion circle radius, keeps
+      // labels well clear of one another regardless of orientation.
+      function labelRadius(attrs) {
+        const text = attrs.label || "";
+        const labelPx = attrs.labelSize || 14;
+        const widthPx = text.length * labelPx * 0.6 + 28;
+        const heightPx = labelPx * 1.4 + 6;
+        const sz = attrs.size || 5;
+        const wG = sz + (widthPx + 8) * GRAPH_PER_PX;
+        const hG = Math.max(sz, heightPx * 0.5 * GRAPH_PER_PX);
+        // Half-diagonal of the (full-width × full-height) box,
+        // scaled down a touch so we don't spread further than the
+        // visual footprint actually requires.
+        return Math.sqrt(wG * wG + hG * hG) * 0.55;
+      }
+      function labelRelaxStep() {
+        let totalMove = 0;
+        for (const lvl of [0, 1, 2]) {
+          const ids = [];
+          g.forEachNode((id, attrs) => {
+            if (attrs.level === lvl) ids.push(id);
+          });
+          if (ids.length < 2) continue;
+          // Pull current positions into a mutable buffer; we'll
+          // apply attraction + hard overlap correction here, then
+          // write the final positions back to the graph in one pass.
+          const px = new Float64Array(ids.length);
+          const py = new Float64Array(ids.length);
+          const tx = new Float64Array(ids.length);
+          const ty = new Float64Array(ids.length);
+          const radii = new Float64Array(ids.length);
+          for (let i = 0; i < ids.length; i++) {
+            const a = g.getNodeAttributes(ids[i]);
+            px[i] = a.x; py[i] = a.y;
+            tx[i] = a.targetX !== undefined ? a.targetX : a.x;
+            ty[i] = a.targetY !== undefined ? a.targetY : a.y;
+            radii[i] = labelRadius(a);
+          }
+          // Phase 1 — attraction: each super-node steps a small
+          // fraction toward its leaf-centroid home. This is the
+          // visible motion the user perceives as "alive".
+          for (let i = 0; i < ids.length; i++) {
+            px[i] += (tx[i] - px[i]) * 0.045;
+            py[i] += (ty[i] - py[i]) * 0.045;
+          }
+          // Phase 2 — pairwise circle repulsion using the diagonal
+          // labelRadius so the collision footprint covers the full
+          // node + label AABB. Force ∝ overlap, so heavily-clumped
+          // pairs unfold faster than gently-touching ones. Soft
+          // (not hard PBD) so attraction can still influence the
+          // final layout — equilibrium settles a few units past
+          // touching, biased toward each super-node's centroid.
+          for (let i = 0; i < ids.length; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+              const ddx = px[i] - px[j];
+              const ddy = py[i] - py[j];
+              const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
+              const minD = radii[i] + radii[j];
+              if (d >= minD) continue;
+              const overlap = minD - d;
+              const push = overlap * 0.30;
+              const ux = ddx / d, uy = ddy / d;
+              px[i] += ux * push; py[i] += uy * push;
+              px[j] -= ux * push; py[j] -= uy * push;
             }
-            // Hover effects: grow hovered, push nearby away.
-            if (hoveredNode) {
-              if (node === hoveredNode) {
+          }
+          for (let i = 0; i < ids.length; i++) {
+            const oldX = g.getNodeAttribute(ids[i], "x");
+            const oldY = g.getNodeAttribute(ids[i], "y");
+            const dxv = px[i] - oldX, dyv = py[i] - oldY;
+            if (dxv === 0 && dyv === 0) continue;
+            g.setNodeAttribute(ids[i], "x", px[i]);
+            g.setNodeAttribute(ids[i], "y", py[i]);
+            totalMove += Math.abs(dxv) + Math.abs(dyv);
+          }
+        }
+        return totalMove;
+      }
+      let physicsRaf = null;
+      let physicsIdleFrames = 0;
+      function startPhysics() {
+        if (physicsRaf !== null) return;
+        physicsIdleFrames = 0;
+        const tick = () => {
+          const moved = labelRelaxStep();
+          // Refresh while either physics is moving OR a level-
+          // transition fade is in flight — without the second
+          // clause, the alpha fade between levels stalls because
+          // there's no other RAF source on the page during a
+          // settled layout.
+          const fadeActive = (performance.now() - levelTransitionStart)
+                             < LEVEL_FADE_MS;
+          if (moved > 0.001 || fadeActive) {
+            physicsIdleFrames = 0;
+            renderer.refresh();
+          } else {
+            physicsIdleFrames++;
+          }
+          // Stop after ~1s of stillness so we're not burning RAF
+          // cycles when nothing is moving. Long enough that brief
+          // overlap-resolutions don't kick the loop off prematurely.
+          if (physicsIdleFrames > 60) {
+            physicsRaf = null;
+            return;
+          }
+          physicsRaf = requestAnimationFrame(tick);
+        };
+        physicsRaf = requestAnimationFrame(tick);
+      }
+
+      // No pre-spread — super-nodes spawn at their member centroids
+      // (clumped) and physics relaxation alone slides them outward.
+      // The user watches the clusters move from where they spawn,
+      // which is the requested behaviour.
+      const SPREAD = { 0: 1.0, 1: 1.0, 2: 1.0 };
+      g.forEachNode((id, attrs) => {
+        const lvl = attrs.level;
+        if (lvl === undefined || lvl === 3) return;
+        const sx = SPREAD[lvl] || 1.0;
+        if (sx === 1.0) return;
+        const dx = (attrs.x - leafCx) * sx;
+        const dy = (attrs.y - leafCy) * sx;
+        g.setNodeAttribute(id, "x", leafCx + dx);
+        g.setNodeAttribute(id, "y", leafCy + dy);
+      });
+
+      // Snapshot final sizes for reveal. Only the level the user lands on
+      // (L0) needs size-zeroing — non-current levels are hidden by the
+      // reducer regardless of their size attribute.
+      const finalSize = new Map();
+      g.forEachNode((id, attrs) => { finalSize.set(id, attrs.size); });
+      g.forEachNode((id, attrs) => {
+        if (attrs.level === 0) g.setNodeAttribute(id, "size", 0);
+      });
+
+      // ----- Sigma renderer (mounted now, on settled positions) -----
+      // Click-to-focus state: when a node is focused, the node reducer
+      // dims anything that isn't the node or a neighbor, and the edge
+      // reducer dims any edge not incident to it. Using reducers keeps
+      // focus toggleable with one click-stage.
+      let focusedNode = null;
+      let neighborSet = new Set();
+      // Hover state: the hovered node grows 30% and its immediate
+      // graph-space neighborhood is pushed radially outward to "make
+      // space" visually. Push applied inside the node reducer on each
+      // frame — no mutation, no animation loop, just a snap on
+      // enter/leave that looks clean at this density.
+      let hoveredNode = null;
+      let hoveredX = 0, hoveredY = 0;
+      const HOVER_PUSH_RADIUS = 8;    // graph units
+      const HOVER_PUSH_MAX = 3.5;     // graph units
+      const HOVER_SIZE_MULT = 1.3;
+
+      // layoutElapsed is filled in after the visible phase finishes; the
+      // closure picks up whatever value it holds when baseStatus() is
+      // called, so click handlers reading the status get the right text.
+      let layoutElapsed = "...";
+      const LEVEL_NAMES = ["domains", "services", "modules", "symbols"];
+      // Counts items the LOD reducer would paint right now — i.e., at
+      // currentLevel and inside the active focus subtree if any. So
+      // status reads what the user actually sees, not raw level totals.
+      function visibleCount() {
+        const fk = focusKey();
+        let c = 0;
+        g.forEachNode((_id, attrs) => {
+          if (attrs.level !== currentLevel) return;
+          if (fk && attrs["l" + fk.level] !== fk.key) return;
+          c++;
+        });
+        return c;
+      }
+      const baseStatus = () => {
+        const showing = visibleCount();
+        const where = `${showing.toLocaleString()} ${LEVEL_NAMES[currentLevel]}`;
+        // Breadcrumb of focused ancestors — rightmost is the deepest.
+        const trail = focusPath.length > 0
+          ? " · " + focusPath
+              .map(f => (f.key.split("/").pop() || f.key))
+              .join(" › ")
+          : "";
+        const hint = focusPath.length > 0
+          ? " · click empty to back out"
+          : " · scroll to zoom";
+        return `L${currentLevel}${trail} · ${where} · FA2 ${layoutElapsed}s${hint}`;
+      };
+
+      // Stroke-outlined label: dark stroke first, light fill on top.
+      // Reads against any background — node fills, edges, hover
+      // highlights, even Sigma's default lighter hover canvas — and
+      // doesn't depend on a backdrop rectangle that can land on the
+      // wrong z-order. Hover variant boosts size 15% so the active
+      // label visibly dominates without needing a separate backdrop.
+      const drawNodeLabelOutlined = (context, data, settings, sizeMul) => {
+        if (!data.label || data.hidden) return;
+        const mul = sizeMul || 1;
+        const baseSize = (data.labelSize || settings.labelSize || 13) * mul;
+        const weight = data.labelWeight || settings.labelWeight || "600";
+        const font = settings.labelFont
+          || "system-ui, -apple-system, sans-serif";
+        context.font = `${weight} ${baseSize}px ${font}`;
+        context.textBaseline = "middle";
+        context.textAlign = "left";
+        const x = data.x + data.size + 4;
+        const y = data.y;
+        // Heavy dark stroke around the text — reads against any
+        // background colour, including Sigma's default white hover
+        // overlay (which previously rendered white-on-white).
+        context.lineWidth = mul > 1 ? 4 : 3;
+        context.lineJoin = "round";
+        context.miterLimit = 2;
+        context.strokeStyle = "rgba(8,10,18,0.92)";
+        context.strokeText(data.label, x, y);
+        context.fillStyle =
+          (settings.labelColor && settings.labelColor.color) || "#f1f3f8";
+        context.fillText(data.label, x, y);
+      };
+      // Sigma paints labels on the labels canvas AND hover labels on
+      // the hoverNodes canvas — both stay visible, so without this
+      // skip the smaller regular label bleeds through under the
+      // bigger hover label and reads as jumbled doubled text.
+      const drawNodeLabel = (ctx, d, s) => {
+        if (d.__hovered) return;
+        drawNodeLabelOutlined(ctx, d, s, 1);
+      };
+      const drawNodeHover = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1.15);
+
+      const renderer = new Sigma(g, document.getElementById("graph"), {
+        labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.04,
+        maxCameraRatio: 30, defaultNodeColor: "#6b7280",
+        defaultEdgeColor: "rgba(107,114,128,0.3)",
+        renderEdgeLabels: false,
+        enableEdgeEvents: false,
+        // Wheel zoom — Sigma's default 1.7× per click felt jumpy with
+        // the LOD bands clustered close (1.5 / 0.7 / 0.3). 1.22× takes
+        // ~3 clicks to cross a band so the smooth crossfade has time
+        // to read; zoomDuration extends the animation so each click
+        // glides instead of snapping.
+        zoomingRatio: 1.22,
+        zoomDuration: 320,
+        // Brighter labels with weight so super-nodes read against the
+        // #0f0f1a body. Per-node labelSize on super-nodes overrides
+        // this default for L0/L1; L3 leaves use it as the floor.
+        labelColor: { color: "#f1f3f8" },
+        labelWeight: "600",
+        labelSize: 13,
+        labelFont: "system-ui, -apple-system, sans-serif",
+        // Sigma 3.0.0 setting names — labelRenderer/hoverRenderer
+        // were Sigma 2 and silently ignored here, which let the
+        // default white-on-white hover overlay clobber labels.
+        defaultDrawNodeLabel: drawNodeLabel,
+        defaultDrawNodeHover: drawNodeHover,
+        nodeReducer: (node, data) => {
+          // Smooth LOD blend — alpha is interpolated through level
+          // boundaries (smoothstep) so wheeling produces a continuous
+          // crossfade between adjacent layers rather than a snap.
+          const a = smoothAlphas()[data.level];
+          if (a <= 0.01) return { ...data, hidden: true };
+          // Drill-down focus: only render descendants of the deepest
+          // focus item. Each super-node + leaf carries ancestor keys at
+          // every level above its own, so this is a single attribute
+          // compare regardless of depth.
+          const fk = focusKey();
+          if (fk && data["l" + fk.level] !== fk.key) {
+            return { ...data, hidden: true };
+          }
+          let out = a < 0.999
+            ? { ...data, color: multiplyAlpha(data.color, a) }
+            : data;
+          // Focus dimming (click) layers first.
+          if (focusedNode) {
+            if (node === focusedNode || neighborSet.has(node)) {
+              out = { ...out, zIndex: 1 };
+            } else {
+              out = { ...out, color: "#2a2a3e", label: "", zIndex: 0 };
+            }
+          }
+          // Hover effects: grow hovered, push nearby away. Hovered
+          // super-nodes get a subtle pulse + 15% bigger label so the
+          // canvas feels live and the label always reads on top.
+          if (hoveredNode) {
+            if (node === hoveredNode) {
+              const pulse = 1 + 0.06 * Math.sin(performance.now() / 220);
+              out = {
+                ...out,
+                size: (out.size || data.size) * HOVER_SIZE_MULT * pulse,
+                labelSize:
+                  (out.labelSize || data.labelSize || 13) * 1.15,
+                forceLabel: true,
+                zIndex: 3,
+                // Marker the label drawer reads to skip painting the
+                // regular (un-grown) label for this node — only the
+                // hover renderer paints it during hover.
+                __hovered: true,
+              };
+            } else {
+              const dx = (data.x || 0) - hoveredX;
+              const dy = (data.y || 0) - hoveredY;
+              const d = Math.sqrt(dx * dx + dy * dy);
+              if (d > 0 && d < HOVER_PUSH_RADIUS) {
+                const t = 1 - (d / HOVER_PUSH_RADIUS);
+                const push = HOVER_PUSH_MAX * t * t;
                 out = {
                   ...out,
-                  size: (out.size || data.size) * HOVER_SIZE_MULT,
-                  forceLabel: true,
-                  zIndex: 3,
+                  x: data.x + (dx / d) * push,
+                  y: data.y + (dy / d) * push,
                 };
-              } else {
-                const dx = (data.x || 0) - hoveredX;
-                const dy = (data.y || 0) - hoveredY;
-                const d = Math.sqrt(dx * dx + dy * dy);
-                if (d > 0 && d < HOVER_PUSH_RADIUS) {
-                  const t = 1 - (d / HOVER_PUSH_RADIUS);
-                  const push = HOVER_PUSH_MAX * t * t;
-                  out = {
-                    ...out,
-                    x: data.x + (dx / d) * push,
-                    y: data.y + (dy / d) * push,
-                  };
-                }
               }
             }
-            return out;
-          },
-          edgeReducer: (edge, data) => {
-            if (!focusedNode) return data;
+          }
+          // Force-render labels for super-nodes — at L0 only ~10 of them
+          // exist, so respecting labelDensity hides the most useful info
+          // on the screen. Leaves still respect the density throttle.
+          if (data.level !== undefined && data.level < 3) {
+            out = { ...out, forceLabel: true };
+          }
+          return out;
+        },
+        edgeReducer: (edge, data) => {
+          // Same smoothstep crossfade as nodes so super-edges fade
+          // alongside super-nodes through the threshold.
+          const a = smoothAlphas()[data.level];
+          if (a <= 0.01) return { ...data, hidden: true };
+          // Same drill-down filter as nodeReducer: hide edges that
+          // would connect across the focus boundary.
+          const fk = focusKey();
+          if (fk) {
             const ext = g.extremities(edge);
-            if (ext[0] === focusedNode || ext[1] === focusedNode) {
-              return { ...data, size: 0.8, zIndex: 1 };
+            const fld = "l" + fk.level;
+            const sa = g.getNodeAttribute(ext[0], fld);
+            const ta = g.getNodeAttribute(ext[1], fld);
+            if (sa !== fk.key || ta !== fk.key) {
+              return { ...data, hidden: true };
             }
-            return { ...data, color: "rgba(40,40,60,0.2)", zIndex: 0 };
-          },
-        });
+          }
+          let out = a < 0.999
+            ? { ...data, color: multiplyAlpha(data.color, a) }
+            : data;
+          // Hover: any super-edge incident to the hovered cluster
+          // gets boosted brightness + thickness so the user can
+          // trace its connections at a glance. Edges to other
+          // clusters stay at their dim default.
+          if (hoveredNode) {
+            const ext = g.extremities(edge);
+            if (ext[0] === hoveredNode || ext[1] === hoveredNode) {
+              return {
+                ...out,
+                color: "rgba(220,228,250,0.92)",
+                size: (out.size || data.size) * 1.8,
+                zIndex: 2,
+              };
+            }
+          }
+          if (!focusedNode) return out;
+          const ext = g.extremities(edge);
+          if (ext[0] === focusedNode || ext[1] === focusedNode) {
+            return { ...out, size: 0.8, zIndex: 1 };
+          }
+          return { ...out, color: "rgba(40,40,60,0.2)", zIndex: 0 };
+        },
+      });
 
-        // Hover enter/leave: cache the hovered node's graph-space
-        // position once so the reducer doesn't re-query per-node.
-        renderer.on("enterNode", ({ node }) => {
-          hoveredNode = node;
-          hoveredX = g.getNodeAttribute(node, "x");
-          hoveredY = g.getNodeAttribute(node, "y");
-          document.body.style.cursor = "pointer";
-          renderer.refresh();
+      // ----- LOD: mousewheel zoom drives abstraction level -----------
+      // Sigma's camera ratio decreases as the user zooms in. Each ratio
+      // band corresponds to one level of the hierarchy; crossing a
+      // threshold flips currentLevel and the reducers swap the visible
+      // layer. ratio=5 lands the user in the L0 band — Sigma's default
+      // (x: 0.5, y: 0.5) keeps the camera centered on the graph bbox,
+      // which is the right framing because the spread pass above places
+      // super-nodes radially around the leaf-graph centroid.
+      const camera = renderer.getCamera();
+      camera.setState({ ratio: 1.8 });
+      currentRatio = 1.8;
+      currentLevel = 0;
+      // Debug hooks — expose graph + renderer so devtools can inspect
+      // node attributes, drive the camera, or smoke-test LOD swaps
+      // without monkey-patching. Cheap and useful.
+      window.__prismGraph = g;
+      window.__prismSigma = renderer;
+      // Size-based auto-drill: when the active cluster's bbox grows
+      // past ~80% of the viewport (because the user keeps zooming in
+      // within the current level), automatically transition to the
+      // next-deeper level so its children spread back into view. The
+      // ratio-based LOD bands still fire as a fallback; this just
+      // catches the case where one cluster's spread doesn't map to
+      // the same ratio band as another's. Debounced so a single zoom
+      // burst can't cascade through every level at once.
+      let lastAutoDrillT = 0;
+      function maybeAutoDrill() {
+        if (currentLevel >= 3) return;
+        const now = performance.now();
+        if (now - lastAutoDrillT < 500) return;
+        const fk = focusKey();
+        let mnX = Infinity, mxX = -Infinity;
+        let mnY = Infinity, mxY = -Infinity;
+        let count = 0;
+        g.forEachNode((id, attrs) => {
+          if (attrs.level !== currentLevel) return;
+          if (fk && attrs["l" + fk.level] !== fk.key) return;
+          if (attrs.x < mnX) mnX = attrs.x;
+          if (attrs.x > mxX) mxX = attrs.x;
+          if (attrs.y < mnY) mnY = attrs.y;
+          if (attrs.y > mxY) mxY = attrs.y;
+          count++;
         });
-        renderer.on("leaveNode", () => {
-          hoveredNode = null;
-          document.body.style.cursor = "";
-          renderer.refresh();
-        });
-        statusEl.textContent = `${nodes.length.toLocaleString()} nodes · `
-          + `${edgesDrawn.toLocaleString()} edges`
-          + (dropped ? ` · ${dropped.toLocaleString()} rationale hidden` : "")
-          + ` · FA2 ${iters}it in ${dt}s`;
-        renderer.on("clickNode", ({ node }) => {
-          focusedNode = node;
-          neighborSet = new Set(g.neighbors(node));
-          const attrs = g.getNodeAttributes(node);
-          statusEl.textContent = `${attrs.label} `
-            + `(cluster: ${attrs.communityLabel || "unlabeled cluster"}, `
-            + `degree ${g.degree(node)}) — `
-            + `click empty space to clear focus`;
-          renderer.refresh();
-        });
-        // Click on the stage (empty space) clears focus highlighting.
-        renderer.on("clickStage", () => {
-          if (!focusedNode) return;
+        if (count < 1) return;
+        const tl = renderer.graphToViewport({ x: mnX, y: mnY });
+        const br = renderer.graphToViewport({ x: mxX, y: mxY });
+        const wPx = Math.abs(br.x - tl.x);
+        const hPx = Math.abs(br.y - tl.y);
+        const cw = renderer.getCanvases().mouse.clientWidth || 1;
+        const ch = renderer.getCanvases().mouse.clientHeight || 1;
+        const frac = Math.max(wPx / cw, hPx / ch);
+        if (frac > 0.80) {
+          lastAutoDrillT = now;
+          setLevel(currentLevel + 1);
+        }
+      }
+
+      // setLevel — single entry point for level changes. Captures
+      // the previous level for the fade, runs the side effects
+      // (status text, legend rebuild, physics nudge), and refreshes.
+      function setLevel(next) {
+        if (next === currentLevel) return;
+        prevLevel = currentLevel;
+        currentLevel = next;
+        levelTransitionStart = performance.now();
+        if (focusedNode) {
           focusedNode = null;
           neighborSet = new Set();
-          statusEl.textContent = `${nodes.length.toLocaleString()} nodes · `
-            + `${edgesDrawn.toLocaleString()} edges`
-            + (dropped ? ` · ${dropped.toLocaleString()} rationale hidden` : "")
-            + ` · FA2 ${iters}it in ${dt}s`;
+        }
+        statusEl.textContent = baseStatus();
+        rebuildLegend();
+        renderer.refresh();
+        startPhysics();
+      }
+
+      camera.on("updated", () => {
+        currentRatio = camera.getState().ratio;
+        // Wheel zoom drives the camera ratio only — it never
+        // crosses a level threshold by itself. Level changes
+        // happen via click-drill or the 80%-bbox auto-drill so
+        // the user sees one level at a time, distinct, and
+        // never gets snapped to a different abstraction just
+        // because they scrolled past an arbitrary ratio.
+        renderer.refresh();
+        maybeAutoDrill();
+      });
+
+      // RAF loop that re-renders while a node is hovered so the
+      // pulse + label-grow are animated, then idles itself out.
+      // Cheap: one render/frame, only while the user's pointer is
+      // over a node.
+      let pulseRaf = null;
+      function startPulseLoop() {
+        if (pulseRaf !== null) return;
+        const tick = () => {
+          if (!hoveredNode) { pulseRaf = null; return; }
           renderer.refresh();
-        });
+          pulseRaf = requestAnimationFrame(tick);
+        };
+        pulseRaf = requestAnimationFrame(tick);
+      }
 
-        // --- Legend / communities sidebar ---------------------------
-        // Rank communities by actual node count in the rendered graph
-        // (post-rationale-filter) instead of raw DB counts, so the
-        // numbers match what's on screen. Fall back to id if no label.
-        const counts = new Map();
-        g.forEachNode((_n, attrs) => {
-          const c = attrs.community;
-          if (c === null || c === undefined) return;
-          counts.set(c, (counts.get(c) || 0) + 1);
-        });
-        const ranked = [...counts.entries()]
-          .map(([cid, n]) => ({
-            cid, n,
-            label: clusterLabel(cid),
-            color: colorFor(cid),
-          }))
-          .sort((a, b) => b.n - a.n);
+      // Hover enter/leave: cache the hovered node's graph-space
+      // position once so the reducer doesn't re-query per-node.
+      renderer.on("enterNode", ({ node }) => {
+        hoveredNode = node;
+        hoveredX = g.getNodeAttribute(node, "x");
+        hoveredY = g.getNodeAttribute(node, "y");
+        document.body.style.cursor = "pointer";
+        startPulseLoop();
+      });
+      renderer.on("leaveNode", () => {
+        hoveredNode = null;
+        document.body.style.cursor = "";
+        renderer.refresh();
+      });
+      renderer.on("clickNode", ({ node }) => {
+        const attrs = g.getNodeAttributes(node);
+        // Click a super-node → push it onto the focus stack so the
+        // next level only paints its descendants, jump to that level
+        // (no ratio threshold races) and pan the camera onto it.
+        if (attrs.level !== undefined && attrs.level < 3) {
+          const tgtLvl = attrs.level + 1;
+          const ownKey = attrs["l" + attrs.level];
+          if (ownKey) {
+            focusPath.push({ level: attrs.level, key: ownKey });
+          }
+          setLevel(tgtLvl);
+          // Pan + zoom onto the clicked super-node. Sigma's camera
+          // state x/y is in normalized [0,1] framed-graph space, not
+          // graph coords — pass through normalizationFunction or the
+          // camera animates off-canvas and the viewer goes blank.
+          const tgtRatio = tgtLvl === 1 ? 1.0
+                         : tgtLvl === 2 ? 0.5
+                         : 0.2;
+          const target = renderer.normalizationFunction({
+            x: attrs.x, y: attrs.y,
+          });
+          camera.animate(
+            { x: target.x, y: target.y, ratio: tgtRatio },
+            { duration: 600 }
+          );
+          return;
+        }
+        // L3 leaf — preserve the existing focus / dim-non-neighbors flow.
+        focusedNode = node;
+        neighborSet = new Set(g.neighbors(node));
+        statusEl.textContent = `${attrs.label} `
+          + `(cluster: ${attrs.communityLabel || "unlabeled cluster"}, `
+          + `degree ${g.degree(node)}) — `
+          + `click empty space to clear focus`;
+        renderer.refresh();
+      });
+      // Click on empty space backs all the way out — clears the
+      // focus stack, drops the leaf-focus dim-highlight, and resets
+      // currentLevel to L0. With no ratio-based level changes,
+      // this is the user's main escape hatch.
+      renderer.on("clickStage", () => {
+        const hadFocus = !!focusedNode || focusPath.length > 0;
+        const wasDeep = currentLevel > 0;
+        if (!hadFocus && !wasDeep) return;
+        focusedNode = null;
+        neighborSet = new Set();
+        focusPath = [];
+        if (wasDeep) {
+          setLevel(0);
+        } else {
+          statusEl.textContent = baseStatus();
+          rebuildLegend();
+          renderer.refresh();
+          startPhysics();
+        }
+      });
 
-        const hidden = new Set();
+      // --- Legend / categories sidebar ----------------------------
+      // Level-aware: at L0/L1/L2 it lists super-nodes ranked by member
+      // count; at L3 it lists Leiden communities. Click an item to dim
+      // its members from the canvas. Truncates the first dotted segment
+      // of community labels per #68 proposal #6 — "express web api · be"
+      // reads as "express web api" with the full string in tooltip.
+      function truncateLabel(lbl) {
+        if (!lbl) return "(unlabeled)";
+        const dot = lbl.indexOf(" · ");
+        return dot > 0 ? lbl.substring(0, dot) : lbl;
+      }
+      function rebuildLegend() {
         const listEl = document.getElementById("legend-list");
         listEl.innerHTML = "";
-        for (const c of ranked) {
-          const item = document.createElement("div");
-          item.className = "legend-item";
-          item.innerHTML =
-            `<div class="legend-dot" style="background:${c.color}"></div>`
-            + `<span class="legend-label" title="${c.label.replace(/"/g,'&quot;')}">`
-            + `${c.label}</span>`
-            + `<span class="legend-count">${c.n}</span>`;
-          item.addEventListener("click", () => {
-            if (hidden.has(c.cid)) {
-              hidden.delete(c.cid);
-              item.classList.remove("dimmed");
-            } else {
-              hidden.add(c.cid);
-              item.classList.add("dimmed");
-            }
-            // Sigma respects the `hidden` node attribute; toggling it
-            // and calling refresh() is the cheapest way to dim a whole
-            // community without touching the layout.
-            g.forEachNode((nid, attrs) => {
-              if (attrs.community === c.cid) {
-                g.setNodeAttribute(nid, "hidden", hidden.has(c.cid));
-              }
+        const fk = focusKey();
+        const inFocus = (attrs) =>
+          !fk || attrs["l" + fk.level] === fk.key;
+        let items = [];
+        if (currentLevel < 3) {
+          g.forEachNode((id, attrs) => {
+            if (attrs.level !== currentLevel) return;
+            if (!inFocus(attrs)) return;
+            items.push({
+              kind: "super", id,
+              label: attrs.label,
+              color: attrs.color,
+              count: attrs.memberCount || 1,
             });
+          });
+        } else {
+          const counts = new Map();
+          g.forEachNode((_n, attrs) => {
+            if (attrs.level !== 3) return;
+            if (!inFocus(attrs)) return;
+            const c = attrs.community;
+            if (c === null || c === undefined) return;
+            counts.set(c, (counts.get(c) || 0) + 1);
+          });
+          items = [...counts.entries()].map(([cid, n]) => ({
+            kind: "community", cid,
+            label: clusterLabel(cid),
+            color: colorFor(cid),
+            count: n,
+          }));
+        }
+        items.sort((a, b) => b.count - a.count);
+
+        for (const item of items) {
+          const div = document.createElement("div");
+          div.className = "legend-item";
+          const display = truncateLabel(item.label);
+          const fullLabel = (item.label || "").replace(/"/g, "&quot;");
+          div.innerHTML =
+            `<div class="legend-dot" style="background:${item.color}"></div>`
+            + `<span class="legend-label" title="${fullLabel}">${display}</span>`
+            + `<span class="legend-count">${item.count}</span>`;
+          div.addEventListener("click", () => {
+            div.classList.toggle("dimmed");
+            const dimmed = div.classList.contains("dimmed");
+            if (item.kind === "super") {
+              g.setNodeAttribute(item.id, "hidden", dimmed);
+            } else {
+              g.forEachNode((nid, attrs) => {
+                if (attrs.level === 3 && attrs.community === item.cid) {
+                  g.setNodeAttribute(nid, "hidden", dimmed);
+                }
+              });
+            }
             renderer.refresh();
           });
-          listEl.appendChild(item);
+          listEl.appendChild(div);
         }
+
         document.getElementById("sidebar-stats").textContent =
-          `${ranked.length.toLocaleString()} clusters · `
-          + `${nodes.length.toLocaleString()} nodes · `
-          + `${edgesDrawn.toLocaleString()} edges`;
-      }, 50);
-    })
-    .catch(err => {
-      statusEl.textContent = "Error loading graph: " + err.message;
-    });
+          `L${currentLevel} (${LEVEL_NAMES[currentLevel]}) · `
+          + `${items.length.toLocaleString()} categories · `
+          + `${nodes.length.toLocaleString()} symbols total`;
+      }
+      rebuildLegend();
+
+      // ----- L0 reveal animation ------------------------------------
+      // The user lands at L0 (~10 super-nodes), so the reveal animates
+      // those biggest-first instead of the L3 leaf graph. The skip
+      // threshold (proposal #3) suppresses the animation when there are
+      // too few super-nodes for the staged reveal to telegraph anything
+      // structural — single-domain repos just snap in.
+      const l0Items = [];
+      g.forEachNode((id, attrs) => {
+        if (attrs.level === 0) {
+          l0Items.push({ id, count: attrs.memberCount || 1 });
+        }
+      });
+      l0Items.sort((a, b) => b.count - a.count);
+
+      const fadeMs = 450;
+      const SKIP_REVEAL_BELOW = 5;
+      const shouldAnimate = !skipped && l0Items.length >= SKIP_REVEAL_BELOW;
+
+      if (shouldAnimate) {
+        const revealBudget = 1600;
+        const staggerMs = l0Items.length > 1
+          ? Math.max(60, Math.min(180,
+              (revealBudget - fadeMs) / (l0Items.length - 1)))
+          : 0;
+        const startTime = new Map();
+        l0Items.forEach(({ id }, idx) => startTime.set(id, idx * staggerMs));
+        const totalAnimMs =
+          staggerMs * Math.max(0, l0Items.length - 1) + fadeMs;
+
+        statusEl.textContent = `Revealing ${l0Items.length} domains...`;
+        await new Promise(resolve => {
+          const aStart = performance.now();
+          const easeOut = t => 1 - Math.pow(1 - t, 3);
+          const step = () => {
+            const elapsed = performance.now() - aStart;
+            for (const { id } of l0Items) {
+              const start = startTime.get(id) || 0;
+              const t = Math.min(1,
+                Math.max(0, (elapsed - start) / fadeMs));
+              if (t <= 0) continue;
+              g.setNodeAttribute(id, "size",
+                finalSize.get(id) * easeOut(t));
+            }
+            if (elapsed < totalAnimMs) requestAnimationFrame(step);
+            else resolve();
+          };
+          requestAnimationFrame(step);
+        });
+      } else {
+        // Snap to final — either the user clicked to skip during
+        // FA2 compute, or there are too few L0 nodes to be worth
+        // animating.
+        for (const { id } of l0Items) {
+          g.setNodeAttribute(id, "size", finalSize.get(id));
+        }
+      }
+      layoutElapsed = ((performance.now() - t0) / 1000).toFixed(1);
+      statusEl.textContent = baseStatus();
+      // Kick the label-relax physics so super-nodes settle into a
+      // non-overlapping layout. Visible motion is the point — users
+      // watch the clusters spread from where they spawned.
+      startPhysics();
+  }
+  loadGraph().catch(err => {
+    statusEl.textContent = "Error loading graph: " + err.message;
+  });
 </script>
 </body>
 </html>"""
@@ -500,6 +1278,74 @@ def _graphify_communities(project_id: str):
     finally:
         conn.close()
     return JSONResponse({"communities": out})
+
+
+@app.get("/graphify-visual/{project_id}/hierarchy.json")
+def _graphify_hierarchy(project_id: str):
+    """Multi-level hierarchical view of the project graph.
+
+    Each leaf node is tagged with l0/l1/l2 parent keys derived from
+    its file path (with src/app/services-style container directories
+    stripped). Edges reference leaf ids only — the client computes
+    super-edges per level on demand by aggregating leaf edges by the
+    parent of each endpoint.
+
+    This is what the Sigma viewer fetches — it replaces the older
+    graph.json + communities.json pair and folds in the data needed
+    to render the L0–L3 zoom hierarchy.
+    """
+    from fastapi.responses import JSONResponse
+    if not _SAFE_PROJECT_RE.match(project_id or ""):
+        raise HTTPException(status_code=400, detail="invalid project id")
+    ctx = get_project(project_id)
+    json_path = ctx._data_dir / "graphify-src" / "graphify-out" / "graph.json"
+    if not json_path.exists():
+        raise HTTPException(
+            status_code=404, detail="graph.json not generated yet"
+        )
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception:
+        raise HTTPException(status_code=500, detail="graph.json parse error")
+
+    raw_nodes = [
+        n for n in data.get("nodes", [])
+        if n.get("file_type") != "rationale"
+    ]
+    raw_edges = data.get("links") or data.get("edges") or []
+
+    out_nodes = []
+    for n in raw_nodes:
+        h = compute_node_hierarchy(
+            n.get("source_file"),
+            fallback_community=n.get("community"),
+        )
+        # Mark leaves as level 3 so the client doesn't have to special-case
+        # them after super-nodes are added with level 0/1/2.
+        out_nodes.append({**n, "level": 3, **h})
+
+    # Pull DB-derived community labels so super-nodes that fall back to
+    # comm:<id> at L0 (flat repos) get a human label instead of the raw id.
+    db_path = ctx._data_dir / "graph.db"
+    comm_labels: dict[int, str] = {}
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(str(db_path))
+            try:
+                for r in conn.execute("SELECT id, label FROM communities"):
+                    comm_labels[int(r[0])] = r[1] or ""
+            except sqlite3.OperationalError:
+                pass
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            pass
+
+    return JSONResponse({
+        "nodes": out_nodes,
+        "edges": raw_edges,
+        "community_labels": comm_labels,
+    })
 
 
 @app.get("/graphify-visual/{project_id}/{filename}")

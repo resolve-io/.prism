@@ -33,12 +33,13 @@ def test_status_benchmark_answers_where_prism_stands():
     assert result["claim_policy"]["prism_improves_agent"]["allowed_now"] is False
     assert result["claim_policy"]["better_than_public_best"]["allowed_now"] is False
     public_claim = result["claim_policy"]["better_than_public_best"]["evidence"]
-    assert public_claim["claim_scope"] == "better_than_any_tracked_public_agent_bar"
+    assert public_claim["claim_scope"] == "better_than_all_tracked_public_agent_bars"
     assert public_claim["all_tracked_bars_measured"] is False
     assert "swebench_verified_patch_resolution" in public_claim["missing_comparable_prism_results"]
     assert "swe_rebench_fresh_pr_resolution" in public_claim["missing_comparable_prism_results"]
     assert "terminal_bench2_agentic_terminal" in public_claim["missing_comparable_prism_results"]
     assert "bfcl_v4_tool_calling" in public_claim["missing_comparable_prism_results"]
+    assert "mcp_atlas_real_world_tool_use" in public_claim["missing_comparable_prism_results"]
     assert public_claim["unknown_public_best_values"] == []
 
     assert result["tool_surface"]["all_tool_count"] == 47
@@ -60,12 +61,33 @@ def test_status_benchmark_answers_where_prism_stands():
     assert "82%" in result["public_best"]["terminal_bench_reference"]
     assert "77.47%" in result["public_best"]["bfcl_reference"]
     assert "2026-04-12" in result["public_best"]["bfcl_reference"]
-    assert len(result["next_commands"]) == 2
+    assert "82.4%" in result["public_best"]["mcp_atlas_reference"]
+    comparison = {row["id"]: row for row in result["public_best_comparison"]}
+    assert set(comparison) == {
+        "swebench_verified_patch_resolution",
+        "swe_rebench_fresh_pr_resolution",
+        "terminal_bench2_agentic_terminal",
+        "bfcl_v4_tool_calling",
+        "mcp_atlas_real_world_tool_use",
+    }
+    assert comparison["swebench_verified_patch_resolution"]["public_best_value"] == 0.939
+    assert comparison["swebench_verified_patch_resolution"]["prism_value"] is None
+    assert comparison["swebench_verified_patch_resolution"]["prism_status"] == "not_comparable_yet"
+    assert "official PRISM-on/off" in comparison["swebench_verified_patch_resolution"]["gap"]
+    assert comparison["mcp_atlas_real_world_tool_use"]["public_best_value"] == 0.824
+    assert comparison["mcp_atlas_real_world_tool_use"]["prism_status"] == "not_comparable_yet"
+    assert len(result["next_commands"]) == 3
+    assert "--manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json" in result["next_commands"][0]
+    assert "--run-generation" not in result["next_commands"][0]
+    assert "--run-evaluation" not in result["next_commands"][0]
+    assert "--confirm-expensive-run" not in result["next_commands"][0]
     assert result["campaign_progress"]["pairs_total"] == 30
     assert result["campaign_budget"]["agent_runs"] == 60
     assert result["campaign_budget"]["evaluator_runs"] == 60
     assert result["campaign_budget"]["conservative_timeout_hours"] == 50.0
     assert result["campaign_budget"]["requires_explicit_confirmation"] is True
+    assert result["scorecard"]["cheap_gates_passed"] >= 15
+    assert result["scorecard"]["cheap_gates_total"] >= 15
     assert "environment_preflight" in result
 
 
@@ -82,6 +104,10 @@ def test_status_benchmark_has_human_readable_output():
     assert "Blocker:" in proc.stdout
     assert "Claim policy:" in proc.stdout
     assert "Paired SWE-bench Lite smoke" in proc.stdout
+    assert "Where PRISM stands vs public bars:" in proc.stdout
+    assert "SWE-bench Verified: public best 93.9%; PRISM no comparable score" in proc.stdout
+    assert "BFCL V4 tool calling: public best 77.47%; PRISM no comparable score" in proc.stdout
+    assert "MCP Atlas real-world tool use: public best 82.4%; PRISM no comparable score" in proc.stdout
     assert "Best public bars tracked:" in proc.stdout
     assert "SWE-bench Verified" in proc.stdout
     assert "93.9%" in proc.stdout
@@ -92,19 +118,25 @@ def test_status_benchmark_has_human_readable_output():
     assert "BFCL V4 tool calling" in proc.stdout
     assert "77.47%" in proc.stdout
     assert "2026-04-12" in proc.stdout
+    assert "MCP Atlas real-world tool use" in proc.stdout
+    assert "82.4%" in proc.stdout
     assert "Public-best claim blockers:" in proc.stdout
     assert "Missing comparable PRISM results:" in proc.stdout
+    assert "Unknown public-best values" not in proc.stdout
     assert "swebench_verified_patch_resolution" in proc.stdout
     assert "swe_rebench_fresh_pr_resolution" in proc.stdout
     assert "terminal_bench2_agentic_terminal" in proc.stdout
     assert "bfcl_v4_tool_calling" in proc.stdout
+    assert "mcp_atlas_real_world_tool_use" in proc.stdout
     assert "Tool surface:" in proc.stdout
     assert "hidden tools blocked" in proc.stdout
     assert "30-pair campaign" in proc.stdout
     assert "Campaign budget:" in proc.stdout
     assert "60 agent runs" in proc.stdout
+    assert "cheap gates passing" in proc.stdout
     assert "Next evidence needed" in proc.stdout
     assert "Next commands:" in proc.stdout
+    assert "--manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json" in proc.stdout
     assert "--run-generation" in proc.stdout
     assert "--run-evaluation --run-comparison" in proc.stdout
 
@@ -158,6 +190,10 @@ def test_status_benchmark_validates_campaign_manifest(tmp_path):
     assert checks["offsets_0_to_29"] is True
     assert checks["requires_bulk_seed"] is True
     assert checks["uses_graph_seed"] is True
+    assert checks["manifest_budget_agent_runs"] is True
+    assert checks["manifest_budget_evaluator_runs"] is True
+    assert checks["manifest_budget_timeout_hours"] is True
+    assert checks["manifest_budget_requires_confirmation"] is True
 
 
 def test_status_benchmark_reports_campaign_progress(tmp_path):
