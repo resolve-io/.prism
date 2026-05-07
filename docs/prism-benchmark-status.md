@@ -21,27 +21,33 @@ official scoring, per-instance comparison, and aggregate comparison for offsets
 
 | Area | Best public bar | PRISM current evidence | Status |
 |---|---:|---:|---|
-| SWE-bench Verified patch solving | 79.2% reported agent score; third-party model leaderboard now reports up to 93.9% | No official `% resolved` score yet | Not comparable yet |
+| SWE-bench Verified patch solving | 93.9% third-party model leaderboard reference; 79.2% reported agent score | No official `% resolved` score yet | Not comparable yet |
 | SWE-rebench fresh PR patch solving | Claude Code 62.1% resolved on the current fresh-PR leaderboard | No SWE-rebench run yet | Not comparable yet |
-| Terminal-Bench 2.0 terminal-agent tasks | Claude Mythos Preview 82%, GPT-5.3 Codex 77.3%, GPT-5.4 75.1% | No Terminal-Bench run yet | Not comparable yet |
-| BFCL V4 tool/function calling | Official BFCL V4 leaderboard last updated 2026-04-12 | No paired BFCL-style PRISM tool-use run yet | Not comparable yet |
+| Terminal-Bench 2.0 terminal-agent tasks | Codex CLI with GPT-5.5 at 82%, ForgeCode with GPT-5.4 at 81.8% | No Terminal-Bench run yet | Not comparable yet |
+| BFCL V4 tool/function calling | Claude Opus 4.6 at 77.47% overall accuracy on the official BFCL V4 leaderboard, last updated 2026-04-12 | No paired BFCL-style PRISM tool-use run yet | Not comparable yet |
+| Scale MCP Atlas real-world MCP tool use | Muse Spark at 82.4% pass rate on the public 500-task subset and 82.2% on all 1,000 MCP tasks; 36 MCP servers and 220 tools | No paired MCP Atlas PRISM tool-use run yet | Not comparable yet |
 | SWE-bench file localization | No single standard public agent leaderboard | 90% recall@10 on 10 SWE-bench Lite tasks | Promising, small sample |
 | LongMemEval memory retrieval | Roughly 96-98% R@5 claimed by leading memory systems | 63.4% R@5 on 500-question MiniLM run; 81.0% R@5 on 100-question multi-granular run | Behind leading memory-only systems |
 | PRISM setup/context grounding | No public standard leaderboard | PRISM-on 1.0000 vs PRISM-off 0.3333 on internal setup scenarios | Strong internal signal |
 | MCP tool surface | Smaller default interactive surface is better for agents | Default profile exposes 17 interactive tools; full maintenance surface has 47 tools | Tool overload reduced |
-| Internal scorecard | Internal gate | 11/11 cheap gates passed | Healthy internal gate |
+| Internal scorecard | Internal gate | 16/16 cheap gates passed | Healthy internal gate |
 
 ## Local evidence
 
 | Evidence | Source file | Result |
 |---|---|---|
-| Scorecard | `benchmarks/results/scorecard/latest.json` | 11/11 cheap gates passed |
-| Direct status | `benchmarks/results/status/latest.json` and `benchmarks/status/run.py --format text` | `not_proven_better_than_best`; `claim_allowed: false`; evidence-derived claim policy currently disallows improvement/public-best claims; broad public-best policy requires comparable PRISM measurements for every tracked public bar; blocker is `official_30_pair_swebench_not_run`; PRISM-on and PRISM-off tied at 1/2 on paired Lite smoke; 30-pair campaign readiness checks passed; campaign progress `not_started`; environment preflight ready |
-| Proof plan | `benchmarks/results/proofplan/latest.json` | 5 next proof actions: 30-pair PRISM-on/off SWE-bench Lite, SWE-bench Verified, SWE-rebench, Terminal-Bench 2.0, BFCL V4 |
-| Benchmark registry | `benchmarks/results/registry/latest.json` | 30 tracked benchmarks, 12 P0 active |
+| Scorecard | `benchmarks/results/scorecard/latest.json` | 16/16 cheap gates passed |
+| Direct status | `benchmarks/results/status/latest.json` and `benchmarks/status/run.py --format text` | Prints a direct "Where PRISM stands vs public bars" section; `not_proven_better_than_best`; `claim_allowed: false`; evidence-derived claim policy currently disallows improvement/public-best claims; broad public-best policy requires comparable PRISM measurements for every tracked public bar; blocker is `official_30_pair_swebench_not_run`; PRISM-on and PRISM-off tied at 1/2 on paired Lite smoke; 30-pair campaign readiness checks passed; campaign progress `not_started`; environment preflight ready |
+| Proof plan | `benchmarks/results/proofplan/latest.json` | 6 next proof actions: 30-pair PRISM-on/off SWE-bench Lite, SWE-bench Verified, SWE-rebench, Terminal-Bench 2.0, BFCL V4, MCP Atlas |
+| Public bar metadata gate | `benchmarks/results/publicbars/latest.json` | 5/5 public-best rows are source-backed, date-stamped, numeric, and still claim-gated as `not_comparable_yet` |
+| Benchmark registry | `benchmarks/results/registry/latest.json` | 35 tracked benchmarks, 13 P0 active, 25 external rows source-backed |
 | Tool profiles | `benchmarks/results/toolprofiles/latest.json` | Default profile `interactive`; 47 total tools, 17 exposed by default, hidden maintenance tools blocked by the default call gate, 13-tool automation profile covers required hooks, 63.83% reduction |
+| BFCL planning gate | `benchmarks/results/bfcl/latest.json` | Official BFCL V4 bar pinned at 77.47%; PRISM status `not_comparable_yet`; PRISM-on/off tool-use contract requires `tool_profile=interactive`, same model/tasks/limits, and metrics for overall accuracy, tool choice, arguments, latency, and recovery |
+| SWE-rebench planning gate | `benchmarks/results/swerebench/latest.json` | SWE-rebench fresh-PR public bar pinned at 62.1%; PRISM status `not_comparable_yet`; PRISM-on/off fresh-PR patch contract requires `tool_profile=interactive`, same model/tasks/limits, and metrics for percent resolved, patch generation, empty patches, cost, latency, and failure category |
+| Terminal-Bench planning gate | `benchmarks/results/terminalbench/latest.json` | Terminal-Bench 2.0 public bar pinned at 82%; PRISM status `not_comparable_yet`; PRISM-on/off terminal-agent contract requires `tool_profile=interactive`, same model/tasks/shell limits, and metrics for success rate, cost, latency, failure category, and tool-call count |
+| MCP Atlas planning gate | `benchmarks/results/mcpatlas/latest.json` | Scale MCP Atlas public-subset bar pinned at 82.4%; PRISM status `not_comparable_yet`; PRISM-on/off real-MCP-server contract requires `tool_profile=interactive`, same model/tasks/tool budget/judge, and metrics for pass rate, coverage, tool selection, arguments, recovery, and tool-call count |
 | Agent setup | `benchmarks/results/agentsetup/latest.json` | PRISM-on 1.0000, PRISM-off 0.3333, delta +0.6667 |
-| Focused test suite | `pytest benchmarks/tests services/prism-service/tests/unit/test_mcp_tool_profiles.py services/prism-service/tests/unit/test_graph_isolation_fix.py services/prism-service/tests/unit/test_install_manifest.py` | 93 passed on 2026-05-04 |
+| Focused test suite | `pytest benchmarks/tests services/prism-service/tests/unit/test_mcp_tool_profiles.py services/prism-service/tests/unit/test_graph_isolation_fix.py services/prism-service/tests/unit/test_install_manifest.py` | 98 passed on 2026-05-04 |
 | SWE-bench localization | `benchmarks/results/swebench/fullstack_limit10.json` | recall@1 0.40, recall@5 0.80, recall@10 0.90 on 10 Lite tasks |
 | SWE-bench patch smoke | `benchmarks/results/swebench_patch/claude-prism-off-smoke.smoke-claude-off-lite1.json` | Claude PRISM-off resolved 1/1 submitted Lite instance |
 | SWE-bench patch smoke | `benchmarks/results/swebench_patch/claude-prism-on-seed25-smoke.smoke-claude-on-seed25-lite1.json` | Claude PRISM-on with `--seed-max-files 25` resolved 1/1 submitted Lite instance |
@@ -63,13 +69,13 @@ official scoring, per-instance comparison, and aggregate comparison for offsets
   2026-05-04 its top resolved rate was Claude Code at 62.1%, followed by
   gpt-5.2-2025-12-11-medium at 61.3% and Claude Sonnet 4.5 at 60.9%.
 - Terminal-Bench 2.0 tracks terminal-agent task solving; when checked on
-  2026-05-04 BenchLM reported Claude Mythos Preview at 82%, GPT-5.3 Codex at
-  77.3%, and GPT-5.4 at 75.1%. LLMDB's Terminal-Bench page separately exposed
-  a 65.4 top score for Claude Opus 4.6 on its current Terminal-Bench table.
+  2026-05-04 the official leaderboard reported Codex CLI with GPT-5.5 at
+  82%, followed by ForgeCode with GPT-5.4 at 81.8%.
 - BFCL V4 is the public tool/function-calling benchmark most relevant to the
   MCP tool-surface question. Its official leaderboard was last updated
   2026-04-12, uses overall accuracy as an unweighted sub-category average, and
-  says models are evaluated at commit `f7cf735` or with
+  the tracked current top row is Claude Opus 4.6 at 77.47% overall accuracy.
+  The leaderboard says models are evaluated at commit `f7cf735` or with
   `bfcl-eval==2025.12.17`.
 - SWE-bench/experiments states that, after 2025-11-18, Verified and
   Multilingual submissions require open research publication and qualifying
@@ -79,10 +85,14 @@ official scoring, per-instance comparison, and aggregate comparison for offsets
 - BenchLM.ai reported Claude Mythos Preview at 93.9% on SWE-bench Verified as
   of 2026-05-01. Treat this as a current external reference point, not a
   PRISM-comparable result until PRISM has an official evaluator score.
-- BFCL V4 evaluates model/tool-calling accuracy and was last updated
-  2026-04-12.
-- Terminal-Bench tracks terminal task-solving, with the current top score shown
-  as 65.4 on LLMDB when checked on 2026-05-04.
+- BFCL V4 evaluates model/tool-calling accuracy; its official leaderboard was
+  last updated 2026-04-12 and shows 77.47% as the current top overall accuracy.
+- Scale MCP Atlas evaluates real-world MCP tool use. The official leaderboard
+  reports 1,000 tasks, 500 public tasks, 36 MCP servers, 220 tools, 3-6 tool
+  calls per task, a current top public-subset pass rate of 82.4%, and an
+  all-task pass rate of 82.2%.
+- Terminal-Bench tracks terminal task-solving; the official Terminal-Bench 2.0
+  leaderboard showed Codex CLI with GPT-5.5 at 82% when checked on 2026-05-04.
 - LongMemEval memory-system claims around 96-98% R@5 exist, but many are
   retrieval-only and not always comparable to end-to-end QA scores.
 
@@ -100,9 +110,7 @@ SWE-bench patch-solving comparison exists.
 Do not claim PRISM is broadly better than any tracked public agent bar until
 PRISM has comparable measurements for every tracked public bar in
 `benchmarks/results/status/latest.json`: SWE-bench Verified, SWE-rebench fresh
-PRs, Terminal-Bench 2.0, and BFCL V4. The current policy also treats BFCL's
-numeric public-best value as unresolved because the official simple page fetch
-exposes update/methodology metadata but not a stable top score.
+PRs, Terminal-Bench 2.0, BFCL V4, and Scale MCP Atlas.
 
 ## Next proof run
 
@@ -113,9 +121,15 @@ Run the same coding agent twice:
 3. Evaluate both with the official SWE-bench evaluator.
 4. Report `% resolved`, cost, latency, and failure categories.
 
-Repo commands now exist for that path:
+Repo commands now exist for that path. The first `paired_campaign.py` command
+is plan-only and rewrites the canonical manifest without running agents or
+evaluators; the next two commands start the expensive generation and scoring
+phases only when `--confirm-expensive-run` is present:
 
 ```bash
+benchmarks/.venv/Scripts/python benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json
+benchmarks/.venv/Scripts/python benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json --run-generation --confirm-expensive-run
+benchmarks/.venv/Scripts/python benchmarks/swebench/paired_campaign.py --dataset lite --offset 0 --limit 30 --agent-preset claude --run-id-prefix claude-lite30 --output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 --manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json --run-evaluation --run-comparison --confirm-expensive-run
 benchmarks/.venv/Scripts/python benchmarks/swebench/preflight.py --agent codex --require-mcp
 benchmarks/.venv/Scripts/python benchmarks/swebench/patch_run.py --dataset lite --limit 1 --mode prism_on --agent-preset codex --predictions-jsonl benchmarks/results/swebench_patch/prism_on.jsonl
 benchmarks/.venv/Scripts/python benchmarks/swebench/patch_run.py --dataset lite --limit 1 --mode prism_off --agent-preset codex --predictions-jsonl benchmarks/results/swebench_patch/prism_off.jsonl

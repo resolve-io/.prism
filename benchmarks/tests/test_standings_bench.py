@@ -48,8 +48,17 @@ def test_standings_benchmark_reports_prism_not_comparable_without_patch_score():
     assert bfcl["prism_value"] is None
     assert bfcl["external_best_value"] == 0.7747
     assert "77.47%" in bfcl["external_best_reference"]
+    assert "Claude Opus 4.6" in bfcl["external_best_reference"]
     assert "2026-04-12" in bfcl["external_best_reference"]
     assert "bfcl_v4_tool_calling" in result["missing_or_not_comparable"]
+
+    mcp_atlas = by_id["mcp_atlas_real_world_tool_use"]
+    assert mcp_atlas["status"] == "not_comparable_yet"
+    assert mcp_atlas["prism_value"] is None
+    assert mcp_atlas["external_best_value"] == 0.824
+    assert "82.4%" in mcp_atlas["external_best_reference"]
+    assert "36 MCP servers" in mcp_atlas["external_best_reference"]
+    assert "mcp_atlas_real_world_tool_use" in result["missing_or_not_comparable"]
 
     tool_surface = by_id["mcp_tool_surface"]
     assert tool_surface["prism_value"] == 17

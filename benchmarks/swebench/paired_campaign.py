@@ -204,6 +204,11 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     for pair in pairs:
         aggregate_command.extend(["--comparison", pair["evaluation_comparison"]])
     aggregate_command.extend(["--output", str(aggregate)])
+    agent_runs = args.limit * 2
+    evaluator_runs = args.limit * 2
+    conservative_timeout_hours = (
+        (agent_runs * args.timeout_sec) + (evaluator_runs * args.eval_timeout_sec)
+    ) / 3600
     return {
         "benchmark": "swebench_paired_campaign",
         "dataset": args.dataset,
@@ -213,6 +218,16 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "limit": args.limit,
         "evaluator": args.evaluator,
         "seed_label": seed_label,
+        "budget": {
+            "pairs": args.limit,
+            "agent_runs": agent_runs,
+            "evaluator_runs": evaluator_runs,
+            "agent_timeout_sec_each": args.timeout_sec,
+            "evaluator_timeout_sec_each": args.eval_timeout_sec,
+            "conservative_timeout_hours": round(conservative_timeout_hours, 2),
+            "large_execution_requires_confirmation": args.limit > 2,
+            "excludes_setup_and_indexing_overhead": True,
+        },
         "pairs": pairs,
         "aggregate_output": str(aggregate),
         "aggregate_command": _cmd_text(aggregate_command),

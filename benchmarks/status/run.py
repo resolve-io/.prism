@@ -43,6 +43,14 @@ def _next_commands() -> list[str]:
             "--dataset lite --offset 0 --limit 30 --agent-preset claude "
             "--run-id-prefix claude-lite30 "
             "--output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 "
+            "--manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json"
+        ),
+        (
+            "benchmarks/.venv/Scripts/python.exe benchmarks/swebench/paired_campaign.py "
+            "--dataset lite --offset 0 --limit 30 --agent-preset claude "
+            "--run-id-prefix claude-lite30 "
+            "--output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 "
+            "--manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json "
             "--run-generation --confirm-expensive-run"
         ),
         (
@@ -50,6 +58,7 @@ def _next_commands() -> list[str]:
             "--dataset lite --offset 0 --limit 30 --agent-preset claude "
             "--run-id-prefix claude-lite30 "
             "--output-dir benchmarks/results/swebench_patch/campaign_claude_lite30 "
+            "--manifest benchmarks/results/swebench_patch/campaign_claude_lite30/manifest.json "
             "--run-evaluation --run-comparison --confirm-expensive-run"
         ),
     ]
@@ -64,6 +73,7 @@ def _campaign_readiness(manifest_path: Path) -> dict[str, Any]:
     off_commands = [command.get("generate_prism_off", "") for command in commands]
     eval_on_commands = [command.get("evaluate_prism_on", "") for command in commands]
     eval_off_commands = [command.get("evaluate_prism_off", "") for command in commands]
+    budget = manifest.get("budget") or {}
 
     checks = {
         "manifest_exists": bool(manifest),
@@ -86,6 +96,12 @@ def _campaign_readiness(manifest_path: Path) -> dict[str, Any]:
         "caps_seed_bytes": all("--seed-max-total-bytes 500000" in command for command in on_commands),
         "uses_graph_seed": all("--seed-skip-graph" not in command for command in on_commands),
         "has_aggregate_command": bool(manifest.get("aggregate_command")),
+        "manifest_budget_agent_runs": budget.get("agent_runs") == 60,
+        "manifest_budget_evaluator_runs": budget.get("evaluator_runs") == 60,
+        "manifest_budget_timeout_hours": budget.get("conservative_timeout_hours") == 50.0,
+        "manifest_budget_requires_confirmation": (
+            budget.get("large_execution_requires_confirmation") is True
+        ),
     }
     missing = [name for name, passed in checks.items() if not passed]
     return {
@@ -276,7 +292,16 @@ PUBLIC_BEST_BAR_IDS = [
     "swe_rebench_fresh_pr_resolution",
     "terminal_bench2_agentic_terminal",
     "bfcl_v4_tool_calling",
+    "mcp_atlas_real_world_tool_use",
 ]
+
+PUBLIC_BEST_LABELS = {
+    "swebench_verified_patch_resolution": "SWE-bench Verified",
+    "swe_rebench_fresh_pr_resolution": "SWE-rebench fresh PRs",
+    "terminal_bench2_agentic_terminal": "Terminal-Bench 2.0",
+    "bfcl_v4_tool_calling": "BFCL V4 tool calling",
+    "mcp_atlas_real_world_tool_use": "MCP Atlas real-world tool use",
+}
 
 
 def _public_best_claim_evidence(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -306,7 +331,7 @@ def _public_best_claim_evidence(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "gap": row.get("gap"),
         })
     return {
-        "claim_scope": "better_than_any_tracked_public_agent_bar",
+        "claim_scope": "better_than_all_tracked_public_agent_bars",
         "tracked_public_bars": tracked,
         "missing_comparable_prism_results": missing,
         "unknown_public_best_values": unknown_public_best,
@@ -314,6 +339,25 @@ def _public_best_claim_evidence(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "all_tracked_bars_measured": not missing,
         "all_known_public_best_values_met": not below_best and not unknown_public_best,
     }
+
+
+def _public_best_comparison(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_id = {row.get("id"): row for row in rows}
+    comparison = []
+    for row_id in PUBLIC_BEST_BAR_IDS:
+        row = by_id.get(row_id) or {}
+        comparison.append({
+            "id": row_id,
+            "label": PUBLIC_BEST_LABELS[row_id],
+            "metric": row.get("metric"),
+            "public_best_value": row.get("external_best_value"),
+            "public_best_reference": row.get("external_best_reference"),
+            "prism_value": row.get("prism_value"),
+            "prism_status": row.get("status") or "missing",
+            "gap": row.get("gap") or "missing comparable PRISM result",
+            "source_urls": row.get("source_urls") or [],
+        })
+    return comparison
 
 
 def _claim_policy(
@@ -397,7 +441,10 @@ def _claim_policy(
 def _rate_text(value: Any) -> str:
     if value is None:
         return "unknown"
-    return f"{value:.1%}"
+    percent = float(value) * 100
+    if abs(percent - round(percent, 1)) < 0.005:
+        return f"{percent:.1f}%"
+    return f"{percent:.2f}%"
 
 
 def _print_text(result: dict[str, Any]) -> None:
@@ -425,12 +472,24 @@ def _print_text(result: dict[str, Any]) -> None:
         f"{public_best['status']} "
         f"({public_best['gap']})."
     )
+    print("Where PRISM stands vs public bars:")
+    for row in result.get("public_best_comparison") or []:
+        prism_status = (row.get("prism_status") or "missing").replace("_", " ")
+        prism_value = row.get("prism_value")
+        prism_text = "no comparable score" if prism_value is None else _rate_text(prism_value)
+        public_value = row.get("public_best_value")
+        public_text = _rate_text(public_value) if isinstance(public_value, (int, float)) else "unknown"
+        print(
+            f"- {row['label']}: public best {public_text}; "
+            f"PRISM {prism_text} ({prism_status}); gap: {row.get('gap')}"
+        )
     print("Best public bars tracked:")
     for label, key in [
         ("SWE-bench Verified", "swebench_verified_reference"),
         ("SWE-rebench fresh PRs", "swe_rebench_reference"),
         ("Terminal-Bench 2.0", "terminal_bench_reference"),
         ("BFCL V4 tool calling", "bfcl_reference"),
+        ("MCP Atlas real-world tool use", "mcp_atlas_reference"),
     ]:
         reference = public_best.get(key)
         if reference:
@@ -519,6 +578,7 @@ def main() -> int:
     swe_rebench = _find_row(rows, "swe_rebench_fresh_pr_resolution")
     terminal_bench = _find_row(rows, "terminal_bench2_agentic_terminal")
     bfcl = _find_row(rows, "bfcl_v4_tool_calling")
+    mcp_atlas = _find_row(rows, "mcp_atlas_real_world_tool_use")
     tool_surface = _find_row(rows, "mcp_tool_surface")
     setup = _find_row(rows, "agent_setup_context")
 
@@ -597,9 +657,11 @@ def main() -> int:
             "swe_rebench_reference": swe_rebench.get("external_best_reference"),
             "terminal_bench_reference": terminal_bench.get("external_best_reference"),
             "bfcl_reference": bfcl.get("external_best_reference"),
+            "mcp_atlas_reference": mcp_atlas.get("external_best_reference"),
             "status": verified.get("status") or "not_comparable_yet",
             "gap": verified.get("gap") or "official PRISM-on/off SWE-bench evaluator score not run",
         },
+        "public_best_comparison": _public_best_comparison(rows),
         "internal_setup": {
             "prism_on_score": setup.get("prism_value"),
             "prism_off_score": setup.get("baseline_value"),

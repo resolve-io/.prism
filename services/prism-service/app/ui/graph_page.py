@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from collections import Counter
@@ -11,6 +12,7 @@ from fastapi.responses import FileResponse
 from nicegui import app, ui
 
 from app.project_context import get_project
+from app.services.graph_service import compute_node_hierarchy
 from app.ui.components.nav import create_nav, page_container
 
 
@@ -65,7 +67,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 <div id="graph-wrap">
   <div id="status">Loading graph...</div>
   <div id="graph"></div>
-  <div id="hint">Scroll to zoom · drag to pan · click a node for details</div>
+  <div id="hint">Scroll to zoom L0→L3 · drag to pan · click a super-node to drill in</div>
 </div>
 <aside id="sidebar">
   <div id="legend-wrap">
@@ -165,30 +167,34 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   function seedPosition() {
     return { x: Math.random(), y: Math.random() };
   }
-  // communities.json returns DB-derived labels ({id, label, count}) so
-  // the sidebar legend reads like graphify's graph.html did. Loaded in
-  // parallel; if it fails we still render the graph but mark clusters as
-  // unlabeled instead of exposing graphify's raw numeric community ids.
+  // hierarchy.json returns leaves tagged with l0/l1/l2 parent keys + the
+  // DB-derived community labels for the legend. One fetch primes both
+  // the LOD super-node assembly (after FA2) and the legend.
   async function loadGraph() {
       statusEl.textContent = "Fetching graph data...";
-      const [data, commData] = await Promise.all([
-        fetch(`/graphify-visual/${PROJECT_ID}/graph.json`)
-          .then(r => { if (!r.ok) throw new Error("graph.json " + r.status); return r.json(); }),
-        fetch(`/graphify-visual/${PROJECT_ID}/communities.json`)
-          .then(r => r.ok ? r.json() : {communities: []})
-          .catch(() => ({communities: []})),
-      ]);
+      const data = await fetch(`/graphify-visual/${PROJECT_ID}/hierarchy.json`)
+        .then(r => {
+          if (!r.ok) throw new Error("hierarchy " + r.status);
+          return r.json();
+        });
       const g = new Graph();
       const rawNodes = data.nodes || [];
-      const edges = data.links || data.edges || [];
-      const labelMap = new Map();
-      for (const c of (commData.communities || [])) {
-        labelMap.set(c.id, c.label);
-        labelMap.set(String(c.id), c.label);
+      const edges = data.edges || data.links || [];
+      const commLabelsMap = new Map();
+      for (const [k, v] of Object.entries(data.community_labels || {})) {
+        commLabelsMap.set(Number(k), v);
+        commLabelsMap.set(String(k), v);
       }
       const clusterLabel = community =>
-        labelMap.get(community) || labelMap.get(String(community))
+        commLabelsMap.get(community) || commLabelsMap.get(String(community))
         || "unlabeled cluster";
+      // Track which abstraction level the camera ratio currently maps to.
+      // Declared up here so the Sigma reducer closure (built farther down)
+      // captures the live binding.
+      let currentLevel = 0;
+      const levelForRatio = r => (
+        r > 3.0 ? 0 : r > 1.2 ? 1 : r > 0.5 ? 2 : 3
+      );
       // Drop graphify's community-summary rationale nodes — they're prose
       // blobs graphify attaches per community, not actual code, and they
       // inflate the graph by ~40% while adding no navigational value.
@@ -247,6 +253,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             color: shadeByDegree(colorFor(n.community), norm),
             community: n.community ?? null,
             communityLabel: clusterLabel(n.community),
+            // L3 = leaf. Parent keys at L0/L1/L2 are emitted by the
+            // server from the file path; the LOD pass below uses them
+            // to assemble super-nodes after FA2 settles.
+            level: 3,
+            l0: n.l0 || null,
+            l1: n.l1 || null,
+            l2: n.l2 || null,
             x: pos.x, y: pos.y,
           });
         }
@@ -275,6 +288,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             g.addEdge(s, t, {
               size: 0.25,
               color: withAlpha(colorFor(srcComm), 0.3),
+              level: 3,
             });
             edgesDrawn++;
           } catch (_) {}
@@ -321,15 +335,132 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       layout.stop();
       layout.kill();
 
-      // Snapshot the final per-node sizes, then hide everything and zero
-      // out sizes so Sigma's first paint shows nothing. The reveal
-      // animation below will pop each cluster in. Edges auto-hide when
-      // either endpoint is hidden (Sigma default), so they appear as
-      // their endpoints become visible — no separate edge animation.
+      // ----- Super-node assembly (LOD hierarchy) ----------------------
+      // For each abstraction level, group the L3 leaves by their l0/l1/l2
+      // parent and add a super-node at the centroid of its members.
+      // Super-edges aggregate leaf edges between matching parent groups.
+      // The level attribute on every node + edge is what the LOD reducer
+      // below keys on to show only one zoom level at a time.
+      function buildSupers(levelKey, lvl) {
+        const groups = new Map();
+        g.forEachNode((id, attrs) => {
+          if (attrs.level !== 3) return;
+          const k = attrs[levelKey];
+          if (!k) return;
+          if (!groups.has(k)) groups.set(k,
+            { ids: [], sx: 0, sy: 0, comm: new Map() });
+          const grp = groups.get(k);
+          grp.ids.push(id);
+          grp.sx += attrs.x; grp.sy += attrs.y;
+          const c = attrs.community ?? "_";
+          grp.comm.set(c, (grp.comm.get(c) || 0) + 1);
+        });
+        for (const [key, grp] of groups) {
+          const n = grp.ids.length;
+          let bestC = null, bestN = -1;
+          for (const [c, cnt] of grp.comm)
+            if (cnt > bestN) { bestN = cnt; bestC = c === "_" ? null : c; }
+          // Strip path parents to the rightmost segment for a readable
+          // label. comm:<id> fallback (flat repos) resolves to its
+          // DB-derived community label.
+          const labelText = key.startsWith("comm:")
+            ? clusterLabel(Number(key.slice(5))) || ("cluster " + key.slice(5))
+            : (key.split("/").pop() || key);
+          g.addNode(`__super__${lvl}__${key}`, {
+            label: labelText,
+            level: lvl,
+            x: grp.sx / n, y: grp.sy / n,
+            // Super-node radius scales sublinearly with member count so
+            // a 5000-member cluster doesn't swamp a 200-member one.
+            size: 8 + 4 * Math.log(1 + n),
+            color: colorFor(bestC),
+            community: bestC,
+            communityLabel: labelText,
+            memberCount: n,
+            l0: lvl === 0 ? key : null,
+            l1: lvl === 1 ? key : null,
+            l2: lvl === 2 ? key : null,
+          });
+        }
+        return groups.size;
+      }
+      function buildSuperEdges(levelKey, lvl) {
+        const agg = new Map();
+        g.forEachEdge((eid, attrs, src, tgt) => {
+          if (attrs.level !== 3) return;
+          const sKey = g.getNodeAttribute(src, levelKey);
+          const tKey = g.getNodeAttribute(tgt, levelKey);
+          if (!sKey || !tKey || sKey === tKey) return;
+          const a = sKey < tKey ? sKey : tKey;
+          const b = sKey < tKey ? tKey : sKey;
+          const key = `${a}${b}`;
+          const cur = agg.get(key);
+          if (cur) cur.count++;
+          else agg.set(key, { a, b, count: 1 });
+        });
+        let added = 0;
+        for (const v of agg.values()) {
+          const sId = `__super__${lvl}__${v.a}`;
+          const tId = `__super__${lvl}__${v.b}`;
+          if (!g.hasNode(sId) || !g.hasNode(tId)) continue;
+          try {
+            g.addEdgeWithKey(`__se__${lvl}__${v.a}__${v.b}`, sId, tId, {
+              level: lvl,
+              size: 0.6 + 0.5 * Math.log(1 + v.count),
+              color: "rgba(170,180,210,0.55)",
+              aggregateCount: v.count,
+            });
+            added++;
+          } catch (_) {}
+        }
+        return added;
+      }
+      const lodCount = {
+        0: buildSupers("l0", 0),
+        1: buildSupers("l1", 1),
+        2: buildSupers("l2", 2),
+      };
+      buildSuperEdges("l0", 0);
+      buildSuperEdges("l1", 1);
+      buildSuperEdges("l2", 2);
+
+      // Spread super-nodes radially outward from the leaf-graph center.
+      // FA2 puts most leaves into a dense central cluster, which makes
+      // raw centroids cluster tight at the middle and overlap at L0/L1.
+      // Pushing each super-node outward by a level-specific factor
+      // separates them while preserving relative direction, so the
+      // visual flow on zoom-in (L0 → L3) reads as "drill into" the
+      // matching leaf cluster.
+      let lminX = Infinity, lmaxX = -Infinity;
+      let lminY = Infinity, lmaxY = -Infinity;
+      g.forEachNode((id, attrs) => {
+        if (attrs.level !== 3) return;
+        if (attrs.x < lminX) lminX = attrs.x;
+        if (attrs.x > lmaxX) lmaxX = attrs.x;
+        if (attrs.y < lminY) lminY = attrs.y;
+        if (attrs.y > lmaxY) lmaxY = attrs.y;
+      });
+      const leafCx = (lminX + lmaxX) / 2;
+      const leafCy = (lminY + lmaxY) / 2;
+      const SPREAD = { 0: 1.6, 1: 1.25, 2: 1.0 };
+      g.forEachNode((id, attrs) => {
+        const lvl = attrs.level;
+        if (lvl === undefined || lvl === 3) return;
+        const sx = SPREAD[lvl] || 1.0;
+        if (sx === 1.0) return;
+        const dx = (attrs.x - leafCx) * sx;
+        const dy = (attrs.y - leafCy) * sx;
+        g.setNodeAttribute(id, "x", leafCx + dx);
+        g.setNodeAttribute(id, "y", leafCy + dy);
+      });
+
+      // Snapshot final sizes for reveal. Only the level the user lands on
+      // (L0) needs size-zeroing — non-current levels are hidden by the
+      // reducer regardless of their size attribute.
       const finalSize = new Map();
-      g.updateEachNodeAttributes((id, attrs) => {
-        finalSize.set(id, attrs.size);
-        return { ...attrs, hidden: true, size: 0 };
+      g.forEachNode((id, attrs) => { finalSize.set(id, attrs.size); });
+      g.forEachNode((id, attrs) => {
+        if (attrs.level === 0) g.setNodeAttribute(id, "size", 0);
       });
 
       // ----- Sigma renderer (mounted now, on settled positions) -----
@@ -354,11 +485,16 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // closure picks up whatever value it holds when baseStatus() is
       // called, so click handlers reading the status get the right text.
       let layoutElapsed = "...";
-      const baseStatus = () =>
-        `${nodes.length.toLocaleString()} nodes · `
-        + `${edgesDrawn.toLocaleString()} edges`
-        + (dropped ? ` · ${dropped.toLocaleString()} rationale hidden` : "")
-        + ` · FA2 ${layoutElapsed}s`;
+      const LEVEL_NAMES = ["domains", "services", "modules", "symbols"];
+      const baseStatus = () => {
+        const showing = lodCount[currentLevel];
+        const where = currentLevel === 3
+          ? `${nodes.length.toLocaleString()} symbols`
+          : `${(showing || 0).toLocaleString()} ${LEVEL_NAMES[currentLevel]}`;
+        return `L${currentLevel} · ${where}`
+          + ` · ${edgesDrawn.toLocaleString()} edges total`
+          + ` · FA2 ${layoutElapsed}s · scroll to zoom`;
+      };
 
       const renderer = new Sigma(g, document.getElementById("graph"), {
         labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
@@ -367,6 +503,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         renderEdgeLabels: false,
         enableEdgeEvents: false,
         nodeReducer: (node, data) => {
+          // LOD: hide everything not at the current zoom level so the
+          // canvas only ever paints one abstraction at a time. Mousewheel
+          // crosses a threshold → camera "updated" handler bumps
+          // currentLevel → reducer re-evaluates → swap is instant.
+          if (data.level !== currentLevel) {
+            return { ...data, hidden: true };
+          }
           let out = data;
           // Focus dimming (click) layers first.
           if (focusedNode) {
@@ -400,9 +543,18 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
               }
             }
           }
+          // Force-render labels for super-nodes — at L0 only ~10 of them
+          // exist, so respecting labelDensity hides the most useful info
+          // on the screen. Leaves still respect the density throttle.
+          if (data.level !== undefined && data.level < 3) {
+            out = { ...out, forceLabel: true };
+          }
           return out;
         },
         edgeReducer: (edge, data) => {
+          if (data.level !== currentLevel) {
+            return { ...data, hidden: true };
+          }
           if (!focusedNode) return data;
           const ext = g.extremities(edge);
           if (ext[0] === focusedNode || ext[1] === focusedNode) {
@@ -410,6 +562,39 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           }
           return { ...data, color: "rgba(40,40,60,0.2)", zIndex: 0 };
         },
+      });
+
+      // ----- LOD: mousewheel zoom drives abstraction level -----------
+      // Sigma's camera ratio decreases as the user zooms in. Each ratio
+      // band corresponds to one level of the hierarchy; crossing a
+      // threshold flips currentLevel and the reducers swap the visible
+      // layer. ratio=5 lands the user in the L0 band — Sigma's default
+      // (x: 0.5, y: 0.5) keeps the camera centered on the graph bbox,
+      // which is the right framing because the spread pass above places
+      // super-nodes radially around the leaf-graph centroid.
+      const camera = renderer.getCamera();
+      camera.setState({ ratio: 5.0 });
+      currentLevel = 0;
+      // Debug hooks — expose graph + renderer so devtools can inspect
+      // node attributes, drive the camera, or smoke-test LOD swaps
+      // without monkey-patching. Cheap and useful.
+      window.__prismGraph = g;
+      window.__prismSigma = renderer;
+      camera.on("updated", () => {
+        const r = camera.getState().ratio;
+        const newLevel = levelForRatio(r);
+        if (newLevel !== currentLevel) {
+          currentLevel = newLevel;
+          // Focus state is meaningless across a level change — the
+          // focused node may not even exist at the new level. Clear it.
+          if (focusedNode) {
+            focusedNode = null;
+            neighborSet = new Set();
+          }
+          statusEl.textContent = baseStatus();
+          rebuildLegend();
+          renderer.refresh();
+        }
       });
 
       // Hover enter/leave: cache the hovered node's graph-space
@@ -427,9 +612,24 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         renderer.refresh();
       });
       renderer.on("clickNode", ({ node }) => {
+        const attrs = g.getNodeAttributes(node);
+        // Click a super-node → animate camera into the next level. Pans
+        // to the super-node's centroid and shrinks the ratio just past
+        // the next threshold so the LOD swap fires automatically.
+        if (attrs.level !== undefined && attrs.level < 3) {
+          const tgtLvl = attrs.level + 1;
+          const tgtRatio = tgtLvl === 1 ? 2.4
+                         : tgtLvl === 2 ? 1.0
+                         : 0.4;
+          camera.animate(
+            { x: attrs.x, y: attrs.y, ratio: tgtRatio },
+            { duration: 600 }
+          );
+          return;
+        }
+        // L3 leaf — preserve the existing focus / dim-non-neighbors flow.
         focusedNode = node;
         neighborSet = new Set(g.neighbors(node));
-        const attrs = g.getNodeAttributes(node);
         statusEl.textContent = `${attrs.label} `
           + `(cluster: ${attrs.communityLabel || "unlabeled cluster"}, `
           + `degree ${g.degree(node)}) — `
@@ -445,121 +645,136 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         renderer.refresh();
       });
 
-      // --- Legend / communities sidebar ---------------------------
-      // Rank communities by actual node count in the rendered graph
-      // (post-rationale-filter) instead of raw DB counts, so the
-      // numbers match what's on screen. Fall back to id if no label.
-      const counts = new Map();
-      g.forEachNode((_n, attrs) => {
-        const c = attrs.community;
-        if (c === null || c === undefined) return;
-        counts.set(c, (counts.get(c) || 0) + 1);
-      });
-      const ranked = [...counts.entries()]
-        .map(([cid, n]) => ({
-          cid, n,
-          label: clusterLabel(cid),
-          color: colorFor(cid),
-        }))
-        .sort((a, b) => b.n - a.n);
-
-      const hidden = new Set();
-      const listEl = document.getElementById("legend-list");
-      listEl.innerHTML = "";
-      for (const c of ranked) {
-        const item = document.createElement("div");
-        item.className = "legend-item";
-        item.innerHTML =
-          `<div class="legend-dot" style="background:${c.color}"></div>`
-          + `<span class="legend-label" title="${c.label.replace(/"/g,'&quot;')}">`
-          + `${c.label}</span>`
-          + `<span class="legend-count">${c.n}</span>`;
-        item.addEventListener("click", () => {
-          if (hidden.has(c.cid)) {
-            hidden.delete(c.cid);
-            item.classList.remove("dimmed");
-          } else {
-            hidden.add(c.cid);
-            item.classList.add("dimmed");
-          }
-          // Sigma respects the `hidden` node attribute; toggling it
-          // and calling refresh() is the cheapest way to dim a whole
-          // community without touching the layout.
-          g.forEachNode((nid, attrs) => {
-            if (attrs.community === c.cid) {
-              g.setNodeAttribute(nid, "hidden", hidden.has(c.cid));
-            }
-          });
-          renderer.refresh();
-        });
-        listEl.appendChild(item);
+      // --- Legend / categories sidebar ----------------------------
+      // Level-aware: at L0/L1/L2 it lists super-nodes ranked by member
+      // count; at L3 it lists Leiden communities. Click an item to dim
+      // its members from the canvas. Truncates the first dotted segment
+      // of community labels per #68 proposal #6 — "express web api · be"
+      // reads as "express web api" with the full string in tooltip.
+      function truncateLabel(lbl) {
+        if (!lbl) return "(unlabeled)";
+        const dot = lbl.indexOf(" · ");
+        return dot > 0 ? lbl.substring(0, dot) : lbl;
       }
-      document.getElementById("sidebar-stats").textContent =
-        `${ranked.length.toLocaleString()} clusters · `
-        + `${nodes.length.toLocaleString()} nodes · `
-        + `${edgesDrawn.toLocaleString()} edges`;
+      function rebuildLegend() {
+        const listEl = document.getElementById("legend-list");
+        listEl.innerHTML = "";
+        let items = [];
+        if (currentLevel < 3) {
+          g.forEachNode((id, attrs) => {
+            if (attrs.level !== currentLevel) return;
+            items.push({
+              kind: "super", id,
+              label: attrs.label,
+              color: attrs.color,
+              count: attrs.memberCount || 1,
+            });
+          });
+        } else {
+          const counts = new Map();
+          g.forEachNode((_n, attrs) => {
+            if (attrs.level !== 3) return;
+            const c = attrs.community;
+            if (c === null || c === undefined) return;
+            counts.set(c, (counts.get(c) || 0) + 1);
+          });
+          items = [...counts.entries()].map(([cid, n]) => ({
+            kind: "community", cid,
+            label: clusterLabel(cid),
+            color: colorFor(cid),
+            count: n,
+          }));
+        }
+        items.sort((a, b) => b.count - a.count);
 
-      // ----- Cluster-by-cluster reveal animation --------------------
-      // Group nodes by community, biggest first. Each cluster starts
-      // popping in `staggerMs` after the previous one starts; within a
-      // cluster, every node fades from size=0 to its final size with
-      // ease-out cubic. Pure WebGL render-loop animation — no physics,
-      // no jitter. Skipping during compute jumps straight to final.
-      const byCommunity = new Map();
+        for (const item of items) {
+          const div = document.createElement("div");
+          div.className = "legend-item";
+          const display = truncateLabel(item.label);
+          const fullLabel = (item.label || "").replace(/"/g, "&quot;");
+          div.innerHTML =
+            `<div class="legend-dot" style="background:${item.color}"></div>`
+            + `<span class="legend-label" title="${fullLabel}">${display}</span>`
+            + `<span class="legend-count">${item.count}</span>`;
+          div.addEventListener("click", () => {
+            div.classList.toggle("dimmed");
+            const dimmed = div.classList.contains("dimmed");
+            if (item.kind === "super") {
+              g.setNodeAttribute(item.id, "hidden", dimmed);
+            } else {
+              g.forEachNode((nid, attrs) => {
+                if (attrs.level === 3 && attrs.community === item.cid) {
+                  g.setNodeAttribute(nid, "hidden", dimmed);
+                }
+              });
+            }
+            renderer.refresh();
+          });
+          listEl.appendChild(div);
+        }
+
+        document.getElementById("sidebar-stats").textContent =
+          `L${currentLevel} (${LEVEL_NAMES[currentLevel]}) · `
+          + `${items.length.toLocaleString()} categories · `
+          + `${nodes.length.toLocaleString()} symbols total`;
+      }
+      rebuildLegend();
+
+      // ----- L0 reveal animation ------------------------------------
+      // The user lands at L0 (~10 super-nodes), so the reveal animates
+      // those biggest-first instead of the L3 leaf graph. The skip
+      // threshold (proposal #3) suppresses the animation when there are
+      // too few super-nodes for the staged reveal to telegraph anything
+      // structural — single-domain repos just snap in.
+      const l0Items = [];
       g.forEachNode((id, attrs) => {
-        const k = String(attrs.community ?? "null");
-        if (!byCommunity.has(k)) byCommunity.set(k, []);
-        byCommunity.get(k).push(id);
+        if (attrs.level === 0) {
+          l0Items.push({ id, count: attrs.memberCount || 1 });
+        }
       });
-      const orderedComms = [...byCommunity.values()]
-        .sort((a, b) => b.length - a.length);
+      l0Items.sort((a, b) => b.count - a.count);
 
-      // Total reveal budget ~2s; pack stagger into it but cap so single-
-      // cluster graphs still get a visible fade.
-      const revealBudget = 2000;
-      const fadeMs = 500;
-      const staggerMs = orderedComms.length > 1
-        ? Math.max(40, Math.min(180,
-            (revealBudget - fadeMs) / (orderedComms.length - 1)))
-        : 0;
-      const startTime = new Map();
-      orderedComms.forEach((ids, idx) => {
-        const t = idx * staggerMs;
-        for (const id of ids) startTime.set(id, t);
-      });
-      const totalAnimMs = staggerMs * Math.max(0, orderedComms.length - 1)
-        + fadeMs;
+      const fadeMs = 450;
+      const SKIP_REVEAL_BELOW = 5;
+      const shouldAnimate = !skipped && l0Items.length >= SKIP_REVEAL_BELOW;
 
-      if (!skipped) {
-        statusEl.textContent =
-          `Revealing ${orderedComms.length} clusters...`;
+      if (shouldAnimate) {
+        const revealBudget = 1600;
+        const staggerMs = l0Items.length > 1
+          ? Math.max(60, Math.min(180,
+              (revealBudget - fadeMs) / (l0Items.length - 1)))
+          : 0;
+        const startTime = new Map();
+        l0Items.forEach(({ id }, idx) => startTime.set(id, idx * staggerMs));
+        const totalAnimMs =
+          staggerMs * Math.max(0, l0Items.length - 1) + fadeMs;
+
+        statusEl.textContent = `Revealing ${l0Items.length} domains...`;
         await new Promise(resolve => {
           const aStart = performance.now();
           const easeOut = t => 1 - Math.pow(1 - t, 3);
           const step = () => {
             const elapsed = performance.now() - aStart;
-            g.updateEachNodeAttributes((id, attrs) => {
+            for (const { id } of l0Items) {
               const start = startTime.get(id) || 0;
-              const t = Math.min(1, Math.max(0, (elapsed - start) / fadeMs));
-              if (t <= 0) return attrs; // not yet — leave hidden
-              return {
-                ...attrs,
-                hidden: false,
-                size: finalSize.get(id) * easeOut(t),
-              };
-            });
+              const t = Math.min(1,
+                Math.max(0, (elapsed - start) / fadeMs));
+              if (t <= 0) continue;
+              g.setNodeAttribute(id, "size",
+                finalSize.get(id) * easeOut(t));
+            }
             if (elapsed < totalAnimMs) requestAnimationFrame(step);
             else resolve();
           };
           requestAnimationFrame(step);
         });
       } else {
-        // Skipped — snap straight to final.
-        g.updateEachNodeAttributes((id, attrs) => ({
-          ...attrs,
-          hidden: false,
-          size: finalSize.get(id),
-        }));
+        // Snap to final — either the user clicked to skip during
+        // FA2 compute, or there are too few L0 nodes to be worth
+        // animating.
+        for (const { id } of l0Items) {
+          g.setNodeAttribute(id, "size", finalSize.get(id));
+        }
       }
       layoutElapsed = ((performance.now() - t0) / 1000).toFixed(1);
       statusEl.textContent = baseStatus();
@@ -619,6 +834,74 @@ def _graphify_communities(project_id: str):
     finally:
         conn.close()
     return JSONResponse({"communities": out})
+
+
+@app.get("/graphify-visual/{project_id}/hierarchy.json")
+def _graphify_hierarchy(project_id: str):
+    """Multi-level hierarchical view of the project graph.
+
+    Each leaf node is tagged with l0/l1/l2 parent keys derived from
+    its file path (with src/app/services-style container directories
+    stripped). Edges reference leaf ids only — the client computes
+    super-edges per level on demand by aggregating leaf edges by the
+    parent of each endpoint.
+
+    This is what the Sigma viewer fetches — it replaces the older
+    graph.json + communities.json pair and folds in the data needed
+    to render the L0–L3 zoom hierarchy.
+    """
+    from fastapi.responses import JSONResponse
+    if not _SAFE_PROJECT_RE.match(project_id or ""):
+        raise HTTPException(status_code=400, detail="invalid project id")
+    ctx = get_project(project_id)
+    json_path = ctx._data_dir / "graphify-src" / "graphify-out" / "graph.json"
+    if not json_path.exists():
+        raise HTTPException(
+            status_code=404, detail="graph.json not generated yet"
+        )
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception:
+        raise HTTPException(status_code=500, detail="graph.json parse error")
+
+    raw_nodes = [
+        n for n in data.get("nodes", [])
+        if n.get("file_type") != "rationale"
+    ]
+    raw_edges = data.get("links") or data.get("edges") or []
+
+    out_nodes = []
+    for n in raw_nodes:
+        h = compute_node_hierarchy(
+            n.get("source_file"),
+            fallback_community=n.get("community"),
+        )
+        # Mark leaves as level 3 so the client doesn't have to special-case
+        # them after super-nodes are added with level 0/1/2.
+        out_nodes.append({**n, "level": 3, **h})
+
+    # Pull DB-derived community labels so super-nodes that fall back to
+    # comm:<id> at L0 (flat repos) get a human label instead of the raw id.
+    db_path = ctx._data_dir / "graph.db"
+    comm_labels: dict[int, str] = {}
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(str(db_path))
+            try:
+                for r in conn.execute("SELECT id, label FROM communities"):
+                    comm_labels[int(r[0])] = r[1] or ""
+            except sqlite3.OperationalError:
+                pass
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            pass
+
+    return JSONResponse({
+        "nodes": out_nodes,
+        "edges": raw_edges,
+        "community_labels": comm_labels,
+    })
 
 
 @app.get("/graphify-visual/{project_id}/{filename}")

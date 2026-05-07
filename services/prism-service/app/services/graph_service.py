@@ -234,6 +234,34 @@ _PATH_PREFIX_DROP = {
 }
 
 
+def compute_node_hierarchy(
+    source_file: str | None,
+    fallback_community: int | None = None,
+) -> dict:
+    """Return {l0, l1, l2} parent keys for a leaf's hierarchical rollup.
+
+    Strips known container directories from the path, then uses the
+    first 1, 2, 3 surviving segments as the L0, L1, L2 parents. Falls
+    back to ``comm:<id>`` when the path is too shallow to produce a
+    meaningful root segment, so a flat repo without a service layout
+    still gets a usable hierarchy from Leiden community detection.
+    """
+    sf = (source_file or "").replace("\\", "/").strip("/")
+    parts = sf.split("/") if sf else []
+    if parts and "." in parts[-1]:
+        parts = parts[:-1]  # drop filename
+    segs = [p for p in parts if p and p.lower() not in _PATH_PREFIX_DROP]
+    if not segs:
+        if fallback_community is not None:
+            key = f"comm:{fallback_community}"
+            return {"l0": key, "l1": key, "l2": key}
+        return {"l0": None, "l1": None, "l2": None}
+    l0 = segs[0]
+    l1 = "/".join(segs[:2]) if len(segs) >= 2 else l0
+    l2 = "/".join(segs[:3]) if len(segs) >= 3 else l1
+    return {"l0": l0, "l1": l1, "l2": l2}
+
+
 def _pick_hub_entity(entities_ranked: list[tuple[dict, int]]) -> str:
     """Pick a meaningful entity name from the highest-degree nodes.
 

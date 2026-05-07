@@ -14,11 +14,16 @@ RESULTS = BENCH / "results" / "scorecard"
 
 CHEAP_GATES = [
     ("registry", [sys.executable, "registry/run.py"]),
+    ("toolprofiles", [sys.executable, "toolprofiles/run.py"]),
     ("standings", [sys.executable, "standings/run.py"]),
+    ("publicbars", [sys.executable, "publicbars/run.py"]),
     ("status", [sys.executable, "status/run.py"]),
+    ("swerebench", [sys.executable, "swerebench/run.py"]),
+    ("bfcl", [sys.executable, "bfcl/run.py"]),
+    ("terminalbench", [sys.executable, "terminalbench/run.py"]),
+    ("mcpatlas", [sys.executable, "mcpatlas/run.py"]),
     ("proofplan", [sys.executable, "proofplan/run.py"]),
     ("objective_audit", [sys.executable, "objective_audit/run.py"]),
-    ("toolprofiles", [sys.executable, "toolprofiles/run.py"]),
     ("agentsetup", [sys.executable, "agentsetup/run.py"]),
     ("contextpack", [sys.executable, "contextpack/run.py"]),
     ("metaconductor", [sys.executable, "metaconductor/run.py"]),
@@ -41,6 +46,26 @@ EXPENSIVE_GATES_NOT_RUN = [
         "id": "swebench_patch_resolution",
         "reason": "requires external agent command plus official SWE-bench Docker evaluator",
         "command": "python swebench/patch_run.py ... && python swebench/evaluate_predictions.py ...",
+    },
+    {
+        "id": "swe_rebench_fresh_pr_resolution",
+        "reason": "requires SWE-rebench fresh-PR tasks/evaluator or a clearly labeled non-comparable fresh-PR fixture",
+        "command": "python swerebench/run.py && python <future SWE-rebench evaluator adapter>",
+    },
+    {
+        "id": "bfcl_v4_tool_calling",
+        "reason": "requires BFCL V4 tasks/evaluator or a clearly labeled non-comparable BFCL-style fixture",
+        "command": "python bfcl/run.py && python <future BFCL evaluator adapter>",
+    },
+    {
+        "id": "terminal_bench2_agentic_terminal",
+        "reason": "requires Terminal-Bench 2.0 tasks/evaluator or a clearly labeled non-comparable terminal-style fixture",
+        "command": "python terminalbench/run.py && python <future Terminal-Bench evaluator adapter>",
+    },
+    {
+        "id": "mcp_atlas_real_world_tool_use",
+        "reason": "requires MCP Atlas public tasks/harness or a clearly labeled non-comparable real-MCP-server fixture",
+        "command": "python mcpatlas/run.py && python <future MCP Atlas evaluator adapter>",
     },
 ]
 
