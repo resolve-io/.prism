@@ -771,8 +771,8 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       const drawNodeHover = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1.15);
 
       const renderer = new Sigma(g, document.getElementById("graph"), {
-        labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
-        maxCameraRatio: 10, defaultNodeColor: "#6b7280",
+        labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.04,
+        maxCameraRatio: 30, defaultNodeColor: "#6b7280",
         defaultEdgeColor: "rgba(107,114,128,0.3)",
         renderEdgeLabels: false,
         enableEdgeEvents: false,
@@ -922,6 +922,50 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // without monkey-patching. Cheap and useful.
       window.__prismGraph = g;
       window.__prismSigma = renderer;
+      // Size-based auto-drill: when the active cluster's bbox grows
+      // past ~80% of the viewport (because the user keeps zooming in
+      // within the current level), automatically transition to the
+      // next-deeper level so its children spread back into view. The
+      // ratio-based LOD bands still fire as a fallback; this just
+      // catches the case where one cluster's spread doesn't map to
+      // the same ratio band as another's. Debounced so a single zoom
+      // burst can't cascade through every level at once.
+      let lastAutoDrillT = 0;
+      function maybeAutoDrill() {
+        if (currentLevel >= 3) return;
+        const now = performance.now();
+        if (now - lastAutoDrillT < 500) return;
+        const fk = focusKey();
+        let mnX = Infinity, mxX = -Infinity;
+        let mnY = Infinity, mxY = -Infinity;
+        let count = 0;
+        g.forEachNode((id, attrs) => {
+          if (attrs.level !== currentLevel) return;
+          if (fk && attrs["l" + fk.level] !== fk.key) return;
+          if (attrs.x < mnX) mnX = attrs.x;
+          if (attrs.x > mxX) mxX = attrs.x;
+          if (attrs.y < mnY) mnY = attrs.y;
+          if (attrs.y > mxY) mxY = attrs.y;
+          count++;
+        });
+        if (count < 1) return;
+        const tl = renderer.graphToViewport({ x: mnX, y: mnY });
+        const br = renderer.graphToViewport({ x: mxX, y: mxY });
+        const wPx = Math.abs(br.x - tl.x);
+        const hPx = Math.abs(br.y - tl.y);
+        const cw = renderer.getCanvases().mouse.clientWidth || 1;
+        const ch = renderer.getCanvases().mouse.clientHeight || 1;
+        const frac = Math.max(wPx / cw, hPx / ch);
+        if (frac > 0.80) {
+          lastAutoDrillT = now;
+          currentLevel++;
+          statusEl.textContent = baseStatus();
+          rebuildLegend();
+          renderer.refresh();
+          startPhysics();
+        }
+      }
+
       camera.on("updated", () => {
         const r = camera.getState().ratio;
         currentRatio = r;
@@ -929,6 +973,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         // alphas track the live ratio. Without this, Sigma may skip a
         // render between camera updates and the fade looks choppy.
         renderer.refresh();
+        maybeAutoDrill();
         const newLevel = levelForRatio(r);
         if (newLevel !== currentLevel) {
           const oldLevel = currentLevel;
