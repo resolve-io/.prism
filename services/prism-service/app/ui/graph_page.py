@@ -769,6 +769,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         defaultEdgeColor: "rgba(107,114,128,0.3)",
         renderEdgeLabels: false,
         enableEdgeEvents: false,
+        // Wheel zoom — Sigma's default 1.7× per click felt jumpy with
+        // the LOD bands clustered close (1.5 / 0.7 / 0.3). 1.22× takes
+        // ~3 clicks to cross a band so the smooth crossfade has time
+        // to read; zoomDuration extends the animation so each click
+        // glides instead of snapping.
+        zoomingRatio: 1.22,
+        zoomDuration: 320,
         // Brighter labels with weight so super-nodes read against the
         // #0f0f1a body. Per-node labelSize on super-nodes overrides
         // this default for L0/L1; L3 leaves use it as the floor.
