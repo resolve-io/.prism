@@ -600,6 +600,39 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         return `L${currentLevel}${trail} · ${where} · FA2 ${layoutElapsed}s${hint}`;
       };
 
+      // Stroke-outlined label: dark stroke first, light fill on top.
+      // Reads against any background — node fills, edges, hover
+      // highlights, even Sigma's default lighter hover canvas — and
+      // doesn't depend on a backdrop rectangle that can land on the
+      // wrong z-order. Hover variant boosts size 15% so the active
+      // label visibly dominates without needing a separate backdrop.
+      const drawNodeLabelOutlined = (context, data, settings, sizeMul) => {
+        if (!data.label || data.hidden) return;
+        const mul = sizeMul || 1;
+        const baseSize = (data.labelSize || settings.labelSize || 13) * mul;
+        const weight = data.labelWeight || settings.labelWeight || "600";
+        const font = settings.labelFont
+          || "system-ui, -apple-system, sans-serif";
+        context.font = `${weight} ${baseSize}px ${font}`;
+        context.textBaseline = "middle";
+        context.textAlign = "left";
+        const x = data.x + data.size + 4;
+        const y = data.y;
+        // Heavy dark stroke around the text — reads against any
+        // background colour, including Sigma's default white hover
+        // overlay (which previously rendered white-on-white).
+        context.lineWidth = mul > 1 ? 4 : 3;
+        context.lineJoin = "round";
+        context.miterLimit = 2;
+        context.strokeStyle = "rgba(8,10,18,0.92)";
+        context.strokeText(data.label, x, y);
+        context.fillStyle =
+          (settings.labelColor && settings.labelColor.color) || "#f1f3f8";
+        context.fillText(data.label, x, y);
+      };
+      const drawNodeLabel = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1);
+      const drawNodeHover = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1.15);
+
       const renderer = new Sigma(g, document.getElementById("graph"), {
         labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.05,
         maxCameraRatio: 10, defaultNodeColor: "#6b7280",
@@ -613,6 +646,11 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         labelWeight: "600",
         labelSize: 13,
         labelFont: "system-ui, -apple-system, sans-serif",
+        // Sigma 3.0.0 setting names — labelRenderer/hoverRenderer
+        // were Sigma 2 and silently ignored here, which let the
+        // default white-on-white hover overlay clobber labels.
+        defaultDrawNodeLabel: drawNodeLabel,
+        defaultDrawNodeHover: drawNodeHover,
         nodeReducer: (node, data) => {
           // Smooth LOD blend — alpha is interpolated through level
           // boundaries (smoothstep) so wheeling produces a continuous
@@ -638,12 +676,17 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
               out = { ...out, color: "#2a2a3e", label: "", zIndex: 0 };
             }
           }
-          // Hover effects: grow hovered, push nearby away.
+          // Hover effects: grow hovered, push nearby away. Hovered
+          // super-nodes get a subtle pulse + 15% bigger label so the
+          // canvas feels live and the label always reads on top.
           if (hoveredNode) {
             if (node === hoveredNode) {
+              const pulse = 1 + 0.06 * Math.sin(performance.now() / 220);
               out = {
                 ...out,
-                size: (out.size || data.size) * HOVER_SIZE_MULT,
+                size: (out.size || data.size) * HOVER_SIZE_MULT * pulse,
+                labelSize:
+                  (out.labelSize || data.labelSize || 13) * 1.15,
                 forceLabel: true,
                 zIndex: 3,
               };
@@ -749,6 +792,21 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         }
       });
 
+      // RAF loop that re-renders while a node is hovered so the
+      // pulse + label-grow are animated, then idles itself out.
+      // Cheap: one render/frame, only while the user's pointer is
+      // over a node.
+      let pulseRaf = null;
+      function startPulseLoop() {
+        if (pulseRaf !== null) return;
+        const tick = () => {
+          if (!hoveredNode) { pulseRaf = null; return; }
+          renderer.refresh();
+          pulseRaf = requestAnimationFrame(tick);
+        };
+        pulseRaf = requestAnimationFrame(tick);
+      }
+
       // Hover enter/leave: cache the hovered node's graph-space
       // position once so the reducer doesn't re-query per-node.
       renderer.on("enterNode", ({ node }) => {
@@ -756,7 +814,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         hoveredX = g.getNodeAttribute(node, "x");
         hoveredY = g.getNodeAttribute(node, "y");
         document.body.style.cursor = "pointer";
-        renderer.refresh();
+        startPulseLoop();
       });
       renderer.on("leaveNode", () => {
         hoveredNode = null;
