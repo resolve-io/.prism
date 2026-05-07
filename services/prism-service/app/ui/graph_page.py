@@ -191,9 +191,15 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // Track which abstraction level the camera ratio currently maps to.
       // Declared up here so the Sigma reducer closure (built farther down)
       // captures the live binding.
+      //
+      // Threshold tuning notes:
+      //   The bbox Sigma normalizes against includes the spread super-
+      //   nodes (3× leaf extent at L0), so ratio=1.0 = "fit super-node
+      //   spread to viewport." Lower thresholds keep the active level
+      //   filling the canvas instead of shrinking into a tiny island.
       let currentLevel = 0;
       const levelForRatio = r => (
-        r > 3.0 ? 0 : r > 1.2 ? 1 : r > 0.5 ? 2 : 3
+        r > 1.5 ? 0 : r > 0.7 ? 1 : r > 0.3 ? 2 : 3
       );
       // Drop graphify's community-summary rationale nodes — they're prose
       // blobs graphify attaches per community, not actual code, and they
@@ -361,11 +367,20 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           for (const [c, cnt] of grp.comm)
             if (cnt > bestN) { bestN = cnt; bestC = c === "_" ? null : c; }
           // Strip path parents to the rightmost segment for a readable
-          // label. comm:<id> fallback (flat repos) resolves to its
-          // DB-derived community label.
-          const labelText = key.startsWith("comm:")
-            ? clusterLabel(Number(key.slice(5))) || ("cluster " + key.slice(5))
+          // label. comm:<id> fallback (flat repos) resolves to the
+          // DB-derived community label, then truncated at the first
+          // " · " separator so legend / canvas don't show the
+          // graphify "<file> · <hub>" suffix as a mashed-up string.
+          const rawLabel = key.startsWith("comm:")
+            ? (clusterLabel(Number(key.slice(5))) || ("cluster " + key.slice(5)))
             : (key.split("/").pop() || key);
+          const labelText = (() => {
+            const dot = rawLabel.indexOf(" · ");
+            return dot > 0 ? rawLabel.substring(0, dot) : rawLabel;
+          })();
+          // Larger labels at higher abstraction levels so the L0 view
+          // reads instantly. Sigma honors per-node labelSize.
+          const labelSizeForLevel = lvl === 0 ? 22 : lvl === 1 ? 18 : 15;
           g.addNode(`__super__${lvl}__${key}`, {
             label: labelText,
             level: lvl,
@@ -377,6 +392,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             community: bestC,
             communityLabel: labelText,
             memberCount: n,
+            labelSize: labelSizeForLevel,
             l0: lvl === 0 ? key : null,
             l1: lvl === 1 ? key : null,
             l2: lvl === 2 ? key : null,
@@ -442,7 +458,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       });
       const leafCx = (lminX + lmaxX) / 2;
       const leafCy = (lminY + lmaxY) / 2;
-      const SPREAD = { 0: 1.6, 1: 1.25, 2: 1.0 };
+      // SPREAD pushes each super-node outward from the leaf-graph
+      // center by the level's factor, so L0 super-nodes (~7-10 in a
+      // small repo) don't pile on top of each other where their member
+      // centroids cluster. The factor is applied in graph coords;
+      // larger spread + correspondingly lower ratio thresholds keeps
+      // the active level filling the viewport rather than shrinking to
+      // a tiny island in the center of an empty canvas.
+      const SPREAD = { 0: 3.0, 1: 1.8, 2: 1.0 };
       g.forEachNode((id, attrs) => {
         const lvl = attrs.level;
         if (lvl === undefined || lvl === 3) return;
@@ -502,6 +525,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         defaultEdgeColor: "rgba(107,114,128,0.3)",
         renderEdgeLabels: false,
         enableEdgeEvents: false,
+        // Brighter labels with weight so super-nodes read against the
+        // #0f0f1a body. Per-node labelSize on super-nodes overrides
+        // this default for L0/L1; L3 leaves use it as the floor.
+        labelColor: { color: "#f1f3f8" },
+        labelWeight: "600",
+        labelSize: 13,
+        labelFont: "system-ui, -apple-system, sans-serif",
         nodeReducer: (node, data) => {
           // LOD: hide everything not at the current zoom level so the
           // canvas only ever paints one abstraction at a time. Mousewheel
@@ -573,7 +603,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // which is the right framing because the spread pass above places
       // super-nodes radially around the leaf-graph centroid.
       const camera = renderer.getCamera();
-      camera.setState({ ratio: 5.0 });
+      camera.setState({ ratio: 1.8 });
       currentLevel = 0;
       // Debug hooks — expose graph + renderer so devtools can inspect
       // node attributes, drive the camera, or smoke-test LOD swaps
@@ -618,9 +648,12 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         // the next threshold so the LOD swap fires automatically.
         if (attrs.level !== undefined && attrs.level < 3) {
           const tgtLvl = attrs.level + 1;
-          const tgtRatio = tgtLvl === 1 ? 2.4
-                         : tgtLvl === 2 ? 1.0
-                         : 0.4;
+          // Land just inside the next band so the LOD swap fires once
+          // the camera animation completes. Stay clear of band edges
+          // so a small wobble doesn't bounce us back.
+          const tgtRatio = tgtLvl === 1 ? 1.1
+                         : tgtLvl === 2 ? 0.55
+                         : 0.22;
           camera.animate(
             { x: attrs.x, y: attrs.y, ratio: tgtRatio },
             { duration: 600 }
