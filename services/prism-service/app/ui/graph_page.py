@@ -127,31 +127,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
     const a0 = m[4] !== undefined ? parseFloat(m[4]) : 1;
     return `rgba(${m[1]},${m[2]},${m[3]},${a0 * a})`;
   }
-  // smoothAlphas → [a0, a1, a2, a3] for a given camera ratio.
-  // Adjacent levels share a smoothstep crossfade through their
-  // boundary so wheel-zoom flows continuously instead of snapping.
-  // Width tuned so the fade reads at ~60fps but is brief enough that
-  // the active level dominates most of its band.
-  function smoothAlphas(r) {
-    const T01 = 1.5, W01 = 0.5;
-    const T12 = 0.7, W12 = 0.25;
-    const T23 = 0.3, W23 = 0.12;
-    const fade = (T, W) => {
-      const t = (r - (T - W / 2)) / W;
-      if (t <= 0) return 0;
-      if (t >= 1) return 1;
-      return t * t * (3 - 2 * t);
-    };
-    const f01 = fade(T01, W01);
-    const f12 = fade(T12, W12);
-    const f23 = fade(T23, W23);
-    return [
-      f01,
-      (1 - f01) * f12,
-      (1 - f01) * (1 - f12) * f23,
-      (1 - f01) * (1 - f12) * (1 - f23),
-    ];
-  }
+  const LEVEL_FADE_MS = 240;
   // HSL round-trip utilities. Shading by degree modulates the L
   // channel while keeping H+S fixed, so every node in a community
   // shares the base hue and saturation — only perceived lightness
@@ -236,9 +212,27 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       //   spread to viewport." Lower thresholds keep the active level
       //   filling the canvas instead of shrinking into a tiny island.
       let currentLevel = 0;
-      const levelForRatio = r => (
-        r > 1.5 ? 0 : r > 0.7 ? 1 : r > 0.3 ? 2 : 3
-      );
+      let prevLevel = 0;
+      let levelTransitionStart = 0;
+      // Per-level alpha for the LOD reducer. Exactly one level is
+      // visible at any settled moment — the previous wide-ratio
+      // crossfade caused a confusing mix where, e.g., L2 super-nodes
+      // ghosted on top of the L3 leaf mesh. When currentLevel
+      // changes (via click-drill or 80%-bbox auto-drill) a short
+      // smoothstep fade interpolates from the old layer to the new.
+      function smoothAlphas() {
+        const out = [0, 0, 0, 0];
+        const elapsed = performance.now() - levelTransitionStart;
+        if (elapsed >= LEVEL_FADE_MS) {
+          out[currentLevel] = 1;
+          return out;
+        }
+        const t = elapsed / LEVEL_FADE_MS;
+        const eased = t * t * (3 - 2 * t);
+        out[currentLevel] = eased;
+        out[prevLevel] = 1 - eased;
+        return out;
+      }
       // Click-to-drill focus stack. Each entry is {level, key} — the
       // ancestor a click pushed down to. Reducers + legend render only
       // descendants of the deepest entry. Wheeling out past a focus
@@ -636,7 +630,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         physicsIdleFrames = 0;
         const tick = () => {
           const moved = labelRelaxStep();
-          if (moved > 0.001) {
+          // Refresh while either physics is moving OR a level-
+          // transition fade is in flight — without the second
+          // clause, the alpha fade between levels stalls because
+          // there's no other RAF source on the page during a
+          // settled layout.
+          const fadeActive = (performance.now() - levelTransitionStart)
+                             < LEVEL_FADE_MS;
+          if (moved > 0.001 || fadeActive) {
             physicsIdleFrames = 0;
             renderer.refresh();
           } else {
@@ -799,7 +800,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // Smooth LOD blend — alpha is interpolated through level
           // boundaries (smoothstep) so wheeling produces a continuous
           // crossfade between adjacent layers rather than a snap.
-          const a = smoothAlphas(currentRatio)[data.level];
+          const a = smoothAlphas()[data.level];
           if (a <= 0.01) return { ...data, hidden: true };
           // Drill-down focus: only render descendants of the deepest
           // focus item. Each super-node + leaf carries ancestor keys at
@@ -864,7 +865,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         edgeReducer: (edge, data) => {
           // Same smoothstep crossfade as nodes so super-edges fade
           // alongside super-nodes through the threshold.
-          const a = smoothAlphas(currentRatio)[data.level];
+          const a = smoothAlphas()[data.level];
           if (a <= 0.01) return { ...data, hidden: true };
           // Same drill-down filter as nodeReducer: hide edges that
           // would connect across the focus boundary.
@@ -958,49 +959,38 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         const frac = Math.max(wPx / cw, hPx / ch);
         if (frac > 0.80) {
           lastAutoDrillT = now;
-          currentLevel++;
-          statusEl.textContent = baseStatus();
-          rebuildLegend();
-          renderer.refresh();
-          startPhysics();
+          setLevel(currentLevel + 1);
         }
       }
 
+      // setLevel — single entry point for level changes. Captures
+      // the previous level for the fade, runs the side effects
+      // (status text, legend rebuild, physics nudge), and refreshes.
+      function setLevel(next) {
+        if (next === currentLevel) return;
+        prevLevel = currentLevel;
+        currentLevel = next;
+        levelTransitionStart = performance.now();
+        if (focusedNode) {
+          focusedNode = null;
+          neighborSet = new Set();
+        }
+        statusEl.textContent = baseStatus();
+        rebuildLegend();
+        renderer.refresh();
+        startPhysics();
+      }
+
       camera.on("updated", () => {
-        const r = camera.getState().ratio;
-        currentRatio = r;
-        // Force the reducer to re-run this frame so the smooth crossfade
-        // alphas track the live ratio. Without this, Sigma may skip a
-        // render between camera updates and the fade looks choppy.
+        currentRatio = camera.getState().ratio;
+        // Wheel zoom drives the camera ratio only — it never
+        // crosses a level threshold by itself. Level changes
+        // happen via click-drill or the 80%-bbox auto-drill so
+        // the user sees one level at a time, distinct, and
+        // never gets snapped to a different abstraction just
+        // because they scrolled past an arbitrary ratio.
         renderer.refresh();
         maybeAutoDrill();
-        const newLevel = levelForRatio(r);
-        if (newLevel !== currentLevel) {
-          const oldLevel = currentLevel;
-          currentLevel = newLevel;
-          // Wheeling out past a focus level pops it — going from L2 of
-          // benchmarks/cli back out to L1 should drop the L2 focus and
-          // resume the L1 view of benchmarks. Wheel-in keeps focus
-          // intact (that's how click-to-drill descends through the
-          // tree without losing its trail).
-          if (newLevel < oldLevel) {
-            while (focusPath.length > 0
-                   && focusPath[focusPath.length - 1].level >= newLevel) {
-              focusPath.pop();
-            }
-          }
-          // Leaf focus is meaningless across a level change.
-          if (focusedNode) {
-            focusedNode = null;
-            neighborSet = new Set();
-          }
-          statusEl.textContent = baseStatus();
-          rebuildLegend();
-          renderer.refresh();
-          // Newly-visible level can have its own label overlap —
-          // kick physics so its super-nodes spread out smoothly.
-          startPhysics();
-        }
       });
 
       // RAF loop that re-renders while a node is hovered so the
@@ -1035,29 +1025,22 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       renderer.on("clickNode", ({ node }) => {
         const attrs = g.getNodeAttributes(node);
         // Click a super-node → push it onto the focus stack so the
-        // next level only paints its descendants, then animate camera
-        // through the LOD threshold so the swap fires on its own.
+        // next level only paints its descendants, jump to that level
+        // (no ratio threshold races) and pan the camera onto it.
         if (attrs.level !== undefined && attrs.level < 3) {
           const tgtLvl = attrs.level + 1;
-          // Own ancestor key at its own level — that's what we filter
-          // descendants against.
           const ownKey = attrs["l" + attrs.level];
           if (ownKey) {
             focusPath.push({ level: attrs.level, key: ownKey });
           }
-          statusEl.textContent = baseStatus();
-          rebuildLegend();
-          startPhysics();
-          // Land just inside the next band so the LOD swap fires once
-          // the camera animation completes. Stay clear of band edges
-          // so a small wobble doesn't bounce us back.
-          const tgtRatio = tgtLvl === 1 ? 1.1
-                         : tgtLvl === 2 ? 0.55
-                         : 0.22;
-          // Sigma's camera state x/y is in normalized [0,1] framed-
-          // graph space, NOT the node's graph coords. Without this
-          // conversion the camera pans to (-193, -93) etc. — i.e.
-          // way off-canvas — and the user sees a blank viewer.
+          setLevel(tgtLvl);
+          // Pan + zoom onto the clicked super-node. Sigma's camera
+          // state x/y is in normalized [0,1] framed-graph space, not
+          // graph coords — pass through normalizationFunction or the
+          // camera animates off-canvas and the viewer goes blank.
+          const tgtRatio = tgtLvl === 1 ? 1.0
+                         : tgtLvl === 2 ? 0.5
+                         : 0.2;
           const target = renderer.normalizationFunction({
             x: attrs.x, y: attrs.y,
           });
@@ -1076,27 +1059,25 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           + `click empty space to clear focus`;
         renderer.refresh();
       });
-      // Click on the stage (empty space) clears both the leaf-focus
-      // dim-highlight and the drill-down focus stack — i.e. backs all
-      // the way out to the L0 unfiltered view.
+      // Click on empty space backs all the way out — clears the
+      // focus stack, drops the leaf-focus dim-highlight, and resets
+      // currentLevel to L0. With no ratio-based level changes,
+      // this is the user's main escape hatch.
       renderer.on("clickStage", () => {
-        let changed = false;
-        if (focusedNode) {
-          focusedNode = null;
-          neighborSet = new Set();
-          changed = true;
+        const hadFocus = !!focusedNode || focusPath.length > 0;
+        const wasDeep = currentLevel > 0;
+        if (!hadFocus && !wasDeep) return;
+        focusedNode = null;
+        neighborSet = new Set();
+        focusPath = [];
+        if (wasDeep) {
+          setLevel(0);
+        } else {
+          statusEl.textContent = baseStatus();
+          rebuildLegend();
+          renderer.refresh();
+          startPhysics();
         }
-        if (focusPath.length > 0) {
-          focusPath = [];
-          changed = true;
-        }
-        if (!changed) return;
-        statusEl.textContent = baseStatus();
-        rebuildLegend();
-        renderer.refresh();
-        // Visible set just expanded back to the unfocused view —
-        // re-run physics in case its layout has drifted.
-        startPhysics();
       });
 
       // --- Legend / categories sidebar ----------------------------
