@@ -654,8 +654,15 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           const tgtRatio = tgtLvl === 1 ? 1.1
                          : tgtLvl === 2 ? 0.55
                          : 0.22;
+          // Sigma's camera state x/y is in normalized [0,1] framed-
+          // graph space, NOT the node's graph coords. Without this
+          // conversion the camera pans to (-193, -93) etc. — i.e.
+          // way off-canvas — and the user sees a blank viewer.
+          const target = renderer.normalizationFunction({
+            x: attrs.x, y: attrs.y,
+          });
           camera.animate(
-            { x: attrs.x, y: attrs.y, ratio: tgtRatio },
+            { x: target.x, y: target.y, ratio: tgtRatio },
             { duration: 600 }
           );
           return;
