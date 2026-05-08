@@ -1,0 +1,17 @@
+{
+  "repos": [
+    "D:/dev/actions.api",
+    "D:/dev/actions.manager",
+    "D:/dev/express-comm",
+    "D:/dev/express-engine",
+    "D:/dev/express-executor",
+    "D:/dev/express-integrations",
+    "D:/dev/express-remote-comm",
+    "D:/dev/express-scheduler",
+    "D:/dev/express-web-api",
+    "D:/dev/express-web-client",
+    "D:/dev/orca",
+    "D:/dev/resolve.platform.facade"
+  ],
+  "mcp_server": "prism"
+}
