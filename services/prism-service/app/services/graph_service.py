@@ -241,10 +241,18 @@ def compute_node_hierarchy(
     """Return {l0, l1, l2} parent keys for a leaf's hierarchical rollup.
 
     Strips known container directories from the path, then uses the
-    first 1, 2, 3 surviving segments as the L0, L1, L2 parents. Falls
-    back to ``comm:<id>`` when the path is too shallow to produce a
-    meaningful root segment, so a flat repo without a service layout
-    still gets a usable hierarchy from Leiden community detection.
+    first 1, 2, 3 surviving segments as the L0, L1, L2 parents.
+    Path-less entities (BCL types, unresolved cross-repo references,
+    other graphify-synthetic nodes) collapse into a single ``external``
+    L0 with the community ID preserved at L1/L2, so Leiden structure
+    remains navigable on drill-down without fragmenting the L0 surface.
+
+    Why a single "external" L0 instead of per-community fallback:
+    multi-repo projects with even 1-2% orphan entities can scatter
+    those orphans across hundreds of communities, producing a long
+    tail of singleton L0 categories that bury the real repo L0s.
+    Collapsing all orphans into one L0 keeps the path-based
+    hierarchy visible.
     """
     sf = (source_file or "").replace("\\", "/").strip("/")
     parts = sf.split("/") if sf else []
@@ -253,8 +261,8 @@ def compute_node_hierarchy(
     segs = [p for p in parts if p and p.lower() not in _PATH_PREFIX_DROP]
     if not segs:
         if fallback_community is not None:
-            key = f"comm:{fallback_community}"
-            return {"l0": key, "l1": key, "l2": key}
+            l1 = f"external/comm:{fallback_community}"
+            return {"l0": "external", "l1": l1, "l2": l1}
         return {"l0": None, "l1": None, "l2": None}
     l0 = segs[0]
     l1 = "/".join(segs[:2]) if len(segs) >= 2 else l0
