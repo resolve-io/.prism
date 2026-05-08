@@ -1492,7 +1492,97 @@ class GraphService:
         # Rewrite graphify's graph.html to replace "Community N" with our labels
         self._rewrite_visual_labels(labels_out)
 
+        # Merge enrichment edges from brain docs (INFERRED edges from
+        # prism-enrich.py — MediatR/DI/MassTransit/sproc/TS-DI/HTTP)
+        if brain_db_path:
+            enrichment_added = self._apply_enrichment_edges(
+                brain_db_path, conn_path=str(self._graph_db),
+            )
+            result["enrichment_edges"] = enrichment_added
+
         return result
+
+    def _apply_enrichment_edges(self, brain_db_path: str, conn_path: str) -> int:
+        """Read enrichment docs from brain.db and insert INFERRED relationships
+        into graph.db. Idempotent — uses INSERT OR IGNORE.
+
+        Entities in enrichment docs use bare class names (e.g. GetWorkflowsQuery).
+        Graph entities use filenames (e.g. GetWorkflowsQuery.cs). Tries exact
+        match first, then strips the extension as fallback.
+
+        Depends on brain commit 6097eee (docs.content stores raw source) so
+        the markdown survives storage. Older brain.db rows written before
+        that commit have tokenized content and won't parse — re-run
+        prism-enrich.py to overwrite them.
+        """
+        import sqlite3 as _sq
+        import re as _re2
+
+        edge_re = _re2.compile(r'\*\*(.+?)\*\*\s*->\s*\*\*(.+?)\*\*')
+        kind_re = _re2.compile(r'^Pattern:\s*(\S+)', _re2.MULTILINE)
+        # Strip brain context prefix (added by contextual chunking) before parsing
+        content_start_re = _re2.compile(r'(#\s*Inferred relationships)', _re2.MULTILINE)
+
+        # Build name → entity_id index from graph.db (both exact and stem-based)
+        try:
+            gconn = _sq.connect(conn_path)
+            gconn.row_factory = _sq.Row
+            name_to_id: dict[str, int] = {}
+            for r in gconn.execute("SELECT id, name FROM entities"):
+                raw = r["name"]
+                name_to_id[raw] = r["id"]
+                # Also index by stem (strip extension) so class names resolve
+                # against filename entities: "GetWorkflowsQuery.cs" → "GetWorkflowsQuery"
+                stem = raw.rsplit(".", 1)[0] if "." in raw else raw
+                if stem not in name_to_id:
+                    name_to_id[stem] = r["id"]
+        except _sq.Error:
+            return 0
+
+        # Read enrichment docs from brain.db
+        try:
+            bconn = _sq.connect(brain_db_path)
+            bconn.row_factory = _sq.Row
+            rows = bconn.execute(
+                "SELECT source_file, content FROM docs "
+                "WHERE source_file LIKE 'enrichment/%'"
+            ).fetchall()
+            bconn.close()
+        except _sq.Error:
+            gconn.close()
+            return 0
+
+        inserted = 0
+        try:
+            for row in rows:
+                content = row["content"] or ""
+                # Strip brain context prefix — content we care about starts at the heading
+                m0 = content_start_re.search(content)
+                if m0:
+                    content = content[m0.start():]
+                kind_match = kind_re.search(content)
+                relation = kind_match.group(1) if kind_match else "inferred"
+                for m in edge_re.finditer(content):
+                    src_name, tgt_name = m.group(1).strip(), m.group(2).strip()
+                    src_id = name_to_id.get(src_name)
+                    tgt_id = name_to_id.get(tgt_name)
+                    if src_id is None or tgt_id is None:
+                        continue
+                    try:
+                        gconn.execute(
+                            "INSERT OR IGNORE INTO relationships "
+                            "(source_id, target_id, relation, confidence, "
+                            " confidence_score, weight) "
+                            "VALUES (?, ?, ?, 'INFERRED', 0.8, 1.0)",
+                            (src_id, tgt_id, relation),
+                        )
+                        inserted += 1
+                    except _sq.IntegrityError:
+                        pass
+            gconn.commit()
+        finally:
+            gconn.close()
+        return inserted
 
     # Extra CSS injected into graphify's graph.html — tames the sidebar
     # scrollbars (they default to the OS chrome which looks terrible embedded
