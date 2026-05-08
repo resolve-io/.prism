@@ -446,6 +446,31 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           const c = attrs.community ?? "_";
           grp.comm.set(c, (grp.comm.get(c) || 0) + 1);
         });
+        // Find the max member count *within this level* so size
+        // scaling is normalised per level — proportional to the
+        // largest group at L0/L1/L2 separately. The previous
+        // 8 + 4·log(n) saturated, giving express-web-api (5852) a
+        // 42.7-unit radius vs. rita-client (75) at 25.3 — visual
+        // areas of 5728 vs 2009 px², a 2.85× ratio that the customer
+        // perceives as "giants swallow smalls". Closes #79.
+        let maxMembers = 1;
+        for (const grp of groups.values()) {
+          if (grp.ids.length > maxMembers) maxMembers = grp.ids.length;
+        }
+        const logMax = Math.log(1 + maxMembers) || 1;
+        // Top-K-by-size super-nodes get forceLabel; the rest let
+        // Sigma's labelDensity hide them when collisions occur.
+        // On a wide-extent project (resolve-platform: 30k graph
+        // units, 21 L0 keys), forcing every label produced an
+        // unreadable knot — by only labelling the dominant clusters
+        // (and the synthetic "other" bucket) the rest still render
+        // as colored dots, hover/zoom reveals them on demand.
+        const LABEL_TOP_K = lvl === 0 ? 12 : 18;
+        const ranked = [...groups.entries()]
+          .sort((a, b) => b[1].ids.length - a[1].ids.length);
+        const labelTopK = new Set();
+        for (const [k] of ranked.slice(0, LABEL_TOP_K)) labelTopK.add(k);
+        labelTopK.add("__other__");
         for (const [key, grp] of groups) {
           const n = grp.ids.length;
           let bestC = null, bestN = -1;
@@ -490,20 +515,32 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           const targetY = grp.sy / n;
           const jx = (Math.random() - 0.5) * 8;
           const jy = (Math.random() - 0.5) * 8;
+          // Proportional log-scale radius, normalised so the level's
+          // largest super-node hits SIZE_MAX and a singleton sits at
+          // SIZE_MIN. Tighter than the old 8 + 4·log formula: 22 vs
+          // 13 instead of 42.7 vs 10.7, so giants don't visually
+          // swallow the tail and label collisions resolve cheaply.
+          const SIZE_MIN = 11;
+          const SIZE_RANGE = 11;
+          const sizeForN = SIZE_MIN
+            + SIZE_RANGE * (Math.log(1 + n) / logMax);
           g.addNode(`__super__${lvl}__${key}`, {
             label: labelText,
             level: lvl,
             x: targetX * 0.18 + jx,
             y: targetY * 0.18 + jy,
             targetX, targetY,
-            // Super-node radius scales sublinearly with member count so
-            // a 5000-member cluster doesn't swamp a 200-member one.
-            size: 8 + 4 * Math.log(1 + n),
+            size: sizeForN,
             color: colorFor(bestC),
             community: bestC,
             communityLabel: labelText,
             memberCount: n,
             labelSize: labelSizeForLevel,
+            // Per-node forceLabel — top-K plus the "other" bucket
+            // always show; rest defer to labelDensity. Reducer-side
+            // hover override still wins, so any cluster can be
+            // identified by mousing over it.
+            forceLabel: labelTopK.has(key),
             l0: ancL0,
             l1: lvl >= 1 ? ancL1 : null,
             l2: lvl >= 2 ? ancL2 : null,
@@ -693,6 +730,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // overlap-resolutions don't kick the loop off prematurely.
           if (physicsIdleFrames > 60) {
             physicsRaf = null;
+            // First time physics settles per page load, animate the
+            // camera onto the L0 set's actual bbox. Beforehand
+            // super-nodes are still spawning + spreading, and a fit
+            // would lock onto the spawn cluster.
+            if (!initialFitDone) {
+              initialFitDone = true;
+              fitCameraToLevel(currentLevel);
+            }
             return;
           }
           physicsRaf = requestAnimationFrame(tick);
@@ -817,7 +862,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       const drawNodeHover = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1.15);
 
       const renderer = new Sigma(g, document.getElementById("graph"), {
-        labelDensity: 0.15, labelGridCellSize: 80, minCameraRatio: 0.04,
+        // labelDensity tightened + labelGridCellSize bumped so non-
+        // forceLabel super-nodes (everything outside the top-K) only
+        // paint their label when there's room. The wide-extent
+        // resolve-platform L0 used to render 21 colliding labels —
+        // now ~12 dominant + "other" always show, the rest reveal on
+        // hover or as the user zooms in.
+        labelDensity: 0.10, labelGridCellSize: 140, minCameraRatio: 0.04,
         maxCameraRatio: 30, defaultNodeColor: "#6b7280",
         defaultEdgeColor: "rgba(107,114,128,0.3)",
         renderEdgeLabels: false,
@@ -899,12 +950,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
               }
             }
           }
-          // Force-render labels for super-nodes — at L0 only ~10 of them
-          // exist, so respecting labelDensity hides the most useful info
-          // on the screen. Leaves still respect the density throttle.
-          if (data.level !== undefined && data.level < 3) {
-            out = { ...out, forceLabel: true };
-          }
+          // forceLabel is set per-node on the top-K super-nodes in
+          // buildSupers; the rest defer to labelDensity so wide-extent
+          // graphs don't paint 21 labels on top of each other. Hover
+          // branch above already force-shows whichever node is hovered.
           return out;
         },
         edgeReducer: (edge, data) => {
@@ -960,9 +1009,41 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // which is the right framing because the spread pass above places
       // super-nodes radially around the leaf-graph centroid.
       const camera = renderer.getCamera();
-      camera.setState({ ratio: 1.8 });
-      currentRatio = 1.8;
+      // Initial camera: Sigma's default ratio=1.0 fits the whole
+      // graph extent. Super-nodes spawn near origin with jitter and
+      // physics spreads them toward leaf-centroid targets — fitting
+      // BEFORE physics ran would zoom into the spawn cluster and
+      // hide the spread animation. fitCameraToLevel(0) fires once
+      // physics first settles (see startPhysics tick).
+      camera.setState({ x: 0.5, y: 0.5, ratio: 1.0 });
+      currentRatio = 1.0;
       currentLevel = 0;
+      // Fit camera so the active level's super-node bbox occupies
+      // ~75% of the viewport. Closes #79 — the previous fixed
+      // ratio=1.8 left a tiny L0 blob floating in 92% empty canvas
+      // when the full graph extent (driven by L3 leaves) is huge.
+      function fitCameraToLevel(targetLvl) {
+        let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+        let count = 0;
+        g.forEachNode((id, attrs) => {
+          if (attrs.level !== targetLvl) return;
+          const norm = renderer.normalizationFunction(
+            { x: attrs.x, y: attrs.y },
+          );
+          if (norm.x < mnx) mnx = norm.x;
+          if (norm.x > mxx) mxx = norm.x;
+          if (norm.y < mny) mny = norm.y;
+          if (norm.y > mxy) mxy = norm.y;
+          count++;
+        });
+        if (count < 1) return;
+        const cx = (mnx + mxx) / 2;
+        const cy = (mny + mxy) / 2;
+        const span = Math.max(mxx - mnx, mxy - mny, 0.05);
+        const ratio = Math.min(30, Math.max(0.1, span / 0.75));
+        camera.animate({ x: cx, y: cy, ratio }, { duration: 500 });
+      }
+      let initialFitDone = false;
       // Debug hooks — expose graph + renderer so devtools can inspect
       // node attributes, drive the camera, or smoke-test LOD swaps
       // without monkey-patching. Cheap and useful.
