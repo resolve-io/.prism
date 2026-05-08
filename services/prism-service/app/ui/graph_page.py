@@ -252,9 +252,42 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // Edges that touched them get skipped by the hasNode guard below.
       const nodes = rawNodes.filter(n => n.file_type !== "rationale");
       const dropped = rawNodes.length - nodes.length;
+
+      // L0 cap (closes #76): big multi-repo projects (resolve-platform
+      // had 108 L0 keys post-#74) ship a long tail of small clusters
+      // that pile labels into an unreadable knot at default zoom. The
+      // legend's count cliff is real signal — keep the dominant N and
+      // bucket the rest into a synthetic "other" L0 super-node, which
+      // a click drills into to reveal the tail at L1.
+      const L0_CAP = 20;
+      const l0Counts = new Map();
+      for (const n of nodes) {
+        if (!n.l0) continue;
+        l0Counts.set(n.l0, (l0Counts.get(n.l0) || 0) + 1);
+      }
+      let bucketedTailKeys = 0;
+      let bucketedTailEntities = 0;
+      if (l0Counts.size > L0_CAP) {
+        const ranked = [...l0Counts.entries()].sort((a, b) => b[1] - a[1]);
+        const topL0 = new Set(ranked.slice(0, L0_CAP).map(([k]) => k));
+        bucketedTailKeys = ranked.length - L0_CAP;
+        for (const n of nodes) {
+          if (n.l0 && !topL0.has(n.l0)) {
+            // Re-tag the leaf so its L0 super-node is the synthetic
+            // bucket, but keep l1/l2 untouched so descending into the
+            // bucket reveals the original cluster structure at L1.
+            n.l0 = "__other__";
+            bucketedTailEntities++;
+          }
+        }
+      }
+
       statusEl.textContent = `Loading ${nodes.length.toLocaleString()} nodes, `
         + `${edges.length.toLocaleString()} edges`
         + (dropped ? ` (hid ${dropped.toLocaleString()} rationale)` : "")
+        + (bucketedTailKeys
+            ? ` · ${bucketedTailKeys} small clusters → other`
+            : "")
         + "...";
       // Visible-subgraph degree: recount edges where both endpoints are
       // kept so the ~40% hidden rationale nodes don't inflate the base
@@ -398,8 +431,15 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           if (attrs.level !== 3) return;
           const k = attrs[levelKey];
           if (!k) return;
-          if (!groups.has(k)) groups.set(k,
-            { ids: [], sx: 0, sy: 0, comm: new Map() });
+          if (!groups.has(k)) groups.set(k, {
+            ids: [], sx: 0, sy: 0, comm: new Map(),
+            // Capture the leaves' ancestor keys so descendants of the
+            // synthetic "__other__" bucket get the right l0 for the
+            // focus-filter to find them. Splitting the key on "/"
+            // would route them back to their original (now bucketed)
+            // L0 path instead.
+            ancL0: attrs.l0, ancL1: attrs.l1, ancL2: attrs.l2,
+          });
           const grp = groups.get(k);
           grp.ids.push(id);
           grp.sx += attrs.x; grp.sy += attrs.y;
@@ -416,9 +456,12 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // DB-derived community label, then truncated at the first
           // " · " separator so legend / canvas don't show the
           // graphify "<file> · <hub>" suffix as a mashed-up string.
-          const rawLabel = key.startsWith("comm:")
-            ? (clusterLabel(Number(key.slice(5))) || ("cluster " + key.slice(5)))
-            : (key.split("/").pop() || key);
+          // The synthetic "__other__" bucket gets a friendly label.
+          const rawLabel = key === "__other__"
+            ? "other"
+            : key.startsWith("comm:")
+              ? (clusterLabel(Number(key.slice(5))) || ("cluster " + key.slice(5)))
+              : (key.split("/").pop() || key);
           const labelText = (() => {
             const dot = rawLabel.indexOf(" · ");
             return dot > 0 ? rawLabel.substring(0, dot) : rawLabel;
@@ -426,18 +469,16 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // Larger labels at higher abstraction levels so the L0 view
           // reads instantly. Sigma honors per-node labelSize.
           const labelSizeForLevel = lvl === 0 ? 22 : lvl === 1 ? 18 : 15;
-          // Each super-node carries the ancestor keys at every level
-          // ABOVE its own — focus filtering then reduces to "show
-          // nodes where l<focusLevel> === focusKey", which works for
-          // both descendants of a path super-node and L3 leaves.
-          const keyParts = key.split("/");
-          const ancL0 = keyParts[0] || key;
-          const ancL1 = keyParts.length >= 2
-            ? keyParts.slice(0, 2).join("/")
-            : ancL0;
-          const ancL2 = keyParts.length >= 3
-            ? keyParts.slice(0, 3).join("/")
-            : ancL1;
+          // Ancestor keys come from the leaves themselves, not from
+          // splitting `key`. That's what lets the "__other__" bucket
+          // properly filter — its L1/L2 descendants keep their
+          // original path keys but have l0='__other__' on the leaf,
+          // which propagates into super-node ancestor metadata here.
+          const ancL0 = grp.ancL0 || (key.split("/")[0] || key);
+          const ancL1 = grp.ancL1
+            || (key.split("/").slice(0, 2).join("/") || ancL0);
+          const ancL2 = grp.ancL2
+            || (key.split("/").slice(0, 3).join("/") || ancL1);
           // Spawn position: a small random jitter very close to the
           // graph centroid (or leaf-graph center for L0). The centroid
           // itself is the *target* — physics adds an attraction force
