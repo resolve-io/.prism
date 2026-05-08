@@ -560,6 +560,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         // visual footprint actually requires.
         return Math.sqrt(wG * wG + hG * hG) * 0.55;
       }
+      // Damping coefficient on the integrated step. Without this the
+      // system is undamped — attraction overshoots equilibrium,
+      // repulsion overshoots back, and the layout oscillates instead
+      // of settling. 0.55 is heavy enough that motion converges
+      // within ~2s for 20-30 super-nodes; light enough that the
+      // spawn animation still reads as motion, not a snap.
+      const PHYSICS_DAMPING = 0.55;
       function labelRelaxStep() {
         let totalMove = 0;
         for (const lvl of [0, 1, 2]) {
@@ -568,9 +575,6 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             if (attrs.level === lvl) ids.push(id);
           });
           if (ids.length < 2) continue;
-          // Pull current positions into a mutable buffer; we'll
-          // apply attraction + hard overlap correction here, then
-          // write the final positions back to the graph in one pass.
           const px = new Float64Array(ids.length);
           const py = new Float64Array(ids.length);
           const tx = new Float64Array(ids.length);
@@ -583,20 +587,17 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             ty[i] = a.targetY !== undefined ? a.targetY : a.y;
             radii[i] = labelRadius(a);
           }
-          // Phase 1 — attraction: each super-node steps a small
-          // fraction toward its leaf-centroid home. This is the
-          // visible motion the user perceives as "alive".
+          // Accumulate force components first so attraction and
+          // repulsion compose on the same step — applying them
+          // sequentially to position let attraction pull nodes
+          // back into overlap, which repulsion would then push out
+          // again, producing the never-settling ping-pong.
+          const dx = new Float64Array(ids.length);
+          const dy = new Float64Array(ids.length);
           for (let i = 0; i < ids.length; i++) {
-            px[i] += (tx[i] - px[i]) * 0.045;
-            py[i] += (ty[i] - py[i]) * 0.045;
+            dx[i] += (tx[i] - px[i]) * 0.040;
+            dy[i] += (ty[i] - py[i]) * 0.040;
           }
-          // Phase 2 — pairwise circle repulsion using the diagonal
-          // labelRadius so the collision footprint covers the full
-          // node + label AABB. Force ∝ overlap, so heavily-clumped
-          // pairs unfold faster than gently-touching ones. Soft
-          // (not hard PBD) so attraction can still influence the
-          // final layout — equilibrium settles a few units past
-          // touching, biased toward each super-node's centroid.
           for (let i = 0; i < ids.length; i++) {
             for (let j = i + 1; j < ids.length; j++) {
               const ddx = px[i] - px[j];
@@ -605,20 +606,23 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
               const minD = radii[i] + radii[j];
               if (d >= minD) continue;
               const overlap = minD - d;
-              const push = overlap * 0.30;
+              const push = overlap * 0.22;
               const ux = ddx / d, uy = ddy / d;
-              px[i] += ux * push; py[i] += uy * push;
-              px[j] -= ux * push; py[j] -= uy * push;
+              dx[i] += ux * push; dy[i] += uy * push;
+              dx[j] -= ux * push; dy[j] -= uy * push;
             }
           }
           for (let i = 0; i < ids.length; i++) {
-            const oldX = g.getNodeAttribute(ids[i], "x");
-            const oldY = g.getNodeAttribute(ids[i], "y");
-            const dxv = px[i] - oldX, dyv = py[i] - oldY;
-            if (dxv === 0 && dyv === 0) continue;
-            g.setNodeAttribute(ids[i], "x", px[i]);
-            g.setNodeAttribute(ids[i], "y", py[i]);
-            totalMove += Math.abs(dxv) + Math.abs(dyv);
+            const stepX = dx[i] * PHYSICS_DAMPING;
+            const stepY = dy[i] * PHYSICS_DAMPING;
+            // Convergence cutoff: per-frame moves below 0.05 graph
+            // units are imperceptible. Skip the write so totalMove
+            // can fall under the idle threshold and the RAF loop
+            // exits, killing the constant-motion bug.
+            if (Math.abs(stepX) < 0.05 && Math.abs(stepY) < 0.05) continue;
+            g.setNodeAttribute(ids[i], "x", px[i] + stepX);
+            g.setNodeAttribute(ids[i], "y", py[i] + stepY);
+            totalMove += Math.abs(stepX) + Math.abs(stepY);
           }
         }
         return totalMove;
@@ -963,6 +967,50 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         }
       }
 
+      // Inverse of maybeAutoDrill: when wheel-out shrinks the active
+      // cluster below ~22% of the viewport, pop back up to the parent
+      // level. Without this, scrolling out at L3 just shoves the leaf
+      // mesh into a tiny corner forever — the user has to click empty
+      // space to escape, which isn't discoverable.
+      let lastAutoPopT = 0;
+      function maybeAutoPop() {
+        if (currentLevel === 0) return;
+        const now = performance.now();
+        if (now - lastAutoPopT < 500) return;
+        const fk = focusKey();
+        let mnX = Infinity, mxX = -Infinity;
+        let mnY = Infinity, mxY = -Infinity;
+        let count = 0;
+        g.forEachNode((id, attrs) => {
+          if (attrs.level !== currentLevel) return;
+          if (fk && attrs["l" + fk.level] !== fk.key) return;
+          if (attrs.x < mnX) mnX = attrs.x;
+          if (attrs.x > mxX) mxX = attrs.x;
+          if (attrs.y < mnY) mnY = attrs.y;
+          if (attrs.y > mxY) mxY = attrs.y;
+          count++;
+        });
+        if (count < 1) return;
+        const tl = renderer.graphToViewport({ x: mnX, y: mnY });
+        const br = renderer.graphToViewport({ x: mxX, y: mxY });
+        const wPx = Math.abs(br.x - tl.x);
+        const hPx = Math.abs(br.y - tl.y);
+        const cw = renderer.getCanvases().mouse.clientWidth || 1;
+        const ch = renderer.getCanvases().mouse.clientHeight || 1;
+        const frac = Math.max(wPx / cw, hPx / ch);
+        if (frac < 0.22) {
+          lastAutoPopT = now;
+          const newLevel = currentLevel - 1;
+          // Pop any focus items at or below the new level so we don't
+          // wind up filtered to a focus deeper than where we are.
+          while (focusPath.length > 0
+                 && focusPath[focusPath.length - 1].level >= newLevel) {
+            focusPath.pop();
+          }
+          setLevel(newLevel);
+        }
+      }
+
       // setLevel — single entry point for level changes. Captures
       // the previous level for the fade, runs the side effects
       // (status text, legend rebuild, physics nudge), and refreshes.
@@ -984,13 +1032,12 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       camera.on("updated", () => {
         currentRatio = camera.getState().ratio;
         // Wheel zoom drives the camera ratio only — it never
-        // crosses a level threshold by itself. Level changes
-        // happen via click-drill or the 80%-bbox auto-drill so
-        // the user sees one level at a time, distinct, and
-        // never gets snapped to a different abstraction just
-        // because they scrolled past an arbitrary ratio.
+        // crosses a level threshold by itself. Level changes are
+        // size-driven: drill DOWN once the active cluster fills
+        // 80% of the viewport, pop UP once it shrinks below 22%.
         renderer.refresh();
         maybeAutoDrill();
+        maybeAutoPop();
       });
 
       // RAF loop that re-renders while a node is hovered so the
