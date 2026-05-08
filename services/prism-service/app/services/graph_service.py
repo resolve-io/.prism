@@ -674,10 +674,14 @@ class GraphService:
 
         # graphify CLI writes graph.json into <target>/graphify-out/ regardless
         # of cwd, so we just pass the staging dir as target.
+        # Timeout: 3600s. graphify processes ~10-50 files/sec depending on
+        # disk + AST density; multi-repo platforms staging 10k+ files
+        # consistently exceed the prior 600s budget and surface as
+        # TimeoutExpired for users who never see the rebuild complete.
         proc = subprocess.run(
             ["graphify", "update", str(self._staging_dir)],
             cwd=str(self._project_dir),
-            capture_output=True, text=True, timeout=600,
+            capture_output=True, text=True, timeout=3600,
         )
         if proc.returncode != 0:
             result["error"] = (proc.stderr or proc.stdout or "").strip()[:500]
