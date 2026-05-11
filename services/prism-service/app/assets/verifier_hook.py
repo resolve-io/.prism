@@ -16,11 +16,47 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+
+def _detach_or_continue() -> None:
+    if "--detached" in sys.argv:
+        return
+    try:
+        stdin_data = sys.stdin.buffer.read()
+    except (OSError, ValueError):
+        stdin_data = b""
+
+    kwargs = {
+        "stdin": subprocess.PIPE,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "close_fds": True,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0)
+    else:
+        kwargs["start_new_session"] = True
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, __file__, "--detached"],
+            **kwargs,
+        )
+    except OSError:
+        return
+    try:
+        if stdin_data and proc.stdin:
+            proc.stdin.write(stdin_data)
+        if proc.stdin:
+            proc.stdin.close()
+    except (OSError, ValueError):
+        pass
+    sys.exit(0)
 
 
 def _project_root() -> Path:
@@ -139,6 +175,8 @@ def _write_log(root: Path, verdict: dict, session_id: str) -> None:
 
 
 def main() -> int:
+    _detach_or_continue()
+
     event = _read_stop_event()
     session_id = event.get("session_id") or os.environ.get("CLAUDE_SESSION_ID", "")
     root = _project_root()

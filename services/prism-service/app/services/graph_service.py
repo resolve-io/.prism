@@ -22,10 +22,10 @@ Design choices:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import sqlite3
-import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -39,6 +39,10 @@ GRAPHIFY_CODE_SUFFIXES = {
     ".go", ".rs", ".java", ".rb", ".php", ".cpp", ".c", ".h", ".hpp",
     ".md",  # graphify also picks up heading structure from markdown
 }
+
+_UNRESOLVED_CALL_MIN_FAN_IN = 50
+_UNRESOLVED_CALL_MEDIAN_MULTIPLIER = 5
+_UNRESOLVED_CALL_RELATIONS = {"calls"}
 
 
 def _graph_schema_migrations(conn: sqlite3.Connection) -> None:
@@ -155,7 +159,7 @@ def _humanize(stem: str) -> str:
         return ""
     # split camelCase/PascalCase
     s = _re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", stem)
-    s = s.replace("_", " ").replace("-", " ")
+    s = s.replace("_", " ").replace("-", " ").replace(".", " ")
     words = [w.lower().rstrip(".,:;") for w in s.split()]
     # Drop leading/trailing noise words
     result = " ".join(w for w in words if w)
@@ -207,6 +211,15 @@ def _path_prefix_label(nodes: list[dict], threshold: float = 0.6) -> str:
         return ""
     n_paths = len(paths)
     min_cov = max(2, int(n_paths * threshold))
+    dotnet_regions: _Counter = _Counter()
+    for n in nodes:
+        region = _dotnet_region_segments(n.get("source_file") or "")
+        if region:
+            dotnet_regions[tuple(region[:2])] += 1
+    if dotnet_regions:
+        region, cov = dotnet_regions.most_common(1)[0]
+        if cov >= min_cov:
+            return _humanize(" ".join(region))
     # Try depths from deepest to shallowest.
     max_depth = max(len(p) for p in paths)
     for depth in range(max_depth, 0, -1):
@@ -239,13 +252,49 @@ _PATH_PREFIX_DROP = {
 }
 
 
+_DOTNET_SOURCE_SUFFIXES = {
+    ".cs", ".csproj", ".sln", ".props", ".targets",
+    ".razor", ".cshtml", ".xaml",
+}
+
+
+_DOTNET_WRAPPER_DIRS = {
+    "src", "source", "sources", "app", "apps", "lib", "libs",
+    "packages", "projects", "assets", "scripts", "runtime",
+}
+
+
+_DOTNET_CATEGORY_DIRS = {
+    "controllers", "endpoints", "handlers", "services", "repositories",
+    "models", "entities", "dtos", "contracts", "interfaces",
+    "infrastructure", "persistence", "migrations", "configurations",
+    "components", "pages", "views", "viewmodels", "middleware",
+    "validators", "mappings", "profiles", "jobs", "workers",
+}
+
+
+_DOTNET_FEATURE_WRAPPERS = {
+    "features", "feature", "modules", "module", "areas", "area",
+    "verticals", "usecases", "usecase",
+}
+
+
 _CS_PROJECT_LAYER_HINTS = {
     "api": "api",
     "web": "ui",
     "mvc": "ui",
+    "presentation": "ui",
+    "client": "ui",
+    "maui": "ui",
+    "wasm": "ui",
     "server": "api",
+    "function": "api",
+    "functions": "api",
     "application": "service",
     "services": "service",
+    "worker": "service",
+    "workers": "service",
+    "background": "service",
     "infrastructure": "data",
     "persistence": "data",
     "data": "data",
@@ -253,6 +302,7 @@ _CS_PROJECT_LAYER_HINTS = {
     "core": "domain",
     "shared": "domain",
     "contracts": "domain",
+    "abstractions": "domain",
     "tests": "test",
     "test": "test",
 }
@@ -266,6 +316,76 @@ def _split_project_segment(segment: str) -> list[str]:
         segment.replace(".", " "),
     )
     return [p.lower() for p in _WORD_RE.findall(spaced) if p]
+
+
+def _dotnet_layer_for_segment(segment: str) -> str | None:
+    for token in _split_project_segment(segment):
+        layer = _CS_PROJECT_LAYER_HINTS.get(token)
+        if layer:
+            return layer
+    return None
+
+
+def _dotnet_region_segments(source_file: str) -> list[str]:
+    """Prefer .NET project/layer regions over generic monorepo folders.
+
+    Massive .NET monorepos often look like:
+    ``src/Commerce/Shop.Api/Controllers/OrdersController.cs`` or
+    ``src/Shop.Application/Features/Orders/CreateOrderHandler.cs``.
+    The useful region is the project/layer segment (``Shop.Api``), then
+    the local feature/category (``Controllers`` or ``Orders``), not
+    wrapper folders such as ``src`` / ``Services`` / ``Features``.
+    """
+    sf = (source_file or "").replace("\\", "/").strip("/")
+    if not sf:
+        return []
+    suffix = "." + sf.rsplit(".", 1)[-1].lower() if "." in sf else ""
+    if suffix not in _DOTNET_SOURCE_SUFFIXES:
+        return []
+
+    raw_parts = [p for p in sf.split("/") if p]
+    if not raw_parts:
+        return []
+    filename = raw_parts[-1] if "." in raw_parts[-1] else ""
+    dir_parts = raw_parts[:-1] if filename else raw_parts
+    file_stem = filename.rsplit(".", 1)[0] if filename else ""
+
+    candidates = [
+        (idx, part)
+        for idx, part in enumerate(dir_parts)
+        if _dotnet_layer_for_segment(part)
+    ]
+    preferred = [
+        (idx, part) for idx, part in candidates
+        if part.lower() not in _DOTNET_CATEGORY_DIRS
+    ]
+    if preferred:
+        project_idx, project = preferred[-1]
+    elif candidates:
+        project_idx, project = candidates[-1]
+    elif suffix in {".csproj", ".sln"} and file_stem:
+        project_idx, project = len(dir_parts), file_stem
+    else:
+        non_wrapper = [
+            (idx, part) for idx, part in enumerate(dir_parts)
+            if part.lower() not in _DOTNET_WRAPPER_DIRS
+        ]
+        if not non_wrapper:
+            return []
+        project_idx, project = non_wrapper[0]
+
+    regions = [project]
+    for part in dir_parts[project_idx + 1:]:
+        lower = part.lower()
+        if lower in _DOTNET_WRAPPER_DIRS:
+            continue
+        if lower in _DOTNET_FEATURE_WRAPPERS:
+            continue
+        if part == project:
+            continue
+        regions.append(part)
+        break
+    return regions
 
 
 def compute_node_hierarchy(
@@ -284,7 +404,9 @@ def compute_node_hierarchy(
     parts = sf.split("/") if sf else []
     if parts and "." in parts[-1]:
         parts = parts[:-1]  # drop filename
-    segs = [p for p in parts if p and p.lower() not in _PATH_PREFIX_DROP]
+    segs = _dotnet_region_segments(sf)
+    if not segs:
+        segs = [p for p in parts if p and p.lower() not in _PATH_PREFIX_DROP]
     if fallback_community is not None:
         root = f"comm:{fallback_community}"
         if not segs:
@@ -817,16 +939,13 @@ class GraphService:
             result["message"] = "no staged source files yet"
             return result
 
-        # graphify CLI writes graph.json into <target>/graphify-out/ regardless
-        # of cwd, so we just pass the staging dir as target.
-        proc = subprocess.run(
-            ["graphify", "update", str(self._staging_dir)],
-            cwd=str(self._project_dir),
-            capture_output=True, text=True, timeout=600,
-        )
-        if proc.returncode != 0:
-            result["error"] = (proc.stderr or proc.stdout or "").strip()[:500]
+        rebuild_out = self._run_graphify_update_with_safe_calls()
+        if not rebuild_out.get("ok"):
+            result["error"] = str(rebuild_out.get("error") or "graphify rebuild failed")[:500]
             return result
+        result["ambiguous_call_phantoms"] = rebuild_out.get(
+            "ambiguous_call_phantoms", 0,
+        )
 
         graph_json_path = self._staging_dir / "graphify-out" / "graph.json"
         if not graph_json_path.exists():
@@ -840,6 +959,144 @@ class GraphService:
             return result
 
         return self._import_graph_json(data, result, brain_db_path)
+
+    def _run_graphify_update_with_safe_calls(self) -> dict:
+        """Rebuild graphify output with PRISM's safer unresolved-call resolver.
+
+        graphifyy 0.4.x resolves every cross-file raw call through a
+        ``label -> single node id`` map. In large C# / TS monorepos that turns
+        calls such as ``x.ToString()`` or ``expect.Be()`` into arbitrary
+        first-party super-hubs. Keep graphify's parser/export pipeline, but
+        replace that one resolver before clustering and writing graph.json.
+        """
+        watch_path = self._staging_dir.resolve()
+        try:
+            import graphify.extract as graphify_extract
+            from graphify.analyze import (
+                god_nodes,
+                surprising_connections,
+                suggest_questions,
+            )
+            from graphify.build import build_from_json
+            from graphify.cache import load_cached, save_cached
+            from graphify.cluster import cluster, score_all
+            from graphify.detect import detect
+            from graphify.export import to_html, to_json
+            from graphify.report import generate
+        except Exception as exc:
+            return {"ok": False, "error": f"graphify import failed: {exc}"}
+
+        try:
+            detected = detect(watch_path)
+            code_files = [Path(f) for f in detected["files"]["code"]]
+            if not code_files:
+                return {"ok": False, "error": "no code files found"}
+
+            per_file: list[dict] = []
+            for path in code_files:
+                if path.name.endswith(".blade.php"):
+                    extractor = getattr(graphify_extract, "extract_blade", None)
+                else:
+                    extractor = getattr(graphify_extract, "_DISPATCH", {}).get(
+                        path.suffix
+                    )
+                if extractor is None:
+                    continue
+                cached = load_cached(path, watch_path)
+                if cached is not None:
+                    per_file.append(cached)
+                    continue
+                extracted = extractor(path)
+                if "error" not in extracted:
+                    save_cached(path, extracted, watch_path)
+                per_file.append(extracted)
+
+            result = _merge_graphify_extractions_with_safe_calls(
+                per_file, code_files,
+            )
+            result = self._preserve_graphify_semantic_context(result)
+
+            out = watch_path / "graphify-out"
+            out.mkdir(exist_ok=True)
+            graph = build_from_json(result)
+            communities = cluster(graph)
+            cohesion = score_all(graph, communities)
+            labels = {cid: f"Community {cid}" for cid in communities}
+            detection = {
+                "files": {
+                    "code": [str(f) for f in code_files],
+                    "document": [],
+                    "paper": [],
+                    "image": [],
+                },
+                "total_files": len(code_files),
+                "total_words": detected.get("total_words", 0),
+            }
+            questions = suggest_questions(graph, communities, labels)
+            report = generate(
+                graph,
+                communities,
+                cohesion,
+                labels,
+                god_nodes(graph),
+                surprising_connections(graph, communities),
+                detection,
+                {"input": 0, "output": 0},
+                str(watch_path),
+                suggested_questions=questions,
+            )
+            (out / "GRAPH_REPORT.md").write_text(report, encoding="utf-8")
+            to_json(graph, communities, str(out / "graph.json"))
+            to_html(
+                graph,
+                communities,
+                str(out / "graph.html"),
+                community_labels=labels or None,
+            )
+            stale_flag = out / "needs_update"
+            if stale_flag.exists():
+                stale_flag.unlink()
+            return {
+                "ok": True,
+                "ambiguous_call_phantoms": result.get(
+                    "ambiguous_call_phantoms", 0,
+                ),
+            }
+        except Exception as exc:
+            return {"ok": False, "error": exc}
+
+    def _preserve_graphify_semantic_context(self, result: dict) -> dict:
+        out = self._staging_dir / "graphify-out"
+        existing_graph = out / "graph.json"
+        if not existing_graph.exists():
+            return result
+        try:
+            existing = json.loads(existing_graph.read_text(encoding="utf-8"))
+        except Exception:
+            return result
+        code_ids = {
+            n["id"] for n in existing.get("nodes", [])
+            if n.get("file_type") == "code"
+        }
+        sem_nodes = [
+            n for n in existing.get("nodes", [])
+            if n.get("file_type") not in ("code", "unresolved_call")
+        ]
+        sem_edges = []
+        for edge in existing.get("links", existing.get("edges", [])):
+            src = edge.get("source") or edge.get("_src")
+            tgt = edge.get("target") or edge.get("_tgt")
+            if src in code_ids and tgt in code_ids:
+                continue
+            sem_edges.append(edge)
+        return {
+            "nodes": result.get("nodes", []) + sem_nodes,
+            "edges": result.get("edges", []) + sem_edges,
+            "hyperedges": existing.get("hyperedges", []),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "ambiguous_call_phantoms": result.get("ambiguous_call_phantoms", 0),
+        }
 
     # ------------------------------------------------------------------
     # graph.json -> graph.db import
@@ -858,12 +1115,28 @@ class GraphService:
         result["communities"] = len({n.get("community") for n in nodes
                                       if n.get("community") is not None})
 
+        node_by_gid, pruned_call_targets, prune_summary = (
+            _unresolved_call_pruning_plan(nodes, links)
+        )
+        filtered_links: list[dict] = []
+        pruned_edges = 0
+        for link in links:
+            if _should_prune_unresolved_call_edge(
+                link, node_by_gid, pruned_call_targets,
+            ):
+                pruned_edges += 1
+                continue
+            filtered_links.append(link)
+        result["pruned_unresolved_call_edges"] = pruned_edges
+        if prune_summary:
+            result["pruned_unresolved_call_labels"] = prune_summary
+
         # Total degree (in + out) for community label derivation — captures
         # both "called-by" hubs and "calls-a-lot" orchestrators.
         in_degree: dict = {}
-        for link in links:
-            src = link.get("source") or link.get("_src")
-            tgt = link.get("target") or link.get("_tgt")
+        for link in filtered_links:
+            src = _graph_link_endpoint(link, "source", "_src")
+            tgt = _graph_link_endpoint(link, "target", "_tgt")
             if src:
                 in_degree[src] = in_degree.get(src, 0) + 1
             if tgt:
@@ -923,9 +1196,9 @@ class GraphService:
                     result["imported_entities"] += 1
 
             # Import links → relationships
-            for link in links:
-                src_gid = link.get("source") or link.get("_src")
-                tgt_gid = link.get("target") or link.get("_tgt")
+            for link in filtered_links:
+                src_gid = _graph_link_endpoint(link, "source", "_src")
+                tgt_gid = _graph_link_endpoint(link, "target", "_tgt")
                 src_id = id_map.get(src_gid)
                 tgt_id = id_map.get(tgt_gid)
                 if src_id is None or tgt_id is None:
@@ -1106,3 +1379,276 @@ def _derive_norm_label(label: str) -> str:
     s = _re.sub(r"[.\s]+", "_", s)
     s = _re.sub(r"[^A-Za-z0-9_]", "", s)
     return s.lower()
+
+
+def _graphify_label_key(label: object) -> str:
+    return str(label or "").strip("()").lstrip(".").lower()
+
+
+def _unresolved_call_id(raw_call: dict, callee: str) -> str:
+    line = str(raw_call.get("source_location") or "")
+    source_file = str(raw_call.get("source_file") or "")
+    digest = hashlib.sha1(
+        f"{raw_call.get('caller_nid')}|{callee}|{source_file}|{line}".encode(
+            "utf-8",
+            errors="replace",
+        )
+    ).hexdigest()[:12]
+    return f"unresolved_call_{_derive_norm_label(callee) or 'call'}_{digest}"
+
+
+def _display_unresolved_callee(callee: str) -> str:
+    callee = str(callee or "").strip()
+    if not callee:
+        return "unresolved call"
+    return callee if callee.endswith(")") else f"{callee}()"
+
+
+def _append_safe_cross_file_call_edges(
+    nodes: list[dict],
+    edges: list[dict],
+    per_file: list[dict],
+) -> int:
+    from collections import defaultdict
+
+    node_by_id = {node.get("id"): node for node in nodes if node.get("id")}
+    label_to_nodes: dict[str, list[dict]] = defaultdict(list)
+    for node in nodes:
+        key = _graphify_label_key(node.get("label"))
+        if key:
+            label_to_nodes[key].append(node)
+
+    existing_pairs = {
+        (edge.get("source"), edge.get("target"))
+        for edge in edges
+        if edge.get("source") and edge.get("target")
+    }
+    unresolved_count = 0
+    unresolved_ids: set[str] = set()
+
+    for result in per_file:
+        for raw_call in result.get("raw_calls", []):
+            callee = str(raw_call.get("callee") or "")
+            caller = raw_call.get("caller_nid")
+            if not callee or not caller:
+                continue
+            candidates = [
+                node for node in label_to_nodes.get(callee.lower(), [])
+                if node.get("id") != caller
+            ]
+            if not candidates:
+                continue
+
+            call_site_file = _path_key(raw_call.get("source_file"))
+            same_file = [
+                node for node in candidates
+                if call_site_file
+                and _source_file_key(node) == call_site_file
+            ]
+            target = same_file[0] if len(same_file) == 1 else None
+            if target is None and len(candidates) == 1:
+                target = candidates[0]
+
+            if target is not None:
+                target_id = target.get("id")
+                pair = (caller, target_id)
+                if target_id and pair not in existing_pairs:
+                    existing_pairs.add(pair)
+                    edges.append({
+                        "source": caller,
+                        "target": target_id,
+                        "relation": "calls",
+                        "confidence": "INFERRED",
+                        "confidence_score": 0.8,
+                        "source_file": raw_call.get("source_file", ""),
+                        "source_location": raw_call.get("source_location"),
+                        "weight": 1.0,
+                    })
+                continue
+
+            unresolved_id = _unresolved_call_id(raw_call, callee)
+            if unresolved_id not in unresolved_ids and unresolved_id not in node_by_id:
+                unresolved_ids.add(unresolved_id)
+                node_by_id[unresolved_id] = {
+                    "id": unresolved_id,
+                    "label": _display_unresolved_callee(callee),
+                    "file_type": "unresolved_call",
+                    "source_file": raw_call.get("source_file", ""),
+                    "source_location": raw_call.get("source_location") or "",
+                    "norm_label": _derive_norm_label(callee),
+                }
+                nodes.append(node_by_id[unresolved_id])
+                unresolved_count += 1
+
+            pair = (caller, unresolved_id)
+            if pair not in existing_pairs:
+                existing_pairs.add(pair)
+                edges.append({
+                    "source": caller,
+                    "target": unresolved_id,
+                    "relation": "calls",
+                    "confidence": "AMBIGUOUS",
+                    "confidence_score": 0.35,
+                    "source_file": raw_call.get("source_file", ""),
+                    "source_location": raw_call.get("source_location"),
+                    "weight": 0.2,
+                })
+
+    return unresolved_count
+
+
+def _merge_graphify_extractions_with_safe_calls(
+    per_file: list[dict],
+    paths: list[Path],
+) -> dict:
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    for result in per_file:
+        nodes.extend(result.get("nodes", []))
+        edges.extend(result.get("edges", []))
+
+    py_paths = [path for path in paths if path.suffix == ".py"]
+    if py_paths:
+        try:
+            from graphify.extract import _resolve_cross_file_imports
+
+            py_results = [
+                result for result, path in zip(per_file, paths)
+                if path.suffix == ".py"
+            ]
+            edges.extend(_resolve_cross_file_imports(py_results, py_paths))
+        except Exception:
+            pass
+
+    ambiguous_count = _append_safe_cross_file_call_edges(
+        nodes, edges, per_file,
+    )
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "hyperedges": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "ambiguous_call_phantoms": ambiguous_count,
+    }
+
+
+def _graph_link_endpoint(link: dict, primary: str, fallback: str) -> object:
+    value = link.get(primary)
+    if value is not None:
+        return value
+    return link.get(fallback)
+
+
+def _graph_link_relation(link: dict) -> str:
+    return str(link.get("relation") or "related").lower()
+
+
+def _source_file_key(node: dict | None) -> str:
+    if not node:
+        return ""
+    return str(node.get("source_file") or "").replace("\\", "/").lower()
+
+
+def _path_key(path: object) -> str:
+    return str(path or "").replace("\\", "/").lower()
+
+
+def _lower_median(values: list[int]) -> int:
+    if not values:
+        return 0
+    sorted_values = sorted(values)
+    return sorted_values[(len(sorted_values) - 1) // 2]
+
+
+def _unresolved_call_pruning_plan(
+    nodes: list[dict],
+    links: list[dict],
+) -> tuple[dict[object, dict], set[object], list[dict]]:
+    """Detect graphify's collapsed C# unresolved-call hubs.
+
+    Some unresolved receiver calls are emitted as dot-prefixed method labels
+    (for example `.ToString()`), then routed to one arbitrary first-party
+    method node with that label. The node is real, so deleting it would remove
+    valid code. Prune only the suspicious cross-file incoming call edges.
+    """
+    from collections import Counter, defaultdict
+
+    node_by_id: dict[object, dict] = {}
+    dot_label_nodes: dict[str, list[object]] = defaultdict(list)
+    for node in nodes:
+        gid = node.get("id")
+        if gid is None:
+            continue
+        node_by_id[gid] = node
+        label = str(node.get("label") or "")
+        if label.startswith("."):
+            dot_label_nodes[label].append(gid)
+
+    incoming_by_label: dict[str, Counter] = defaultdict(Counter)
+    for link in links:
+        if _graph_link_relation(link) not in _UNRESOLVED_CALL_RELATIONS:
+            continue
+        tgt = _graph_link_endpoint(link, "target", "_tgt")
+        target_node = node_by_id.get(tgt)
+        label = str((target_node or {}).get("label") or "")
+        if label.startswith("."):
+            incoming_by_label[label][tgt] += 1
+
+    pruned_targets: set[object] = set()
+    summary: list[dict] = []
+    for label, target_counts in incoming_by_label.items():
+        group_node_ids = dot_label_nodes.get(label, [])
+        if len(group_node_ids) < 2:
+            continue
+        counts = [int(target_counts.get(gid, 0)) for gid in group_node_ids]
+        total = sum(counts)
+        if total <= _UNRESOLVED_CALL_MIN_FAN_IN:
+            continue
+        median = _lower_median(counts)
+        threshold = max(
+            _UNRESOLVED_CALL_MIN_FAN_IN,
+            _UNRESOLVED_CALL_MEDIAN_MULTIPLIER * max(1, median),
+        )
+        offenders = [
+            gid for gid, count in target_counts.items()
+            if count > threshold
+        ]
+        if not offenders:
+            continue
+        pruned_targets.update(offenders)
+        summary.append({
+            "label": label,
+            "total_incoming": total,
+            "median_incoming": median,
+            "targets": [
+                {
+                    "id": str(gid),
+                    "incoming": int(target_counts.get(gid, 0)),
+                    "source_file": str((node_by_id.get(gid) or {}).get("source_file") or ""),
+                }
+                for gid in offenders[:5]
+            ],
+        })
+
+    return node_by_id, pruned_targets, summary
+
+
+def _should_prune_unresolved_call_edge(
+    link: dict,
+    node_by_id: dict[object, dict],
+    pruned_targets: set[object],
+) -> bool:
+    if _graph_link_relation(link) not in _UNRESOLVED_CALL_RELATIONS:
+        return False
+    tgt = _graph_link_endpoint(link, "target", "_tgt")
+    if tgt not in pruned_targets:
+        return False
+    src = _graph_link_endpoint(link, "source", "_src")
+    source_file = _path_key(link.get("source_file")) or _source_file_key(
+        node_by_id.get(src)
+    )
+    target_file = _source_file_key(node_by_id.get(tgt))
+    if source_file and target_file and source_file == target_file:
+        return False
+    return True

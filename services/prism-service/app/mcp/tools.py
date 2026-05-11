@@ -1656,13 +1656,75 @@ def _collect(root: Path) -> dict[str, tuple[str, Path]]:
     return out
 
 
+def _read_session_id(timeout: float = 2.0) -> str:
+    try:
+        import threading
+        buf = [""]
+
+        def _read() -> None:
+            try:
+                buf[0] = sys.stdin.read()
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_read, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        return json.loads(buf[0] or "{}").get("session_id", "")
+    except Exception:
+        return ""
+
+
+def _spawn_background(root: Path, base: str, project: str, session_id: str) -> None:
+    cmd = [
+        sys.executable,
+        __file__,
+        "--background",
+        str(root),
+        base,
+        project,
+        session_id,
+    ]
+    kwargs = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "close_fds": True,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        )
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen(cmd, **kwargs)
+
+
 def main() -> int:
-    root = _project_root()
-    cfg = _mcp_url_and_project(root)
-    if cfg is None:
-        # No .mcp.json — user hasn't opted in. Silent skip.
-        return 0
-    base, project = cfg
+    if len(sys.argv) >= 5 and sys.argv[1] == "--background":
+        root = Path(sys.argv[2])
+        base = sys.argv[3]
+        project = sys.argv[4]
+        session_id = sys.argv[5] if len(sys.argv) > 5 else ""
+    else:
+        root = _project_root()
+        cfg = _mcp_url_and_project(root)
+        if cfg is None:
+            # No .mcp.json — user hasn't opted in. Silent skip.
+            return 0
+        base, project = cfg
+        session_id = _read_session_id()
+        try:
+            _spawn_background(root, base, project, session_id)
+        except Exception as e:
+            print(
+                f"[prism-sync] background spawn failed ({e!r}); "
+                "continuing inline",
+                file=sys.stderr,
+            )
+        else:
+            return 0
 
     files = _collect(root)
     if not files:
@@ -1750,18 +1812,8 @@ def main() -> int:
     # candidate is ready, emit hookSpecificOutput.additionalContext so
     # Claude sees the brief on its first turn and can delegate to the
     # prism-reflect sub-agent. Silent no-op when nothing is pending.
-    # SessionStart hooks receive a small JSON payload on stdin; extract
-    # session_id so janitor_check can rate-limit and so the emitted
-    # additionalContext can be linked to this session.
-    session_id = ""
-    try:
-        import json as _json
-        import sys as _sys
-        session_id = (
-            _json.loads(_sys.stdin.read() or "{}").get("session_id", "")
-        )
-    except Exception:
-        pass
+    # SessionStart hooks receive a small JSON payload on stdin. The foreground
+    # process captures session_id before detaching and passes it here.
     if session_id:
         try:
             chk_resp = _mcp_call(

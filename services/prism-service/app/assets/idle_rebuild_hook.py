@@ -18,11 +18,48 @@ Advisory only: always exits 0, silent on any error.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
 
 _DIRTY_SENTINEL = ".prism/graph-dirty"
+
+
+def _detach_or_continue() -> None:
+    if "--detached" in sys.argv:
+        return
+    try:
+        stdin_data = sys.stdin.buffer.read()
+    except (OSError, ValueError):
+        stdin_data = b""
+
+    kwargs = {
+        "stdin": subprocess.PIPE,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "close_fds": True,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0)
+    else:
+        kwargs["start_new_session"] = True
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, __file__, "--detached"],
+            **kwargs,
+        )
+    except OSError:
+        return
+    try:
+        if stdin_data and proc.stdin:
+            proc.stdin.write(stdin_data)
+        if proc.stdin:
+            proc.stdin.close()
+    except (OSError, ValueError):
+        pass
+    sys.exit(0)
 
 
 def _project_root() -> Path:
@@ -75,6 +112,8 @@ def _mcp_call(base: str, project: str, tool: str, args: dict,
 
 
 def main() -> int:
+    _detach_or_continue()
+
     # Drain stdin so Claude Code doesn't block writing to a closed pipe;
     # payload is unused (no per-session state needed for graph_rebuild).
     try:
