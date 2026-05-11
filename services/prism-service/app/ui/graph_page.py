@@ -12,7 +12,10 @@ from fastapi.responses import FileResponse
 from nicegui import app, ui
 
 from app.project_context import get_project
-from app.services.graph_service import compute_node_hierarchy
+from app.services.graph_service import (
+    compute_node_hierarchy,
+    infer_architectural_layer,
+)
 from app.ui.components.nav import create_nav, page_container
 
 
@@ -24,7 +27,7 @@ _SAFE_PROJECT_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 _ALLOWED_VISUAL_FILES = {"graph.json"}
 
 
-_SIGMA_VIEWER_HTML = """<!DOCTYPE html>
+_SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -42,13 +45,50 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   #hint { position: absolute; bottom: 8px; left: 8px; padding: 6px 10px;
           background: rgba(15,15,26,0.8); border: 1px solid #2a2a4e;
           border-radius: 6px; font-size: 11px; z-index: 10; color: #9ca3af; }
-  /* Right-side legend panel — matches graphify's graph.html styling
-     so users can see cluster labels + toggle clusters on/off. */
+  /* Right-side region panel — GitNexus-style: semantic regions first,
+     then click/hover to descend into their contents. */
   #sidebar { width: 280px; background: #1a1a2e; border-left: 1px solid #2a2a4e;
              display: flex; flex-direction: column; overflow: hidden; }
   #sidebar h3 { font-size: 12px; color: #aaa; margin: 0 0 10px 0;
                 text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
   #legend-wrap { flex: 1; overflow-y: auto; padding: 14px; }
+  #search-wrap { margin-bottom: 14px; }
+  #graph-search { width: 100%; box-sizing: border-box; border: 1px solid #34345a;
+                  background: #111123; color: #eef2ff; border-radius: 6px;
+                  padding: 8px 9px; font: 12px system-ui, sans-serif; outline: none; }
+  #graph-search:focus { border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,0.18); }
+  #search-results { margin-top: 6px; display: none; border: 1px solid #2a2a4e;
+                    border-radius: 6px; overflow: hidden; background: #141427; }
+  .search-result { padding: 7px 8px; cursor: pointer; border-bottom: 1px solid #24243f; }
+  .search-result:last-child { border-bottom: none; }
+  .search-result:hover { background: #252547; }
+  .search-title { color: #f8fafc; font-size: 12px; overflow: hidden;
+                  text-overflow: ellipsis; white-space: nowrap; }
+  .search-meta { margin-top: 2px; color: #7f8aa3; font-size: 10px; }
+  #layer-filters, #relation-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .filter-chip { display: inline-flex; align-items: center; gap: 5px;
+                 padding: 3px 7px; border-radius: 999px; border: 1px solid #34345a;
+                 background: #17172b; color: #dbe4f0; font-size: 11px;
+                 cursor: pointer; user-select: none; }
+  .filter-chip:hover { background: #242443; }
+  .filter-chip.off { opacity: 0.35; text-decoration: line-through; }
+  .layer-chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .relation-chip-dot { color: #8fa1c2; font-size: 10px; }
+  #nav-controls { display: flex; gap: 6px; margin-top: 10px; }
+  .nav-btn { flex: 1; border: 1px solid #34345a; background: #17172b;
+             color: #dbe4f0; border-radius: 6px; padding: 6px 8px;
+             font-size: 11px; cursor: pointer; }
+  .nav-btn:hover { background: #242443; }
+  .nav-btn.active { border-color: #60a5fa; background: #1d3152; color: #f8fafc; }
+  .nav-btn:disabled { opacity: 0.4; cursor: default; }
+  #breadcrumb { display: flex; flex-wrap: wrap; align-items: center;
+                gap: 5px; margin-top: 8px; min-height: 18px; }
+  .crumb { border: 0; border-radius: 999px; padding: 3px 7px;
+           background: #24243d; color: #dbe4f0; font-size: 10px;
+           cursor: pointer; max-width: 100%; overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; }
+  .crumb:hover { background: #303056; }
+  .crumb-sep { color: #596174; font-size: 10px; }
   .legend-item { display: flex; align-items: center; gap: 8px;
                  padding: 5px 4px; cursor: pointer; border-radius: 4px;
                  font-size: 12px; user-select: none; }
@@ -58,6 +98,24 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis;
                   white-space: nowrap; color: #e0e0e0; }
   .legend-count { color: #666; font-size: 11px; }
+  #inspector { border-top: 1px solid #2a2a4e; padding: 14px;
+               background: rgba(10,10,20,0.24); }
+  #inspector-body { font-size: 12px; color: #cbd5e1; line-height: 1.45; }
+  .inspector-title { color: #f8fafc; font-weight: 700; font-size: 13px;
+                     margin-bottom: 8px; overflow-wrap: anywhere; }
+  .inspector-row { display: flex; justify-content: space-between; gap: 10px;
+                   padding: 3px 0; border-bottom: 1px solid rgba(42,42,78,0.45); }
+  .inspector-key { color: #7f8aa3; }
+  .inspector-value { color: #e5e7eb; text-align: right; overflow-wrap: anywhere; }
+  .inspector-summary { margin-top: 9px; color: #aab4c8; }
+  .inspector-neighbors { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .neighbor-pill { max-width: 100%; padding: 2px 6px; border-radius: 999px;
+                   background: #24243d; color: #dbe4f0; font-size: 11px;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                   border: 0; cursor: pointer; }
+  .neighbor-pill:hover { background: #303056; }
+  .neighbor-rel { color: #8fa1c2; }
+  .inspector-empty { color: #64748b; }
   #sidebar-stats { padding: 10px 14px; border-top: 1px solid #2a2a4e;
                    font-size: 11px; color: #666; }
   * { scrollbar-color: #2a2a4e transparent; scrollbar-width: thin; }
@@ -71,8 +129,24 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
 </div>
 <aside id="sidebar">
   <div id="legend-wrap">
-    <h3>Clusters</h3>
+    <div id="search-wrap">
+      <input id="graph-search" type="search" placeholder="Search regions and symbols" autocomplete="off" />
+      <div id="search-results"></div>
+      <div id="layer-filters"></div>
+      <div id="relation-filters"></div>
+      <div id="nav-controls">
+        <button id="nav-back" class="nav-btn" type="button">Back</button>
+        <button id="nav-overview" class="nav-btn" type="button">Overview</button>
+        <button id="nav-whole" class="nav-btn" type="button">Whole</button>
+      </div>
+      <div id="breadcrumb"></div>
+    </div>
+    <h3>Regions</h3>
     <div id="legend-list"></div>
+  </div>
+  <div id="inspector">
+    <h3>Selection</h3>
+    <div id="inspector-body" class="inspector-empty">No selection</div>
   </div>
   <div id="sidebar-stats">Loading...</div>
 </aside>
@@ -93,20 +167,25 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   const yieldToBrowser = () => new Promise(r => requestAnimationFrame(r));
   const PROJECT_ID = "__PROJECT_ID__";
   const statusEl = document.getElementById("status");
-  const COMMUNITY_COLORS = [
-    "#4E79A7","#F28E2B","#E15759","#76B7B2","#59A14F","#EDC948",
-    "#B07AA1","#FF9DA7","#9C755F","#BAB0AC","#86BCB6","#D37295",
-  ];
-  function colorFor(community) {
-    if (community === undefined || community === null) return "#6b7280";
-    const idx = Math.abs(Number(community) || 0) % COMMUNITY_COLORS.length;
-    return COMMUNITY_COLORS[idx];
+  const LAYER_COLORS = {
+    ui: "#2DD4BF",
+    api: "#60A5FA",
+    service: "#A78BFA",
+    data: "#34D399",
+    domain: "#FBBF24",
+    test: "#F87171",
+    docs: "#94A3B8",
+    config: "#F59E0B",
+    tooling: "#C084FC",
+    other: "#64748B",
+  };
+  function colorForLayer(layer) {
+    return LAYER_COLORS[layer || "other"] || LAYER_COLORS.other;
   }
   // Translate #RRGGBB into rgba(R,G,B,a). Used so edges can inherit the
-  // source node's community color at a lower alpha — that way intra-
-  // cluster edges blend into the cluster and cross-cluster bridges read
-  // as a visible contrast line, the same trick vis.js does by default
-  // when edges.color.inherit='from'.
+  // source node's architectural-layer color at a lower alpha — that way
+  // intra-region edges blend into the region and cross-region bridges
+  // read as visible contrast lines.
   function withAlpha(hex, a) {
     const h = (hex || "#6b7280").replace("#", "");
     const r = parseInt(h.substring(0, 2), 16);
@@ -129,9 +208,9 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
   }
   const LEVEL_FADE_MS = 240;
   // HSL round-trip utilities. Shading by degree modulates the L
-  // channel while keeping H+S fixed, so every node in a community
-  // shares the base hue and saturation — only perceived lightness
-  // changes with connection count.
+  // channel while keeping H+S fixed, so every node in a layer shares
+  // the base hue and saturation — only perceived lightness changes
+  // with connection count.
   function hexToHsl(hex) {
     const h = (hex || "#6b7280").replace("#", "");
     const r = parseInt(h.substring(0, 2), 16) / 255;
@@ -166,7 +245,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
     else              [r1, g1, b1] = [c, 0, x];
     return `rgb(${Math.round((r1 + m) * 255)},${Math.round((g1 + m) * 255)},${Math.round((b1 + m) * 255)})`;
   }
-  // Community hue with L modulated in [25, 75] by normalized log-degree.
+  // Layer hue with L modulated in [25, 75] by normalized log-degree.
   function shadeByDegree(baseHex, norm) {
     const { h, s } = hexToHsl(baseHex);
     const L = 25 + 50 * Math.max(0, Math.min(1, norm));
@@ -199,9 +278,16 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         commLabelsMap.set(Number(k), v);
         commLabelsMap.set(String(k), v);
       }
+      const commMetaMap = new Map();
+      for (const [k, v] of Object.entries(data.community_meta || {})) {
+        commMetaMap.set(Number(k), v || {});
+        commMetaMap.set(String(k), v || {});
+      }
       const clusterLabel = community =>
         commLabelsMap.get(community) || commLabelsMap.get(String(community))
         || "unlabeled cluster";
+      const clusterSummary = community =>
+        (commMetaMap.get(community) || commMetaMap.get(String(community)) || {}).summary || "";
       // Track which abstraction level the camera ratio currently maps to.
       // Declared up here so the Sigma reducer closure (built farther down)
       // captures the live binding.
@@ -221,16 +307,36 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // changes (via click-drill or 80%-bbox auto-drill) a short
       // smoothstep fade interpolates from the old layer to the new.
       function smoothAlphas() {
+        const now = performance.now();
+        if (
+          smoothAlphas.cache
+          && smoothAlphas.cacheLevel === currentLevel
+          && smoothAlphas.cachePrevLevel === prevLevel
+          && smoothAlphas.cacheStart === levelTransitionStart
+          && now - smoothAlphas.cacheNow < 8
+        ) {
+          return smoothAlphas.cache;
+        }
         const out = [0, 0, 0, 0];
-        const elapsed = performance.now() - levelTransitionStart;
+        const elapsed = now - levelTransitionStart;
         if (elapsed >= LEVEL_FADE_MS) {
           out[currentLevel] = 1;
+          smoothAlphas.cache = out;
+          smoothAlphas.cacheNow = now;
+          smoothAlphas.cacheLevel = currentLevel;
+          smoothAlphas.cachePrevLevel = prevLevel;
+          smoothAlphas.cacheStart = levelTransitionStart;
           return out;
         }
         const t = elapsed / LEVEL_FADE_MS;
         const eased = t * t * (3 - 2 * t);
         out[currentLevel] = eased;
         out[prevLevel] = 1 - eased;
+        smoothAlphas.cache = out;
+        smoothAlphas.cacheNow = now;
+        smoothAlphas.cacheLevel = currentLevel;
+        smoothAlphas.cachePrevLevel = prevLevel;
+        smoothAlphas.cacheStart = levelTransitionStart;
         return out;
       }
       // Click-to-drill focus stack. Each entry is {level, key} — the
@@ -253,41 +359,9 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       const nodes = rawNodes.filter(n => n.file_type !== "rationale");
       const dropped = rawNodes.length - nodes.length;
 
-      // L0 cap (closes #76): big multi-repo projects (resolve-platform
-      // had 108 L0 keys post-#74) ship a long tail of small clusters
-      // that pile labels into an unreadable knot at default zoom. The
-      // legend's count cliff is real signal — keep the dominant N and
-      // bucket the rest into a synthetic "other" L0 super-node, which
-      // a click drills into to reveal the tail at L1.
-      const L0_CAP = 20;
-      const l0Counts = new Map();
-      for (const n of nodes) {
-        if (!n.l0) continue;
-        l0Counts.set(n.l0, (l0Counts.get(n.l0) || 0) + 1);
-      }
-      let bucketedTailKeys = 0;
-      let bucketedTailEntities = 0;
-      if (l0Counts.size > L0_CAP) {
-        const ranked = [...l0Counts.entries()].sort((a, b) => b[1] - a[1]);
-        const topL0 = new Set(ranked.slice(0, L0_CAP).map(([k]) => k));
-        bucketedTailKeys = ranked.length - L0_CAP;
-        for (const n of nodes) {
-          if (n.l0 && !topL0.has(n.l0)) {
-            // Re-tag the leaf so its L0 super-node is the synthetic
-            // bucket, but keep l1/l2 untouched so descending into the
-            // bucket reveals the original cluster structure at L1.
-            n.l0 = "__other__";
-            bucketedTailEntities++;
-          }
-        }
-      }
-
       statusEl.textContent = `Loading ${nodes.length.toLocaleString()} nodes, `
         + `${edges.length.toLocaleString()} edges`
         + (dropped ? ` (hid ${dropped.toLocaleString()} rationale)` : "")
-        + (bucketedTailKeys
-            ? ` · ${bucketedTailKeys} small clusters → other`
-            : "")
         + "...";
       // Visible-subgraph degree: recount edges where both endpoints are
       // kept so the ~40% hidden rationale nodes don't inflate the base
@@ -334,9 +408,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             // brightness, not radius — large degree→size mappings turn
             // hubs into canvas-dominating blobs.
             size: 2.5 + 0.8 * norm,
-            color: shadeByDegree(colorFor(n.community), norm),
+            layer: n.layer || "other",
+            color: shadeByDegree(colorForLayer(n.layer), norm),
             community: n.community ?? null,
             communityLabel: clusterLabel(n.community),
+            communitySummary: clusterSummary(n.community),
+            sourceFile: n.source_file || "",
+            sourceLocation: n.source_location || "",
+            fileType: n.file_type || "",
             // L3 = leaf. Parent keys at L0/L1/L2 are emitted by the
             // server from the file path; the LOD pass below uses them
             // to assemble super-nodes after FA2 settles.
@@ -354,6 +433,11 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // Stream edge insertion — addEdge is cheaper than addNode so the
       // batch is larger, but the principle is the same: never block the
       // main thread for more than a frame.
+      const leafAdj = new Map();
+      function addLeafAdj(from, to, relation, direction) {
+        if (!leafAdj.has(from)) leafAdj.set(from, []);
+        leafAdj.get(from).push({ id: to, relation, direction });
+      }
       let edgesDrawn = 0;
       const EDGE_BATCH = 5000;
       for (let i = 0; i < edges.length; ) {
@@ -362,17 +446,23 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           const e = edges[i];
           const s = e.source, t = e.target;
           if (!g.hasNode(s) || !g.hasNode(t) || s === t) continue;
-          // Edge color = source node's COMMUNITY hue at low alpha, not the
-          // degree-shaded node color. A dim leaf connected to a bright hub
-          // should still contribute a visible community-colored thread —
-          // inheriting the shaded color made leaf-anchored edges fade to
-          // invisible, which killed the webby between-community feel.
-          const srcComm = g.getNodeAttribute(s, "community");
+          const relation = e.relation || e.kind || e.type || "related";
+          addLeafAdj(s, t, relation, "out");
+          addLeafAdj(t, s, relation, "in");
+          // Edge color = source node's architectural-layer hue at low alpha,
+          // not the degree-shaded node color. A dim leaf connected to a
+          // bright hub should still contribute a visible layer-colored thread.
+          const srcLayer = g.getNodeAttribute(s, "layer");
           try {
             g.addEdge(s, t, {
               size: 0.25,
-              color: withAlpha(colorFor(srcComm), 0.3),
+              color: withAlpha(colorForLayer(srcLayer), 0.3),
               level: 3,
+              relation,
+              confidence: e.confidence || "",
+              confidenceScore: e.confidence_score || null,
+              sourceLocation: e.source_location || "",
+              callSiteFile: e.source_file || "",
             });
             edgesDrawn++;
           } catch (_) {}
@@ -432,12 +522,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           const k = attrs[levelKey];
           if (!k) return;
           if (!groups.has(k)) groups.set(k, {
-            ids: [], sx: 0, sy: 0, comm: new Map(),
-            // Capture the leaves' ancestor keys so descendants of the
-            // synthetic "__other__" bucket get the right l0 for the
-            // focus-filter to find them. Splitting the key on "/"
-            // would route them back to their original (now bucketed)
-            // L0 path instead.
+            ids: [], sx: 0, sy: 0, comm: new Map(), layer: new Map(),
+            // Capture the leaves' ancestor keys so descendants retain
+            // their exact community/path lineage. Splitting keys later
+            // would lose that lineage for comm:<id>/path combinations.
             ancL0: attrs.l0, ancL1: attrs.l1, ancL2: attrs.l2,
           });
           const grp = groups.get(k);
@@ -445,6 +533,8 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           grp.sx += attrs.x; grp.sy += attrs.y;
           const c = attrs.community ?? "_";
           grp.comm.set(c, (grp.comm.get(c) || 0) + 1);
+          const layer = attrs.layer || "other";
+          grp.layer.set(layer, (grp.layer.get(layer) || 0) + 1);
         });
         // Find the max member count *within this level* so size
         // scaling is normalised per level — proportional to the
@@ -462,29 +552,28 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         // Sigma's labelDensity hide them when collisions occur.
         // On a wide-extent project (resolve-platform: 30k graph
         // units, 21 L0 keys), forcing every label produced an
-        // unreadable knot — by only labelling the dominant clusters
-        // (and the synthetic "other" bucket) the rest still render
+        // unreadable knot — by only labelling the dominant clusters,
+        // the rest still render
         // as colored dots, hover/zoom reveals them on demand.
         const LABEL_TOP_K = lvl === 0 ? 12 : 18;
         const ranked = [...groups.entries()]
           .sort((a, b) => b[1].ids.length - a[1].ids.length);
         const labelTopK = new Set();
         for (const [k] of ranked.slice(0, LABEL_TOP_K)) labelTopK.add(k);
-        labelTopK.add("__other__");
         for (const [key, grp] of groups) {
           const n = grp.ids.length;
           let bestC = null, bestN = -1;
           for (const [c, cnt] of grp.comm)
             if (cnt > bestN) { bestN = cnt; bestC = c === "_" ? null : c; }
+          let bestLayer = "other", bestLayerN = -1;
+          for (const [layer, cnt] of grp.layer)
+            if (cnt > bestLayerN) { bestLayerN = cnt; bestLayer = layer; }
           // Strip path parents to the rightmost segment for a readable
           // label. comm:<id> fallback (flat repos) resolves to the
           // DB-derived community label, then truncated at the first
           // " · " separator so legend / canvas don't show the
           // graphify "<file> · <hub>" suffix as a mashed-up string.
-          // The synthetic "__other__" bucket gets a friendly label.
-          const rawLabel = key === "__other__"
-            ? "other"
-            : key.startsWith("comm:")
+          const rawLabel = key.startsWith("comm:") && !key.includes("/")
               ? (clusterLabel(Number(key.slice(5))) || ("cluster " + key.slice(5)))
               : (key.split("/").pop() || key);
           const labelText = (() => {
@@ -495,10 +584,8 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // reads instantly. Sigma honors per-node labelSize.
           const labelSizeForLevel = lvl === 0 ? 22 : lvl === 1 ? 18 : 15;
           // Ancestor keys come from the leaves themselves, not from
-          // splitting `key`. That's what lets the "__other__" bucket
-          // properly filter — its L1/L2 descendants keep their
-          // original path keys but have l0='__other__' on the leaf,
-          // which propagates into super-node ancestor metadata here.
+          // splitting `key`; community-prefixed path keys need to keep
+          // their exact ancestry for focus filtering.
           const ancL0 = grp.ancL0 || (key.split("/")[0] || key);
           const ancL1 = grp.ancL1
             || (key.split("/").slice(0, 2).join("/") || ancL0);
@@ -531,15 +618,16 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             y: targetY * 0.18 + jy,
             targetX, targetY,
             size: sizeForN,
-            color: colorFor(bestC),
+            color: colorForLayer(bestLayer),
+            layer: bestLayer,
             community: bestC,
             communityLabel: labelText,
+            communitySummary: clusterSummary(bestC),
             memberCount: n,
             labelSize: labelSizeForLevel,
-            // Per-node forceLabel — top-K plus the "other" bucket
-            // always show; rest defer to labelDensity. Reducer-side
-            // hover override still wins, so any cluster can be
-            // identified by mousing over it.
+            // Per-node forceLabel — top-K always show; rest defer to
+            // labelDensity. Reducer-side hover override still wins, so
+            // any cluster can be identified by mousing over it.
             forceLabel: labelTopK.has(key),
             l0: ancL0,
             l1: lvl >= 1 ? ancL1 : null,
@@ -784,6 +872,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // enter/leave that looks clean at this density.
       let hoveredNode = null;
       let hoveredX = 0, hoveredY = 0;
+      let suppressNextStageClick = false;
+      let wholeGraphMode = false;
+      const hiddenLayers = new Set();
+      const hiddenRelations = new Set();
       const HOVER_PUSH_RADIUS = 8;    // graph units
       const HOVER_PUSH_MAX = 3.5;     // graph units
       const HOVER_SIZE_MULT = 1.3;
@@ -792,22 +884,28 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // closure picks up whatever value it holds when baseStatus() is
       // called, so click handlers reading the status get the right text.
       let layoutElapsed = "...";
-      const LEVEL_NAMES = ["domains", "services", "modules", "symbols"];
+      const LEVEL_NAMES = ["communities", "regions", "modules", "symbols"];
       // Counts items the LOD reducer would paint right now — i.e., at
       // currentLevel and inside the active focus subtree if any. So
       // status reads what the user actually sees, not raw level totals.
       function visibleCount() {
         const fk = focusKey();
+        const targetLevel = wholeGraphMode ? 3 : currentLevel;
         let c = 0;
         g.forEachNode((_id, attrs) => {
-          if (attrs.level !== currentLevel) return;
-          if (fk && attrs["l" + fk.level] !== fk.key) return;
+          if (attrs.level !== targetLevel) return;
+          if (!wholeGraphMode && fk && attrs["l" + fk.level] !== fk.key) return;
+          if (hiddenLayers.has(attrs.layer || "other")) return;
           c++;
         });
         return c;
       }
       const baseStatus = () => {
         const showing = visibleCount();
+        if (wholeGraphMode) {
+          return `Whole graph · ${showing.toLocaleString()} symbols · `
+            + `FA2 ${layoutElapsed}s · scroll in for communities`;
+        }
         const where = `${showing.toLocaleString()} ${LEVEL_NAMES[currentLevel]}`;
         // Breadcrumb of focused ancestors — rightmost is the deepest.
         const trail = focusPath.length > 0
@@ -820,6 +918,152 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           : " · scroll to zoom";
         return `L${currentLevel}${trail} · ${where} · FA2 ${layoutElapsed}s${hint}`;
       };
+      let inspectorPinned = false;
+      function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, ch => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;",
+          '"': "&quot;", "'": "&#39;",
+        }[ch]));
+      }
+      function compactLabel(value) {
+        const s = String(value || "");
+        return s.includes(" · ") ? s.split(" · ")[0] : s;
+      }
+      function relationLabel(item) {
+        if (!item || !item.relation) return "";
+        const arrow = item.direction === "in" ? "←" : "→";
+        return `${arrow} ${item.relation}`;
+      }
+      function updateInspector(node = null) {
+        const el = document.getElementById("inspector-body");
+        if (!node || !g.hasNode(node)) {
+          el.className = "inspector-empty";
+          el.textContent = "No selection";
+          return;
+        }
+        const attrs = g.getNodeAttributes(node);
+        const isLeaf = attrs.level === 3;
+        const type = isLeaf ? "symbol" : LEVEL_NAMES[attrs.level] || "region";
+        const degree = g.degree(node);
+        const rows = [
+          ["type", type],
+          ["layer", attrs.layer || "other"],
+          ["region", attrs.communityLabel || "unlabeled"],
+        ];
+        if (isLeaf) {
+          rows.push(["degree", degree]);
+          if (attrs.fileType) rows.push(["kind", attrs.fileType]);
+          if (attrs.sourceFile) rows.push(["file", attrs.sourceFile]);
+          if (attrs.sourceLocation) rows.push(["loc", attrs.sourceLocation]);
+        } else {
+          rows.push(["symbols", attrs.memberCount || 0]);
+        }
+        const neighbors = (isLeaf && leafAdj.has(node)
+            ? leafAdj.get(node)
+            : g.neighbors(node).map(nid => ({ id: nid, relation: "", direction: "" }))
+          )
+          .slice(0, 8)
+          .map(item => ({
+            id: item.id,
+            relation: relationLabel(item),
+            label: compactLabel(g.getNodeAttribute(item.id, "label") || item.id),
+          }));
+        const summary = attrs.communitySummary || "";
+        el.className = "";
+        el.innerHTML =
+          `<div class="inspector-title">${escapeHtml(attrs.label || node)}</div>`
+          + rows.map(([k, v]) =>
+              `<div class="inspector-row">`
+              + `<span class="inspector-key">${escapeHtml(k)}</span>`
+              + `<span class="inspector-value">${escapeHtml(v)}</span>`
+              + `</div>`
+            ).join("")
+          + (summary
+              ? `<div class="inspector-summary">${escapeHtml(summary)}</div>`
+              : "")
+          + (neighbors.length
+              ? `<div class="inspector-neighbors">`
+                + neighbors.map(n =>
+                    `<button class="neighbor-pill" type="button" data-node="${escapeHtml(n.id)}">`
+                    + (n.relation
+                        ? `<span class="neighbor-rel">${escapeHtml(n.relation)}</span> `
+                        : "")
+                    + `${escapeHtml(n.label)}</button>`
+                  ).join("")
+                + `</div>`
+              : "");
+        el.querySelectorAll(".neighbor-pill[data-node]").forEach(btn => {
+          btn.addEventListener("click", ev => {
+            ev.stopPropagation();
+            jumpToNode(btn.dataset.node);
+          });
+        });
+      }
+      function focusDisplayName(focusItem) {
+        const key = focusItem?.key || "";
+        if (focusItem?.level === 0 && key.startsWith("comm:")) {
+          const cid = Number(key.slice(5));
+          return compactLabel(clusterLabel(cid));
+        }
+        return compactLabel(key.split("/").pop() || key || "region");
+      }
+      function renderBreadcrumb() {
+        const el = document.getElementById("breadcrumb");
+        const backBtn = document.getElementById("nav-back");
+        const overviewBtn = document.getElementById("nav-overview");
+        const wholeBtn = document.getElementById("nav-whole");
+        if (!el || !backBtn) return;
+        backBtn.disabled =
+          !wholeGraphMode && currentLevel === 0 && focusPath.length === 0 && !focusedNode;
+        if (overviewBtn) overviewBtn.classList.toggle(
+          "active", !wholeGraphMode && currentLevel === 0 && focusPath.length === 0
+        );
+        if (wholeBtn) wholeBtn.classList.toggle("active", wholeGraphMode);
+        const pieces = [
+          `<button class="crumb" type="button" data-root="1">Overview</button>`,
+        ];
+        if (wholeGraphMode) {
+          pieces.push(`<span class="crumb-sep">/</span>`);
+          pieces.push(`<button class="crumb" type="button" data-whole="1">Whole graph</button>`);
+        }
+        focusPath.forEach((item, idx) => {
+          pieces.push(`<span class="crumb-sep">/</span>`);
+          pieces.push(
+            `<button class="crumb" type="button" data-idx="${idx}">`
+            + `${escapeHtml(focusDisplayName(item))}`
+            + `</button>`
+          );
+        });
+        if (focusedNode && g.hasNode(focusedNode)) {
+          pieces.push(`<span class="crumb-sep">/</span>`);
+          pieces.push(
+            `<button class="crumb" type="button" data-focus="1">`
+            + `${escapeHtml(compactLabel(g.getNodeAttribute(focusedNode, "label") || focusedNode))}`
+            + `</button>`
+          );
+        }
+        el.innerHTML = pieces.join("");
+        const root = el.querySelector("[data-root]");
+        if (root) root.addEventListener("click", clearToOverview);
+        const whole = el.querySelector("[data-whole]");
+        if (whole) whole.addEventListener("click", enterWholeGraph);
+        el.querySelectorAll("[data-idx]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.idx);
+            const item = focusPath[idx];
+            if (!item) return;
+            focusPath = focusPath.slice(0, idx + 1);
+            focusedNode = null;
+            neighborSet = new Set();
+            inspectorPinned = false;
+            updateInspector(null);
+            setLevel(Math.min(3, item.level + 1), {
+              anchorRatio: currentRatio || lodAnchorRatio,
+              lockMs: 420,
+            });
+          });
+        });
+      }
 
       // Stroke-outlined label: dark stroke first, light fill on top.
       // Reads against any background — node fills, edges, hover
@@ -866,8 +1110,8 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         // forceLabel super-nodes (everything outside the top-K) only
         // paint their label when there's room. The wide-extent
         // resolve-platform L0 used to render 21 colliding labels —
-        // now ~12 dominant + "other" always show, the rest reveal on
-        // hover or as the user zooms in.
+        // now only dominant regions force labels, and the rest reveal
+        // on hover or as the user zooms in.
         labelDensity: 0.10, labelGridCellSize: 140, minCameraRatio: 0.04,
         maxCameraRatio: 30, defaultNodeColor: "#6b7280",
         defaultEdgeColor: "rgba(107,114,128,0.3)",
@@ -903,7 +1147,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // every level above its own, so this is a single attribute
           // compare regardless of depth.
           const fk = focusKey();
-          if (fk && data["l" + fk.level] !== fk.key) {
+          if (!wholeGraphMode && fk && data["l" + fk.level] !== fk.key) {
+            return { ...data, hidden: true };
+          }
+          if (hiddenLayers.has(data.layer || "other")) {
             return { ...data, hidden: true };
           }
           let out = a < 0.999
@@ -954,6 +1201,14 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // buildSupers; the rest defer to labelDensity so wide-extent
           // graphs don't paint 21 labels on top of each other. Hover
           // branch above already force-shows whichever node is hovered.
+          if (wholeGraphMode && node !== hoveredNode && node !== focusedNode) {
+            return {
+              ...out,
+              label: "",
+              forceLabel: false,
+              size: Math.min(out.size || data.size || 2.4, 2.4),
+            };
+          }
           return out;
         },
         edgeReducer: (edge, data) => {
@@ -964,7 +1219,7 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // Same drill-down filter as nodeReducer: hide edges that
           // would connect across the focus boundary.
           const fk = focusKey();
-          if (fk) {
+          if (!wholeGraphMode && fk) {
             const ext = g.extremities(edge);
             const fld = "l" + fk.level;
             const sa = g.getNodeAttribute(ext[0], fld);
@@ -972,6 +1227,15 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
             if (sa !== fk.key || ta !== fk.key) {
               return { ...data, hidden: true };
             }
+          }
+          const ext = g.extremities(edge);
+          const sLayer = g.getNodeAttribute(ext[0], "layer") || "other";
+          const tLayer = g.getNodeAttribute(ext[1], "layer") || "other";
+          if (hiddenLayers.has(sLayer) || hiddenLayers.has(tLayer)) {
+            return { ...data, hidden: true };
+          }
+          if (hiddenRelations.has(data.relation || "related")) {
+            return { ...data, hidden: true };
           }
           let out = a < 0.999
             ? { ...data, color: multiplyAlpha(data.color, a) }
@@ -981,7 +1245,6 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           // trace its connections at a glance. Edges to other
           // clusters stay at their dim default.
           if (hoveredNode) {
-            const ext = g.extremities(edge);
             if (ext[0] === hoveredNode || ext[1] === hoveredNode) {
               return {
                 ...out,
@@ -991,8 +1254,15 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
               };
             }
           }
+          if (wholeGraphMode) {
+            return {
+              ...out,
+              color: multiplyAlpha(out.color, 0.45),
+              size: Math.min(out.size || data.size || 0.18, 0.18),
+              zIndex: 0,
+            };
+          }
           if (!focusedNode) return out;
-          const ext = g.extremities(edge);
           if (ext[0] === focusedNode || ext[1] === focusedNode) {
             return { ...out, size: 0.8, zIndex: 1 };
           }
@@ -1000,14 +1270,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         },
       });
 
-      // ----- LOD: mousewheel zoom drives abstraction level -----------
-      // Sigma's camera ratio decreases as the user zooms in. Each ratio
-      // band corresponds to one level of the hierarchy; crossing a
-      // threshold flips currentLevel and the reducers swap the visible
-      // layer. ratio=5 lands the user in the L0 band — Sigma's default
-      // (x: 0.5, y: 0.5) keeps the camera centered on the graph bbox,
-      // which is the right framing because the spread pass above places
-      // super-nodes radially around the leaf-graph centroid.
+      // ----- LOD: camera-ratio ladder -------------------------------
+      // Sigma's camera ratio decreases as the user zooms in. Instead
+      // of recomputing viewport bboxes on every camera tick, each level
+      // records the ratio where the user entered it. Wheel-in past the
+      // lower threshold descends one level; wheel-out past the upper
+      // threshold ascends. This gives a predictable, GitNexus-like
+      // ladder: smooth crossfades, no surprise size-based jumps.
       const camera = renderer.getCamera();
       // Initial camera: Sigma's default ratio=1.0 fits the whole
       // graph extent. Super-nodes spawn near origin with jitter and
@@ -1018,11 +1287,15 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       camera.setState({ x: 0.5, y: 0.5, ratio: 1.0 });
       currentRatio = 1.0;
       currentLevel = 0;
+      let lodAnchorRatio = 1.0;
+      let lodLockedUntil = 0;
+      const LOD_ZOOM_IN_RATIO = 0.52;
+      const LOD_ZOOM_OUT_RATIO = 1.85;
       // Fit camera so the active level's super-node bbox occupies
       // ~75% of the viewport. Closes #79 — the previous fixed
       // ratio=1.8 left a tiny L0 blob floating in 92% empty canvas
       // when the full graph extent (driven by L3 leaves) is huge.
-      function fitCameraToLevel(targetLvl) {
+      function fitCameraToLevel(targetLvl, opts = {}) {
         let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
         let count = 0;
         g.forEachNode((id, attrs) => {
@@ -1041,7 +1314,13 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         const cy = (mny + mxy) / 2;
         const span = Math.max(mxx - mnx, mxy - mny, 0.05);
         const ratio = Math.min(30, Math.max(0.1, span / 0.75));
-        camera.animate({ x: cx, y: cy, ratio }, { duration: 500 });
+        lodAnchorRatio = ratio;
+        lodLockedUntil = performance.now() + (opts.lockMs || 520);
+        camera.animate(
+          { x: cx, y: cy, ratio },
+          { duration: opts.duration || 500 },
+        );
+        return ratio;
       }
       let initialFitDone = false;
       // Debug hooks — expose graph + renderer so devtools can inspect
@@ -1049,97 +1328,51 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
       // without monkey-patching. Cheap and useful.
       window.__prismGraph = g;
       window.__prismSigma = renderer;
-      // Size-based auto-drill: when the active cluster's bbox grows
-      // past ~80% of the viewport (because the user keeps zooming in
-      // within the current level), automatically transition to the
-      // next-deeper level so its children spread back into view. The
-      // ratio-based LOD bands still fire as a fallback; this just
-      // catches the case where one cluster's spread doesn't map to
-      // the same ratio band as another's. Debounced so a single zoom
-      // burst can't cascade through every level at once.
-      let lastAutoDrillT = 0;
-      function maybeAutoDrill() {
-        if (currentLevel >= 3) return;
-        const now = performance.now();
-        if (now - lastAutoDrillT < 500) return;
-        const fk = focusKey();
-        let mnX = Infinity, mxX = -Infinity;
-        let mnY = Infinity, mxY = -Infinity;
-        let count = 0;
-        g.forEachNode((id, attrs) => {
-          if (attrs.level !== currentLevel) return;
-          if (fk && attrs["l" + fk.level] !== fk.key) return;
-          if (attrs.x < mnX) mnX = attrs.x;
-          if (attrs.x > mxX) mxX = attrs.x;
-          if (attrs.y < mnY) mnY = attrs.y;
-          if (attrs.y > mxY) mxY = attrs.y;
-          count++;
-        });
-        if (count < 1) return;
-        const tl = renderer.graphToViewport({ x: mnX, y: mnY });
-        const br = renderer.graphToViewport({ x: mxX, y: mxY });
-        const wPx = Math.abs(br.x - tl.x);
-        const hPx = Math.abs(br.y - tl.y);
-        const cw = renderer.getCanvases().mouse.clientWidth || 1;
-        const ch = renderer.getCanvases().mouse.clientHeight || 1;
-        const frac = Math.max(wPx / cw, hPx / ch);
-        if (frac > 0.80) {
-          lastAutoDrillT = now;
-          setLevel(currentLevel + 1);
-        }
-      }
-
-      // Inverse of maybeAutoDrill: when wheel-out shrinks the active
-      // cluster below ~22% of the viewport, pop back up to the parent
-      // level. Without this, scrolling out at L3 just shoves the leaf
-      // mesh into a tiny corner forever — the user has to click empty
-      // space to escape, which isn't discoverable.
-      let lastAutoPopT = 0;
-      function maybeAutoPop() {
-        if (currentLevel === 0) return;
-        const now = performance.now();
-        if (now - lastAutoPopT < 500) return;
-        const fk = focusKey();
-        let mnX = Infinity, mxX = -Infinity;
-        let mnY = Infinity, mxY = -Infinity;
-        let count = 0;
-        g.forEachNode((id, attrs) => {
-          if (attrs.level !== currentLevel) return;
-          if (fk && attrs["l" + fk.level] !== fk.key) return;
-          if (attrs.x < mnX) mnX = attrs.x;
-          if (attrs.x > mxX) mxX = attrs.x;
-          if (attrs.y < mnY) mnY = attrs.y;
-          if (attrs.y > mxY) mxY = attrs.y;
-          count++;
-        });
-        if (count < 1) return;
-        const tl = renderer.graphToViewport({ x: mnX, y: mnY });
-        const br = renderer.graphToViewport({ x: mxX, y: mxY });
-        const wPx = Math.abs(br.x - tl.x);
-        const hPx = Math.abs(br.y - tl.y);
-        const cw = renderer.getCanvases().mouse.clientWidth || 1;
-        const ch = renderer.getCanvases().mouse.clientHeight || 1;
-        const frac = Math.max(wPx / cw, hPx / ch);
-        if (frac < 0.22) {
-          lastAutoPopT = now;
-          const newLevel = currentLevel - 1;
-          // Pop any focus items at or below the new level so we don't
-          // wind up filtered to a focus deeper than where we are.
-          while (focusPath.length > 0
-                 && focusPath[focusPath.length - 1].level >= newLevel) {
-            focusPath.pop();
+      function reconcileLevelWithZoom() {
+        if (performance.now() < lodLockedUntil) return;
+        const ratio = currentRatio || lodAnchorRatio;
+        if (wholeGraphMode) {
+          if (ratio < lodAnchorRatio * LOD_ZOOM_IN_RATIO) {
+            wholeGraphMode = false;
+            setLevel(0, { anchorRatio: ratio, lockMs: 420 });
           }
-          setLevel(newLevel);
+          return;
         }
+        let next = currentLevel;
+        if (ratio < lodAnchorRatio * LOD_ZOOM_IN_RATIO && currentLevel < 3) {
+          next = currentLevel + 1;
+        } else if (
+          ratio > lodAnchorRatio * LOD_ZOOM_OUT_RATIO
+          && currentLevel > 0
+        ) {
+          next = currentLevel - 1;
+        } else if (
+          ratio > lodAnchorRatio * LOD_ZOOM_OUT_RATIO
+          && currentLevel === 0
+          && focusPath.length === 0
+        ) {
+          enterWholeGraph({ anchorRatio: ratio, lockMs: 420, fit: false });
+          return;
+        }
+        if (next === currentLevel) return;
+        while (focusPath.length > 0
+               && focusPath[focusPath.length - 1].level >= next) {
+          focusPath.pop();
+        }
+        setLevel(next, { anchorRatio: ratio });
       }
 
       // setLevel — single entry point for level changes. Captures
       // the previous level for the fade, runs the side effects
       // (status text, legend rebuild, physics nudge), and refreshes.
-      function setLevel(next) {
+      function setLevel(next, opts = {}) {
+        next = Math.max(0, Math.min(3, next));
+        if (!opts.keepWhole) wholeGraphMode = false;
         if (next === currentLevel) return;
         prevLevel = currentLevel;
         currentLevel = next;
+        lodAnchorRatio = opts.anchorRatio || currentRatio || lodAnchorRatio;
+        if (opts.lockMs) lodLockedUntil = performance.now() + opts.lockMs;
         levelTransitionStart = performance.now();
         if (focusedNode) {
           focusedNode = null;
@@ -1147,19 +1380,98 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         }
         statusEl.textContent = baseStatus();
         rebuildLegend();
+        renderBreadcrumb();
         renderer.refresh();
         startPhysics();
       }
 
+      function clearToOverview() {
+        wholeGraphMode = false;
+        focusedNode = null;
+        neighborSet = new Set();
+        inspectorPinned = false;
+        updateInspector(null);
+        focusPath = [];
+        if (currentLevel !== 0) {
+          setLevel(0, { anchorRatio: currentRatio, lockMs: 650 });
+        } else {
+          statusEl.textContent = baseStatus();
+          rebuildLegend();
+          renderBreadcrumb();
+          renderer.refresh();
+          startPhysics();
+        }
+        fitCameraToLevel(0, { duration: 650, lockMs: 720 });
+      }
+
+      function backOneLevel() {
+        if (wholeGraphMode) {
+          clearToOverview();
+          return;
+        }
+        if (focusedNode) {
+          focusedNode = null;
+          neighborSet = new Set();
+          inspectorPinned = false;
+          updateInspector(null);
+        }
+        if (currentLevel <= 0 && focusPath.length === 0) {
+          clearToOverview();
+          return;
+        }
+        const next = Math.max(0, currentLevel - 1);
+        while (focusPath.length > 0
+               && focusPath[focusPath.length - 1].level >= next) {
+          focusPath.pop();
+        }
+        if (next === 0) {
+          clearToOverview();
+        } else {
+          setLevel(next, { anchorRatio: currentRatio, lockMs: 420 });
+        }
+      }
+
+      function setupNavigationControls() {
+        const backBtn = document.getElementById("nav-back");
+        const overviewBtn = document.getElementById("nav-overview");
+        const wholeBtn = document.getElementById("nav-whole");
+        if (backBtn) backBtn.addEventListener("click", backOneLevel);
+        if (overviewBtn) overviewBtn.addEventListener("click", clearToOverview);
+        if (wholeBtn) wholeBtn.addEventListener("click", () => enterWholeGraph());
+        renderBreadcrumb();
+      }
+      window.__prismJumpToNode = jumpToNode;
+
+      function enterWholeGraph(opts = {}) {
+        wholeGraphMode = true;
+        focusPath = [];
+        focusedNode = null;
+        neighborSet = new Set();
+        inspectorPinned = false;
+        updateInspector(null);
+        if (currentLevel !== 3) {
+          setLevel(3, {
+            anchorRatio: opts.anchorRatio || currentRatio || lodAnchorRatio,
+            lockMs: opts.lockMs || 650,
+            keepWhole: true,
+          });
+        } else {
+          lodAnchorRatio = opts.anchorRatio || currentRatio || lodAnchorRatio;
+          lodLockedUntil = performance.now() + (opts.lockMs || 650);
+          statusEl.textContent = baseStatus();
+          rebuildLegend();
+          renderBreadcrumb();
+          renderer.refresh();
+        }
+        if (opts.fit !== false) {
+          fitCameraToLevel(3, { duration: 700, lockMs: 760 });
+        }
+      }
+
       camera.on("updated", () => {
         currentRatio = camera.getState().ratio;
-        // Wheel zoom drives the camera ratio only — it never
-        // crosses a level threshold by itself. Level changes are
-        // size-driven: drill DOWN once the active cluster fills
-        // 80% of the viewport, pop UP once it shrinks below 22%.
+        reconcileLevelWithZoom();
         renderer.refresh();
-        maybeAutoDrill();
-        maybeAutoPop();
       });
 
       // RAF loop that re-renders while a node is hovered so the
@@ -1184,15 +1496,21 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         hoveredX = g.getNodeAttribute(node, "x");
         hoveredY = g.getNodeAttribute(node, "y");
         document.body.style.cursor = "pointer";
+        if (!inspectorPinned) updateInspector(node);
         startPulseLoop();
       });
       renderer.on("leaveNode", () => {
         hoveredNode = null;
         document.body.style.cursor = "";
+        if (!inspectorPinned) updateInspector(null);
         renderer.refresh();
       });
       renderer.on("clickNode", ({ node }) => {
+        suppressNextStageClick = true;
+        setTimeout(() => { suppressNextStageClick = false; }, 0);
         const attrs = g.getNodeAttributes(node);
+        inspectorPinned = true;
+        updateInspector(node);
         // Click a super-node → push it onto the focus stack so the
         // next level only paints its descendants, jump to that level
         // (no ratio threshold races) and pan the camera onto it.
@@ -1202,17 +1520,24 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           if (ownKey) {
             focusPath.push({ level: attrs.level, key: ownKey });
           }
-          setLevel(tgtLvl);
+          const tgtRatio = Math.max(
+            0.04,
+            Math.min(30, (currentRatio || lodAnchorRatio) * 0.58),
+          );
+          setLevel(tgtLvl, { anchorRatio: tgtRatio, lockMs: 700 });
           // Pan + zoom onto the clicked super-node. Sigma's camera
           // state x/y is in normalized [0,1] framed-graph space, not
           // graph coords — pass through normalizationFunction or the
           // camera animates off-canvas and the viewer goes blank.
-          const tgtRatio = tgtLvl === 1 ? 1.0
-                         : tgtLvl === 2 ? 0.5
-                         : 0.2;
           const target = renderer.normalizationFunction({
             x: attrs.x, y: attrs.y,
           });
+          const summary = attrs.communitySummary
+            ? ` · ${attrs.communitySummary}`
+            : "";
+          statusEl.textContent = `${attrs.label} · `
+            + `${(attrs.memberCount || 0).toLocaleString()} symbols`
+            + ` · layer ${attrs.layer || "other"}${summary}`;
           camera.animate(
             { x: target.x, y: target.y, ratio: tgtRatio },
             { duration: 600 }
@@ -1223,31 +1548,218 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         focusedNode = node;
         neighborSet = new Set(g.neighbors(node));
         statusEl.textContent = `${attrs.label} `
-          + `(cluster: ${attrs.communityLabel || "unlabeled cluster"}, `
+          + `(region: ${attrs.communityLabel || "unlabeled region"}, `
+          + `layer ${attrs.layer || "other"}, `
           + `degree ${g.degree(node)}) — `
           + `click empty space to clear focus`;
+        renderBreadcrumb();
         renderer.refresh();
       });
       // Click on empty space backs all the way out — clears the
-      // focus stack, drops the leaf-focus dim-highlight, and resets
-      // currentLevel to L0. With no ratio-based level changes,
-      // this is the user's main escape hatch.
+      // focus stack, drops the leaf-focus dim-highlight, resets
+      // currentLevel to L0, and recenters the overview.
       renderer.on("clickStage", () => {
+        if (suppressNextStageClick) {
+          suppressNextStageClick = false;
+          return;
+        }
         const hadFocus = !!focusedNode || focusPath.length > 0;
         const wasDeep = currentLevel > 0;
         if (!hadFocus && !wasDeep) return;
-        focusedNode = null;
-        neighborSet = new Set();
-        focusPath = [];
-        if (wasDeep) {
-          setLevel(0);
-        } else {
-          statusEl.textContent = baseStatus();
-          rebuildLegend();
-          renderer.refresh();
-          startPhysics();
-        }
+        clearToOverview();
       });
+
+      function focusPathForNode(attrs) {
+        const out = [];
+        const level = attrs.level === undefined ? 3 : attrs.level;
+        for (let lvl = 0; lvl < level; lvl++) {
+          const key = attrs["l" + lvl];
+          if (key) out.push({ level: lvl, key });
+        }
+        return out;
+      }
+      function ratioForJumpLevel(level) {
+        const base = Math.max(currentRatio || lodAnchorRatio || 1, 0.45);
+        if (level <= 0) return Math.min(30, base);
+        return Math.max(0.04, Math.min(30, base * Math.pow(0.58, level)));
+      }
+      function jumpToNode(node) {
+        if (!g.hasNode(node)) return;
+        const attrs = g.getNodeAttributes(node);
+        const level = attrs.level === undefined ? 3 : attrs.level;
+        focusPath = focusPathForNode(attrs);
+        focusedNode = level === 3 ? node : null;
+        neighborSet = level === 3 ? new Set(g.neighbors(node)) : new Set();
+        inspectorPinned = true;
+        updateInspector(node);
+        const target = renderer.normalizationFunction({
+          x: attrs.x, y: attrs.y,
+        });
+        const ratio = ratioForJumpLevel(level);
+        setLevel(level, { anchorRatio: ratio, lockMs: 720 });
+        camera.animate(
+          { x: target.x, y: target.y, ratio },
+          { duration: 680 },
+        );
+        statusEl.textContent = `${attrs.label || node} · `
+          + `${LEVEL_NAMES[level] || "symbol"} · layer ${attrs.layer || "other"}`;
+        renderBreadcrumb();
+        renderer.refresh();
+      }
+      function setupSearch() {
+        const input = document.getElementById("graph-search");
+        const resultsEl = document.getElementById("search-results");
+        if (!input || !resultsEl) return;
+        const index = [];
+        g.forEachNode((id, attrs) => {
+          index.push({
+            id,
+            label: attrs.label || id,
+            level: attrs.level === undefined ? 3 : attrs.level,
+            layer: attrs.layer || "other",
+            region: attrs.communityLabel || "",
+            count: attrs.memberCount || g.degree(id) || 0,
+            text: [
+              attrs.label || id,
+              attrs.layer || "",
+              attrs.communityLabel || "",
+              attrs.communitySummary || "",
+              attrs.sourceFile || "",
+              attrs.sourceLocation || "",
+              attrs.fileType || "",
+            ].join(" ").toLowerCase(),
+          });
+        });
+        const renderResults = () => {
+          const q = input.value.trim().toLowerCase();
+          if (q.length < 2) {
+            resultsEl.style.display = "none";
+            resultsEl.innerHTML = "";
+            return;
+          }
+          const hits = index
+            .filter(item => item.text.includes(q))
+            .sort((a, b) => {
+              const al = a.label.toLowerCase();
+              const bl = b.label.toLowerCase();
+              const ap = al.startsWith(q) ? 0 : al.includes(q) ? 1 : 2;
+              const bp = bl.startsWith(q) ? 0 : bl.includes(q) ? 1 : 2;
+              return ap - bp || a.level - b.level || b.count - a.count;
+            })
+            .slice(0, 9);
+          if (!hits.length) {
+            resultsEl.style.display = "block";
+            resultsEl.innerHTML =
+              `<div class="search-result"><div class="search-meta">No matches</div></div>`;
+            return;
+          }
+          resultsEl.style.display = "block";
+          resultsEl.innerHTML = hits.map((item, idx) =>
+            `<div class="search-result" data-idx="${idx}">`
+            + `<div class="search-title">${escapeHtml(item.label)}</div>`
+            + `<div class="search-meta">L${item.level} ${escapeHtml(LEVEL_NAMES[item.level] || "symbol")}`
+            + ` · ${escapeHtml(item.layer)} · ${escapeHtml(compactLabel(item.region))}</div>`
+            + `</div>`
+          ).join("");
+          resultsEl.querySelectorAll(".search-result[data-idx]").forEach(el => {
+            el.addEventListener("click", () => {
+              const hit = hits[Number(el.dataset.idx)];
+              if (!hit) return;
+              input.value = hit.label;
+              resultsEl.style.display = "none";
+              jumpToNode(hit.id);
+            });
+          });
+        };
+        input.addEventListener("input", renderResults);
+        input.addEventListener("keydown", ev => {
+          if (ev.key !== "Enter") return;
+          const first = resultsEl.querySelector(".search-result[data-idx]");
+          if (first) first.click();
+        });
+      }
+      function setupLayerFilters() {
+        const el = document.getElementById("layer-filters");
+        if (!el) return;
+        const counts = new Map();
+        g.forEachNode((_id, attrs) => {
+          if (attrs.level !== 3) return;
+          const layer = attrs.layer || "other";
+          counts.set(layer, (counts.get(layer) || 0) + 1);
+        });
+        const order = Object.keys(LAYER_COLORS)
+          .filter(layer => counts.has(layer))
+          .concat(
+            [...counts.keys()]
+              .filter(layer => !Object.prototype.hasOwnProperty.call(LAYER_COLORS, layer))
+              .sort()
+          );
+        el.innerHTML = order.map(layer =>
+          `<button class="filter-chip layer-chip" type="button" data-layer="${escapeHtml(layer)}" `
+          + `title="${escapeHtml(counts.get(layer) || 0)} symbols">`
+          + `<span class="layer-chip-dot" style="background:${colorForLayer(layer)}"></span>`
+          + `${escapeHtml(layer)}`
+          + `</button>`
+        ).join("");
+        el.querySelectorAll(".layer-chip").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const layer = btn.dataset.layer || "other";
+            if (hiddenLayers.has(layer)) {
+              hiddenLayers.delete(layer);
+              btn.classList.remove("off");
+            } else {
+              hiddenLayers.add(layer);
+              btn.classList.add("off");
+            }
+            if (focusedNode && hiddenLayers.has(g.getNodeAttribute(focusedNode, "layer") || "other")) {
+              focusedNode = null;
+              neighborSet = new Set();
+            }
+            const filters = hiddenLayers.size + hiddenRelations.size;
+            statusEl.textContent = baseStatus()
+              + (filters ? ` · ${filters} filters` : "");
+            rebuildLegend();
+            renderer.refresh();
+          });
+        });
+      }
+
+      function setupRelationFilters() {
+        const el = document.getElementById("relation-filters");
+        if (!el) return;
+        const counts = new Map();
+        g.forEachEdge((_eid, attrs) => {
+          if (attrs.level !== 3) return;
+          const relation = attrs.relation || "related";
+          counts.set(relation, (counts.get(relation) || 0) + 1);
+        });
+        const relations = [...counts.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, 8);
+        el.innerHTML = relations.map(([relation, count]) =>
+          `<button class="filter-chip relation-chip" type="button" data-relation="${escapeHtml(relation)}" `
+          + `title="${escapeHtml(count)} edges">`
+          + `<span class="relation-chip-dot">edge</span> `
+          + `${escapeHtml(relation)}`
+          + `</button>`
+        ).join("");
+        el.querySelectorAll(".relation-chip").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const relation = btn.dataset.relation || "related";
+            if (hiddenRelations.has(relation)) {
+              hiddenRelations.delete(relation);
+              btn.classList.remove("off");
+            } else {
+              hiddenRelations.add(relation);
+              btn.classList.add("off");
+            }
+            const filters = hiddenLayers.size + hiddenRelations.size;
+            statusEl.textContent = baseStatus()
+              + (filters ? ` · ${filters} filters` : "");
+            renderer.refresh();
+          });
+        });
+      }
 
       // --- Legend / categories sidebar ----------------------------
       // Level-aware: at L0/L1/L2 it lists super-nodes ranked by member
@@ -1265,7 +1777,8 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
         listEl.innerHTML = "";
         const fk = focusKey();
         const inFocus = (attrs) =>
-          !fk || attrs["l" + fk.level] === fk.key;
+          (!fk || attrs["l" + fk.level] === fk.key)
+          && !hiddenLayers.has(attrs.layer || "other");
         let items = [];
         if (currentLevel < 3) {
           g.forEachNode((id, attrs) => {
@@ -1280,17 +1793,25 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           });
         } else {
           const counts = new Map();
+          const layers = new Map();
           g.forEachNode((_n, attrs) => {
             if (attrs.level !== 3) return;
             if (!inFocus(attrs)) return;
             const c = attrs.community;
             if (c === null || c === undefined) return;
             counts.set(c, (counts.get(c) || 0) + 1);
+            if (!layers.has(c)) layers.set(c, new Map());
+            const layerCounts = layers.get(c);
+            const layer = attrs.layer || "other";
+            layerCounts.set(layer, (layerCounts.get(layer) || 0) + 1);
           });
           items = [...counts.entries()].map(([cid, n]) => ({
             kind: "community", cid,
             label: clusterLabel(cid),
-            color: colorFor(cid),
+            color: colorForLayer(
+              [...(layers.get(cid) || new Map()).entries()]
+                .sort((a, b) => b[1] - a[1])[0]?.[0] || "other"
+            ),
             count: n,
           }));
         }
@@ -1328,6 +1849,10 @@ _SIGMA_VIEWER_HTML = """<!DOCTYPE html>
           + `${nodes.length.toLocaleString()} symbols total`;
       }
       rebuildLegend();
+      setupSearch();
+      setupLayerFilters();
+      setupRelationFilters();
+      setupNavigationControls();
 
       // ----- L0 reveal animation ------------------------------------
       // The user lands at L0 (~10 super-nodes), so the reveal animates
@@ -1453,11 +1978,11 @@ def _graphify_communities(project_id: str):
 def _graphify_hierarchy(project_id: str):
     """Multi-level hierarchical view of the project graph.
 
-    Each leaf node is tagged with l0/l1/l2 parent keys derived from
-    its file path (with src/app/services-style container directories
-    stripped). Edges reference leaf ids only — the client computes
-    super-edges per level on demand by aggregating leaf edges by the
-    parent of each endpoint.
+    Each leaf node is tagged with l0/l1/l2 parent keys. L0 is graphify's
+    Leiden community when available; L1/L2 are path prefixes nested under
+    that community. Edges reference leaf ids only — the client computes
+    super-edges per level on demand by aggregating leaf edges by the parent
+    of each endpoint.
 
     This is what the Sigma viewer fetches — it replaces the older
     graph.json + communities.json pair and folds in the data needed
@@ -1489,20 +2014,45 @@ def _graphify_hierarchy(project_id: str):
             n.get("source_file"),
             fallback_community=n.get("community"),
         )
+        layer = infer_architectural_layer(
+            n.get("source_file"),
+            file_type=n.get("file_type"),
+            label=n.get("label") or n.get("id"),
+        )
         # Mark leaves as level 3 so the client doesn't have to special-case
         # them after super-nodes are added with level 0/1/2.
-        out_nodes.append({**n, "level": 3, **h})
+        out_nodes.append({**n, "level": 3, "layer": layer, **h})
 
     # Pull DB-derived community labels so super-nodes that fall back to
     # comm:<id> at L0 (flat repos) get a human label instead of the raw id.
     db_path = ctx._data_dir / "graph.db"
     comm_labels: dict[int, str] = {}
+    comm_meta: dict[int, dict] = {}
     if db_path.exists():
         try:
             conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            def _loads_json_list(value: str | None) -> list:
+                try:
+                    parsed = json.loads(value or "[]")
+                    return parsed if isinstance(parsed, list) else []
+                except json.JSONDecodeError:
+                    return []
             try:
-                for r in conn.execute("SELECT id, label FROM communities"):
-                    comm_labels[int(r[0])] = r[1] or ""
+                for r in conn.execute(
+                    "SELECT id, label, size, top_files, top_entities, summary "
+                    "FROM communities"
+                ):
+                    cid = int(r["id"])
+                    label = r["label"] or ""
+                    comm_labels[cid] = label
+                    comm_meta[cid] = {
+                        "label": label,
+                        "size": int(r["size"] or 0),
+                        "top_files": _loads_json_list(r["top_files"]),
+                        "top_entities": _loads_json_list(r["top_entities"]),
+                        "summary": r["summary"] or "",
+                    }
             except sqlite3.OperationalError:
                 pass
             finally:
@@ -1514,6 +2064,7 @@ def _graphify_hierarchy(project_id: str):
         "nodes": out_nodes,
         "edges": raw_edges,
         "community_labels": comm_labels,
+        "community_meta": comm_meta,
     })
 
 

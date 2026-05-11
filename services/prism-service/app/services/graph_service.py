@@ -240,26 +240,80 @@ def compute_node_hierarchy(
 ) -> dict:
     """Return {l0, l1, l2} parent keys for a leaf's hierarchical rollup.
 
-    Strips known container directories from the path, then uses the
-    first 1, 2, 3 surviving segments as the L0, L1, L2 parents. Falls
-    back to ``comm:<id>`` when the path is too shallow to produce a
-    meaningful root segment, so a flat repo without a service layout
-    still gets a usable hierarchy from Leiden community detection.
+    L0 is the graphify Leiden community when present. L1/L2 are path
+    prefixes nested under that community, so repos with repeated
+    ``src/app`` style layouts do not collapse unrelated communities
+    together as the user drills in. For graph.json files without
+    community metadata, the path-only hierarchy remains as a fallback.
     """
     sf = (source_file or "").replace("\\", "/").strip("/")
     parts = sf.split("/") if sf else []
     if parts and "." in parts[-1]:
         parts = parts[:-1]  # drop filename
     segs = [p for p in parts if p and p.lower() not in _PATH_PREFIX_DROP]
+    if fallback_community is not None:
+        root = f"comm:{fallback_community}"
+        if not segs:
+            return {"l0": root, "l1": root, "l2": root}
+        l1 = f"{root}/{segs[0]}"
+        l2 = f"{root}/{'/'.join(segs[:2])}" if len(segs) >= 2 else l1
+        return {"l0": root, "l1": l1, "l2": l2}
     if not segs:
-        if fallback_community is not None:
-            key = f"comm:{fallback_community}"
-            return {"l0": key, "l1": key, "l2": key}
         return {"l0": None, "l1": None, "l2": None}
     l0 = segs[0]
     l1 = "/".join(segs[:2]) if len(segs) >= 2 else l0
     l2 = "/".join(segs[:3]) if len(segs) >= 3 else l1
     return {"l0": l0, "l1": l1, "l2": l2}
+
+
+def infer_architectural_layer(
+    source_file: str | None,
+    file_type: str | None = None,
+    label: str | None = None,
+) -> str:
+    """Infer a coarse architectural layer for graph visualization color.
+
+    This deliberately uses boring path/name heuristics instead of a model:
+    it is deterministic, cheap, and good enough to make color encode
+    meaning while graphify's communities encode topology.
+    """
+    haystack = " ".join(
+        part for part in (source_file or "", file_type or "", label or "")
+        if part
+    ).replace("\\", "/").lower()
+    tokens = set(_WORD_RE.findall(haystack))
+
+    def has_any(words: set[str]) -> bool:
+        return bool(tokens.intersection(words))
+
+    if has_any({"test", "tests", "spec", "specs", "fixture", "fixtures"}):
+        return "test"
+    if has_any({"doc", "docs", "documentation", "readme", "markdown"}):
+        return "docs"
+    if has_any({"config", "settings", "manifest", "dockerfile", "compose"}):
+        return "config"
+    if has_any({"script", "scripts", "tool", "tools", "cli", "command", "commands"}):
+        return "tooling"
+    if has_any({
+        "ui", "web", "frontend", "front", "page", "pages", "component",
+        "components", "view", "views", "dashboard", "screen", "screens",
+    }):
+        return "ui"
+    if has_any({
+        "api", "route", "routes", "endpoint", "endpoints", "handler",
+        "handlers", "controller", "controllers", "server", "mcp",
+    }):
+        return "api"
+    if has_any({"service", "services", "engine", "engines", "worker", "workers"}):
+        return "service"
+    if has_any({
+        "db", "database", "data", "model", "models", "repo", "repos",
+        "repository", "repositories", "schema", "migration", "storage",
+    }):
+        return "data"
+    if has_any({"domain", "core", "entity", "entities"}):
+        return "domain"
+    return "other"
 
 
 def _pick_hub_entity(entities_ranked: list[tuple[dict, int]]) -> str:
