@@ -35,6 +35,7 @@ from typing import Optional
 # Ingested docs with these suffixes will be staged for the graph pass.
 GRAPHIFY_CODE_SUFFIXES = {
     ".py", ".ts", ".tsx", ".js", ".jsx", ".cs",
+    ".csproj", ".sln", ".props", ".targets", ".razor", ".cshtml", ".xaml",
     ".go", ".rs", ".java", ".rb", ".php", ".cpp", ".c", ".h", ".hpp",
     ".md",  # graphify also picks up heading structure from markdown
 }
@@ -231,7 +232,40 @@ def _path_prefix_label(nodes: list[dict], threshold: float = 0.6) -> str:
 _PATH_PREFIX_DROP = {
     "src", "app", "lib", "pkg", "source", "sources",
     "plugins", "services", "packages",
+    # Common C# / Unity wrapper folders. Keeping these as hierarchy
+    # regions makes customer graphs read as "Assets > Scripts" instead
+    # of the actual gameplay/API/domain area underneath.
+    "assets", "scripts", "runtime",
 }
+
+
+_CS_PROJECT_LAYER_HINTS = {
+    "api": "api",
+    "web": "ui",
+    "mvc": "ui",
+    "server": "api",
+    "application": "service",
+    "services": "service",
+    "infrastructure": "data",
+    "persistence": "data",
+    "data": "data",
+    "domain": "domain",
+    "core": "domain",
+    "shared": "domain",
+    "contracts": "domain",
+    "tests": "test",
+    "test": "test",
+}
+
+
+def _split_project_segment(segment: str) -> list[str]:
+    """Split C# project folders like ``Acme.Store.Api`` into tokens."""
+    spaced = _re.sub(
+        r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+        " ",
+        segment.replace(".", " "),
+    )
+    return [p.lower() for p in _WORD_RE.findall(spaced) if p]
 
 
 def compute_node_hierarchy(
@@ -282,38 +316,95 @@ def infer_architectural_layer(
         if part
     ).replace("\\", "/").lower()
     tokens = set(_WORD_RE.findall(haystack))
+    path = (source_file or "").replace("\\", "/")
+    path_lower = path.lower()
+    suffix = "." + path_lower.rsplit(".", 1)[-1] if "." in path_lower else ""
+    path_parts = [p for p in path.replace("\\", "/").split("/") if p]
+    project_token_list = [
+        tok
+        for part in path_parts
+        for tok in _split_project_segment(part)
+    ]
+    project_tokens = set(project_token_list)
 
     def has_any(words: set[str]) -> bool:
-        return bool(tokens.intersection(words))
+        return bool(tokens.intersection(words) or project_tokens.intersection(words))
+
+    if suffix in {".csproj", ".sln", ".props", ".targets"}:
+        return "config"
+    if any(name in path_lower for name in (
+        "appsettings.", "launchsettings.", "directory.build.",
+        "global.json", "nuget.config",
+    )):
+        return "config"
+    if path_lower.rsplit("/", 1)[-1] in {"program.cs", "startup.cs"}:
+        return "config"
+
+    for layer in ("test", "api", "ui", "service", "data", "domain"):
+        if any(_CS_PROJECT_LAYER_HINTS.get(token) == layer
+               for token in project_token_list):
+            return layer
 
     if has_any({"test", "tests", "spec", "specs", "fixture", "fixtures"}):
         return "test"
     if has_any({"doc", "docs", "documentation", "readme", "markdown"}):
         return "docs"
-    if has_any({"config", "settings", "manifest", "dockerfile", "compose"}):
+    if has_any({
+        "config", "settings", "manifest", "dockerfile", "compose",
+        "program", "startup", "host", "hosting", "properties",
+    }):
         return "config"
     if has_any({"script", "scripts", "tool", "tools", "cli", "command", "commands"}):
         return "tooling"
     if has_any({
         "ui", "web", "frontend", "front", "page", "pages", "component",
         "components", "view", "views", "dashboard", "screen", "screens",
+        "razor", "blazor", "viewmodel", "viewmodels", "xaml", "presenter",
+        "presenters",
     }):
         return "ui"
     if has_any({
         "api", "route", "routes", "endpoint", "endpoints", "handler",
         "handlers", "controller", "controllers", "server", "mcp",
+        "hub", "hubs", "grpc",
     }):
         return "api"
-    if has_any({"service", "services", "engine", "engines", "worker", "workers"}):
+    if has_any({
+        "service", "services", "engine", "engines", "worker", "workers",
+        "mediator", "mediatr", "command", "commands", "query", "queries",
+        "usecase", "usecases", "job", "jobs", "backgroundservice",
+    }):
         return "service"
     if has_any({
         "db", "database", "data", "model", "models", "repo", "repos",
         "repository", "repositories", "schema", "migration", "storage",
+        "dbcontext", "context", "contexts", "entityframework",
+        "configuration", "configurations",
     }):
         return "data"
-    if has_any({"domain", "core", "entity", "entities"}):
+    if has_any({
+        "domain", "core", "entity", "entities", "aggregate", "aggregates",
+        "valueobject", "valueobjects", "enum", "enums", "contract",
+        "contracts", "dto", "dtos",
+    }):
         return "domain"
     return "other"
+
+
+def display_label_for_graph_node(label: str | None, source_file: str | None = None) -> str:
+    """Return a viewer-friendly node label without changing graph ids.
+
+    Graphify emits C# member labels as ``.Method()``. That is faithful to
+    the AST, but it looks broken in a customer-facing graph. Strip only this
+    C#-specific leading dot; leave hidden/anonymous labels untouched.
+    """
+    text = str(label or "").strip()
+    if not text:
+        return text
+    sf = (source_file or "").replace("\\", "/").lower()
+    if sf.endswith(".cs") and text.startswith(".") and len(text) > 1:
+        return text[1:]
+    return text
 
 
 def _pick_hub_entity(entities_ranked: list[tuple[dict, int]]) -> str:

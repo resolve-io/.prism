@@ -542,6 +542,8 @@ class Brain:
 
     _INDEXABLE_SUFFIXES = {
         ".py", ".ts", ".tsx", ".js", ".jsx",
+        ".cs", ".csproj", ".sln", ".props", ".targets",
+        ".razor", ".cshtml", ".xaml",
         ".md", ".yaml", ".yml", ".json", ".txt", ".sh",
     }
 
