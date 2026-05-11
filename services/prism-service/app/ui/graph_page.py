@@ -14,6 +14,7 @@ from nicegui import app, ui
 from app.project_context import get_project
 from app.services.graph_service import (
     compute_node_hierarchy,
+    display_label_for_graph_node,
     infer_architectural_layer,
 )
 from app.ui.components.nav import create_nav, page_container
@@ -207,6 +208,10 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
     return `rgba(${m[1]},${m[2]},${m[3]},${a0 * a})`;
   }
   const LEVEL_FADE_MS = 240;
+  const L0_DENSE_COUNT = 120;
+  const L0_HUGE_COUNT = 240;
+  const RELAX_NODE_LIMIT = 80;
+  const L0_SUPER_EDGE_LIMIT = 900;
   // HSL round-trip utilities. Shading by degree modulates the L
   // channel while keeping H+S fixed, so every node in a layer shares
   // the base hue and saturation — only perceived lightness changes
@@ -548,16 +553,21 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           if (grp.ids.length > maxMembers) maxMembers = grp.ids.length;
         }
         const logMax = Math.log(1 + maxMembers) || 1;
-        // Top-K-by-size super-nodes get forceLabel; the rest let
-        // Sigma's labelDensity hide them when collisions occur.
-        // On a wide-extent project (resolve-platform: 30k graph
-        // units, 21 L0 keys), forcing every label produced an
-        // unreadable knot — by only labelling the dominant clusters,
-        // the rest still render
-        // as colored dots, hover/zoom reveals them on demand.
-        const LABEL_TOP_K = lvl === 0 ? 12 : 18;
         const ranked = [...groups.entries()]
           .sort((a, b) => b[1].ids.length - a[1].ids.length);
+        const rankByKey = new Map();
+        ranked.forEach(([k], idx) => rankByKey.set(k, idx));
+        const isDenseL0 = lvl === 0 && groups.size >= L0_DENSE_COUNT;
+        const isHugeL0 = lvl === 0 && groups.size >= L0_HUGE_COUNT;
+        // Top-K-by-size super-nodes get forceLabel; the rest let
+        // Sigma's labelDensity hide them when collisions occur.
+        // On massive L0 graphs, make that set smaller and keep
+        // unlabeled communities as compact colored landmarks. This
+        // preserves the full shape without turning the overview into
+        // a label layout problem.
+        const LABEL_TOP_K = lvl === 0
+          ? (isHugeL0 ? 6 : isDenseL0 ? 8 : 12)
+          : 18;
         const labelTopK = new Set();
         for (const [k] of ranked.slice(0, LABEL_TOP_K)) labelTopK.add(k);
         for (const [key, grp] of groups) {
@@ -582,7 +592,9 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           })();
           // Larger labels at higher abstraction levels so the L0 view
           // reads instantly. Sigma honors per-node labelSize.
-          const labelSizeForLevel = lvl === 0 ? 22 : lvl === 1 ? 18 : 15;
+          const labelSizeForLevel = lvl === 0
+            ? (isHugeL0 ? 16 : isDenseL0 ? 18 : 22)
+            : lvl === 1 ? 18 : 15;
           // Ancestor keys come from the leaves themselves, not from
           // splitting `key`; community-prefixed path keys need to keep
           // their exact ancestry for focus filtering.
@@ -600,22 +612,22 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           // settle into their natural homes.
           const targetX = grp.sx / n;
           const targetY = grp.sy / n;
-          const jx = (Math.random() - 0.5) * 8;
-          const jy = (Math.random() - 0.5) * 8;
+          const jx = (Math.random() - 0.5) * (isDenseL0 ? 3 : 8);
+          const jy = (Math.random() - 0.5) * (isDenseL0 ? 3 : 8);
           // Proportional log-scale radius, normalised so the level's
           // largest super-node hits SIZE_MAX and a singleton sits at
           // SIZE_MIN. Tighter than the old 8 + 4·log formula: 22 vs
           // 13 instead of 42.7 vs 10.7, so giants don't visually
           // swallow the tail and label collisions resolve cheaply.
-          const SIZE_MIN = 11;
-          const SIZE_RANGE = 11;
+          const SIZE_MIN = isHugeL0 ? 6 : isDenseL0 ? 8 : 11;
+          const SIZE_RANGE = isHugeL0 ? 7 : isDenseL0 ? 8 : 11;
           const sizeForN = SIZE_MIN
             + SIZE_RANGE * (Math.log(1 + n) / logMax);
           g.addNode(`__super__${lvl}__${key}`, {
             label: labelText,
             level: lvl,
-            x: targetX * 0.18 + jx,
-            y: targetY * 0.18 + jy,
+            x: targetX * (isDenseL0 ? 0.35 : 0.18) + jx,
+            y: targetY * (isDenseL0 ? 0.35 : 0.18) + jy,
             targetX, targetY,
             size: sizeForN,
             color: colorForLayer(bestLayer),
@@ -625,6 +637,8 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
             communitySummary: clusterSummary(bestC),
             memberCount: n,
             labelSize: labelSizeForLevel,
+            rank: rankByKey.get(key) || 0,
+            denseOverview: isDenseL0,
             // Per-node forceLabel — top-K always show; rest defer to
             // labelDensity. Reducer-side hover override still wins, so
             // any cluster can be identified by mousing over it.
@@ -651,7 +665,13 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           else agg.set(key, { a, b, count: 1 });
         });
         let added = 0;
-        for (const v of agg.values()) {
+        let values = [...agg.values()];
+        if (lvl === 0 && values.length > L0_SUPER_EDGE_LIMIT) {
+          values = values
+            .sort((a, b) => b.count - a.count)
+            .slice(0, L0_SUPER_EDGE_LIMIT);
+        }
+        for (const v of values) {
           const sId = `__super__${lvl}__${v.a}`;
           const tId = `__super__${lvl}__${v.b}`;
           if (!g.hasNode(sId) || !g.hasNode(tId)) continue;
@@ -736,10 +756,23 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       function labelRelaxStep() {
         let totalMove = 0;
         for (const lvl of [0, 1, 2]) {
-          const ids = [];
+          const candidates = [];
           g.forEachNode((id, attrs) => {
-            if (attrs.level === lvl) ids.push(id);
+            if (attrs.level === lvl) candidates.push({
+              id,
+              forceLabel: !!attrs.forceLabel,
+              memberCount: attrs.memberCount || 0,
+            });
           });
+          if (candidates.length > RELAX_NODE_LIMIT) {
+            candidates.sort((a, b) =>
+              Number(b.forceLabel) - Number(a.forceLabel)
+              || b.memberCount - a.memberCount
+            );
+          }
+          const ids = candidates
+            .slice(0, RELAX_NODE_LIMIT)
+            .map(item => item.id);
           if (ids.length < 2) continue;
           const px = new Float64Array(ids.length);
           const py = new Float64Array(ids.length);
@@ -916,7 +949,10 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         const hint = focusPath.length > 0
           ? " · click empty to back out"
           : " · scroll to zoom";
-        return `L${currentLevel}${trail} · ${where} · FA2 ${layoutElapsed}s${hint}`;
+        const scaleHint = currentLevel === 0 && lodCount[0] >= L0_DENSE_COUNT
+          ? " · high-scale overview"
+          : "";
+        return `L${currentLevel}${trail} · ${where} · FA2 ${layoutElapsed}s${scaleHint}${hint}`;
       };
       let inspectorPinned = false;
       function escapeHtml(value) {
@@ -1106,13 +1142,10 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       const drawNodeHover = (ctx, d, s) => drawNodeLabelOutlined(ctx, d, s, 1.15);
 
       const renderer = new Sigma(g, document.getElementById("graph"), {
-        // labelDensity tightened + labelGridCellSize bumped so non-
-        // forceLabel super-nodes (everything outside the top-K) only
-        // paint their label when there's room. The wide-extent
-        // resolve-platform L0 used to render 21 colliding labels —
-        // now only dominant regions force labels, and the rest reveal
-        // on hover or as the user zooms in.
-        labelDensity: 0.10, labelGridCellSize: 140, minCameraRatio: 0.04,
+        // Keep overview labels selective. Dense L0 graphs explicitly
+        // label only the dominant communities; Sigma can opportunistically
+        // place the rest when there is room.
+        labelDensity: 0.08, labelGridCellSize: 160, minCameraRatio: 0.04,
         maxCameraRatio: 30, defaultNodeColor: "#6b7280",
         defaultEdgeColor: "rgba(107,114,128,0.3)",
         renderEdgeLabels: false,
@@ -1201,6 +1234,12 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           // buildSupers; the rest defer to labelDensity so wide-extent
           // graphs don't paint 21 labels on top of each other. Hover
           // branch above already force-shows whichever node is hovered.
+          if (!wholeGraphMode && data.level === 0
+              && lodCount[0] >= L0_DENSE_COUNT
+              && !data.forceLabel
+              && node !== hoveredNode && node !== focusedNode) {
+            out = { ...out, label: "", forceLabel: false };
+          }
           if (wholeGraphMode && node !== hoveredNode && node !== focusedNode) {
             return {
               ...out,
@@ -1870,12 +1909,14 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
 
       const fadeMs = 450;
       const SKIP_REVEAL_BELOW = 5;
-      const shouldAnimate = !skipped && l0Items.length >= SKIP_REVEAL_BELOW;
+      const shouldAnimate = !skipped
+        && l0Items.length >= SKIP_REVEAL_BELOW
+        && l0Items.length < L0_DENSE_COUNT;
 
       if (shouldAnimate) {
         const revealBudget = 1600;
         const staggerMs = l0Items.length > 1
-          ? Math.max(60, Math.min(180,
+          ? Math.max(18, Math.min(120,
               (revealBudget - fadeMs) / (l0Items.length - 1)))
           : 0;
         const startTime = new Map();
@@ -2021,7 +2062,17 @@ def _graphify_hierarchy(project_id: str):
         )
         # Mark leaves as level 3 so the client doesn't have to special-case
         # them after super-nodes are added with level 0/1/2.
-        out_nodes.append({**n, "level": 3, "layer": layer, **h})
+        display_label = display_label_for_graph_node(
+            n.get("label") or n.get("id"),
+            n.get("source_file"),
+        )
+        out_nodes.append({
+            **n,
+            "label": display_label,
+            "level": 3,
+            "layer": layer,
+            **h,
+        })
 
     # Pull DB-derived community labels so super-nodes that fall back to
     # comm:<id> at L0 (flat repos) get a human label instead of the raw id.
