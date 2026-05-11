@@ -714,6 +714,9 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         1: buildSupers("l1", 1),
         2: buildSupers("l2", 2),
       };
+      const overviewLevel = lodCount[0] > 0 ? 0 : 3;
+      currentLevel = overviewLevel;
+      prevLevel = overviewLevel;
       buildSuperEdges("l0", 0);
       buildSuperEdges("l1", 1);
       buildSuperEdges("l2", 2);
@@ -1359,7 +1362,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       // physics first settles (see startPhysics tick).
       camera.setState({ x: 0.5, y: 0.5, ratio: 1.0 });
       currentRatio = 1.0;
-      currentLevel = 0;
+      currentLevel = overviewLevel;
       let lodAnchorRatio = 1.0;
       let lodLockedUntil = 0;
       const LOD_ZOOM_IN_RATIO = 0.52;
@@ -1369,6 +1372,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       // ratio=1.8 left a tiny L0 blob floating in 92% empty canvas
       // when the full graph extent (driven by L3 leaves) is huge.
       function fitCameraToLevel(targetLvl, opts = {}) {
+        if (targetLvl < 3 && lodCount[targetLvl] === 0) targetLvl = 3;
         let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
         let count = 0;
         g.forEachNode((id, attrs) => {
@@ -1440,6 +1444,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       // (status text, legend rebuild, physics nudge), and refreshes.
       function setLevel(next, opts = {}) {
         next = Math.max(0, Math.min(3, next));
+        if (next < 3 && lodCount[next] === 0) next = 3;
         if (!opts.keepWhole) wholeGraphMode = false;
         if (next === currentLevel) return;
         prevLevel = currentLevel;
@@ -1465,8 +1470,8 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         inspectorPinned = false;
         updateInspector(null);
         focusPath = [];
-        if (currentLevel !== 0) {
-          setLevel(0, { anchorRatio: currentRatio, lockMs: 650 });
+        if (currentLevel !== overviewLevel) {
+          setLevel(overviewLevel, { anchorRatio: currentRatio, lockMs: 650 });
         } else {
           statusEl.textContent = baseStatus();
           rebuildLegend();
@@ -1474,7 +1479,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           renderer.refresh();
           startPhysics();
         }
-        fitCameraToLevel(0, { duration: 650, lockMs: 720 });
+        fitCameraToLevel(overviewLevel, { duration: 650, lockMs: 720 });
       }
 
       function backOneLevel() {
