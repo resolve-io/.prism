@@ -26,6 +26,9 @@ _SAFE_PROJECT_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 # because they capped at ~11K nodes and the Sigma viewer covers every
 # size graphify can produce.
 _ALLOWED_VISUAL_FILES = {"graph.json"}
+_CS_SUFFIXES = (".cs", ".csx", ".razor.cs")
+_TS_JS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte")
+_VISUAL_MEMBER_LIMIT = 80
 
 
 _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
@@ -110,6 +113,10 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
   .inspector-value { color: #e5e7eb; text-align: right; overflow-wrap: anywhere; }
   .inspector-summary { margin-top: 9px; color: #aab4c8; }
   .inspector-neighbors { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .inspector-symbols { margin-top: 10px; border-top: 1px solid #252545; padding-top: 8px; }
+  .inspector-symbol { color: #cbd5e1; font-size: 11px; line-height: 1.35;
+                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inspector-symbol-more { color: #7f8aa3; font-size: 10px; margin-top: 4px; }
   .neighbor-pill { max-width: 100%; padding: 2px 6px; border-radius: 999px;
                    background: #24243d; color: #dbe4f0; font-size: 11px;
                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -131,7 +138,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
 <aside id="sidebar">
   <div id="legend-wrap">
     <div id="search-wrap">
-      <input id="graph-search" type="search" placeholder="Search regions and symbols" autocomplete="off" />
+      <input id="graph-search" type="search" placeholder="Search regions, types, and files" autocomplete="off" />
       <div id="search-results"></div>
       <div id="layer-filters"></div>
       <div id="relation-filters"></div>
@@ -363,6 +370,10 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       // Edges that touched them get skipped by the hasNode guard below.
       const nodes = rawNodes.filter(n => n.file_type !== "rationale");
       const dropped = rawNodes.length - nodes.length;
+      const totalMembers = nodes.reduce(
+        (sum, n) => sum + (n.member_count || n.symbol_count || 1),
+        0
+      );
 
       statusEl.textContent = `Loading ${nodes.length.toLocaleString()} nodes, `
         + `${edges.length.toLocaleString()} edges`
@@ -421,6 +432,9 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
             sourceFile: n.source_file || "",
             sourceLocation: n.source_location || "",
             fileType: n.file_type || "",
+            visualKind: n.visual_kind || n.file_type || "symbol",
+            memberCount: n.member_count || n.symbol_count || 1,
+            symbols: Array.isArray(n.symbols) ? n.symbols : [],
             // L3 = leaf. Parent keys at L0/L1/L2 are emitted by the
             // server from the file path; the LOD pass below uses them
             // to assemble super-nodes after FA2 settles.
@@ -468,6 +482,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
               confidenceScore: e.confidence_score || null,
               sourceLocation: e.source_location || "",
               callSiteFile: e.source_file || "",
+              aggregateCount: e.aggregate_count || 1,
             });
             edgesDrawn++;
           } catch (_) {}
@@ -528,6 +543,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           if (!k) return;
           if (!groups.has(k)) groups.set(k, {
             ids: [], sx: 0, sy: 0, comm: new Map(), layer: new Map(),
+            symbolCount: 0,
             // Capture the leaves' ancestor keys so descendants retain
             // their exact community/path lineage. Splitting keys later
             // would lose that lineage for comm:<id>/path combinations.
@@ -536,6 +552,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           const grp = groups.get(k);
           grp.ids.push(id);
           grp.sx += attrs.x; grp.sy += attrs.y;
+          grp.symbolCount += attrs.memberCount || 1;
           const c = attrs.community ?? "_";
           grp.comm.set(c, (grp.comm.get(c) || 0) + 1);
           const layer = attrs.layer || "other";
@@ -636,6 +653,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
             communityLabel: labelText,
             communitySummary: clusterSummary(bestC),
             memberCount: n,
+            symbolCount: grp.symbolCount,
             labelSize: labelSizeForLevel,
             rank: rankByKey.get(key) || 0,
             denseOverview: isDenseL0,
@@ -917,7 +935,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       // closure picks up whatever value it holds when baseStatus() is
       // called, so click handlers reading the status get the right text.
       let layoutElapsed = "...";
-      const LEVEL_NAMES = ["communities", "regions", "modules", "symbols"];
+      const LEVEL_NAMES = ["communities", "regions", "modules", "leaves"];
       // Counts items the LOD reducer would paint right now — i.e., at
       // currentLevel and inside the active focus subtree if any. So
       // status reads what the user actually sees, not raw level totals.
@@ -936,7 +954,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       const baseStatus = () => {
         const showing = visibleCount();
         if (wholeGraphMode) {
-          return `Whole graph · ${showing.toLocaleString()} symbols · `
+          return `Whole graph · ${showing.toLocaleString()} leaves · `
             + `FA2 ${layoutElapsed}s · scroll in for communities`;
         }
         const where = `${showing.toLocaleString()} ${LEVEL_NAMES[currentLevel]}`;
@@ -979,7 +997,8 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         }
         const attrs = g.getNodeAttributes(node);
         const isLeaf = attrs.level === 3;
-        const type = isLeaf ? "symbol" : LEVEL_NAMES[attrs.level] || "region";
+        const visualKind = attrs.visualKind || attrs.fileType || "symbol";
+        const type = isLeaf ? visualKind : LEVEL_NAMES[attrs.level] || "region";
         const degree = g.degree(node);
         const rows = [
           ["type", type],
@@ -987,12 +1006,14 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           ["region", attrs.communityLabel || "unlabeled"],
         ];
         if (isLeaf) {
+          if (attrs.memberCount && attrs.memberCount > 1) rows.push(["members", attrs.memberCount]);
           rows.push(["degree", degree]);
           if (attrs.fileType) rows.push(["kind", attrs.fileType]);
           if (attrs.sourceFile) rows.push(["file", attrs.sourceFile]);
           if (attrs.sourceLocation) rows.push(["loc", attrs.sourceLocation]);
         } else {
-          rows.push(["symbols", attrs.memberCount || 0]);
+          rows.push(["leaves", attrs.memberCount || 0]);
+          if (attrs.symbolCount) rows.push(["members", attrs.symbolCount]);
         }
         const neighbors = (isLeaf && leafAdj.has(node)
             ? leafAdj.get(node)
@@ -1004,7 +1025,19 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
             relation: relationLabel(item),
             label: compactLabel(g.getNodeAttribute(item.id, "label") || item.id),
           }));
-        const summary = attrs.communitySummary || "";
+        const symbols = Array.isArray(attrs.symbols) ? attrs.symbols : [];
+        const visibleSymbols = symbols.slice(0, 12);
+        const symbolList = isLeaf && visibleSymbols.length && attrs.memberCount > 1
+          ? `<div class="inspector-symbols">`
+            + visibleSymbols.map(s =>
+                `<div class="inspector-symbol">${escapeHtml(s.label || s.id || "")}</div>`
+              ).join("")
+            + (attrs.memberCount > visibleSymbols.length
+                ? `<div class="inspector-symbol-more">+${escapeHtml(attrs.memberCount - visibleSymbols.length)} more</div>`
+                : "")
+            + `</div>`
+          : "";
+        const summary = isLeaf ? "" : attrs.communitySummary || "";
         el.className = "";
         el.innerHTML =
           `<div class="inspector-title">${escapeHtml(attrs.label || node)}</div>`
@@ -1017,6 +1050,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           + (summary
               ? `<div class="inspector-summary">${escapeHtml(summary)}</div>`
               : "")
+          + symbolList
           + (neighbors.length
               ? `<div class="inspector-neighbors">`
                 + neighbors.map(n =>
@@ -1575,7 +1609,8 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
             ? ` · ${attrs.communitySummary}`
             : "";
           statusEl.textContent = `${attrs.label} · `
-            + `${(attrs.memberCount || 0).toLocaleString()} symbols`
+            + `${(attrs.memberCount || 0).toLocaleString()} leaves`
+            + (attrs.symbolCount ? ` · ${attrs.symbolCount.toLocaleString()} members` : "")
             + ` · layer ${attrs.layer || "other"}${summary}`;
           camera.animate(
             { x: target.x, y: target.y, ratio: tgtRatio },
@@ -1587,7 +1622,9 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         focusedNode = node;
         neighborSet = new Set(g.neighbors(node));
         statusEl.textContent = `${attrs.label} `
-          + `(region: ${attrs.communityLabel || "unlabeled region"}, `
+          + `(${attrs.visualKind || attrs.fileType || "leaf"}, `
+          + `${(attrs.memberCount || 1).toLocaleString()} members, `
+          + `region: ${attrs.communityLabel || "unlabeled region"}, `
           + `layer ${attrs.layer || "other"}, `
           + `degree ${g.degree(node)}) — `
           + `click empty space to clear focus`;
@@ -1641,7 +1678,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           { duration: 680 },
         );
         statusEl.textContent = `${attrs.label || node} · `
-          + `${LEVEL_NAMES[level] || "symbol"} · layer ${attrs.layer || "other"}`;
+          + `${LEVEL_NAMES[level] || "leaf"} · layer ${attrs.layer || "other"}`;
         renderBreadcrumb();
         renderer.refresh();
       }
@@ -1651,6 +1688,9 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         if (!input || !resultsEl) return;
         const index = [];
         g.forEachNode((id, attrs) => {
+          const symbolText = Array.isArray(attrs.symbols)
+            ? attrs.symbols.map(s => [s.label || "", s.source_file || ""].join(" ")).join(" ")
+            : "";
           index.push({
             id,
             label: attrs.label || id,
@@ -1666,6 +1706,8 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
               attrs.sourceFile || "",
               attrs.sourceLocation || "",
               attrs.fileType || "",
+              attrs.visualKind || "",
+              symbolText,
             ].join(" ").toLowerCase(),
           });
         });
@@ -1696,7 +1738,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           resultsEl.innerHTML = hits.map((item, idx) =>
             `<div class="search-result" data-idx="${idx}">`
             + `<div class="search-title">${escapeHtml(item.label)}</div>`
-            + `<div class="search-meta">L${item.level} ${escapeHtml(LEVEL_NAMES[item.level] || "symbol")}`
+            + `<div class="search-meta">L${item.level} ${escapeHtml(LEVEL_NAMES[item.level] || "leaf")}`
             + ` · ${escapeHtml(item.layer)} · ${escapeHtml(compactLabel(item.region))}</div>`
             + `</div>`
           ).join("");
@@ -1735,7 +1777,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           );
         el.innerHTML = order.map(layer =>
           `<button class="filter-chip layer-chip" type="button" data-layer="${escapeHtml(layer)}" `
-          + `title="${escapeHtml(counts.get(layer) || 0)} symbols">`
+          + `title="${escapeHtml(counts.get(layer) || 0)} leaves">`
           + `<span class="layer-chip-dot" style="background:${colorForLayer(layer)}"></span>`
           + `${escapeHtml(layer)}`
           + `</button>`
@@ -1885,7 +1927,8 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         document.getElementById("sidebar-stats").textContent =
           `L${currentLevel} (${LEVEL_NAMES[currentLevel]}) · `
           + `${items.length.toLocaleString()} categories · `
-          + `${nodes.length.toLocaleString()} symbols total`;
+          + `${nodes.length.toLocaleString()} leaves · `
+          + `${totalMembers.toLocaleString()} members`;
       }
       rebuildLegend();
       setupSearch();
@@ -1964,6 +2007,235 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
 </script>
 </body>
 </html>"""
+
+
+def _path_key(path: str | None) -> str:
+    return str(path or "").replace("\\", "/").strip()
+
+
+def _path_suffix(path: str | None) -> str:
+    lower = _path_key(path).lower()
+    for suffix in (".razor.cs",):
+        if lower.endswith(suffix):
+            return suffix
+    idx = lower.rfind(".")
+    return lower[idx:] if idx >= 0 else ""
+
+
+def _file_stem(path: str | None) -> str:
+    name = _path_key(path).split("/")[-1]
+    lower = name.lower()
+    if lower.endswith(".razor.cs"):
+        return name[:-9]
+    if "." in name:
+        return name.rsplit(".", 1)[0]
+    return name or "unknown"
+
+
+def _symbol_key(label: str | None) -> str:
+    value = str(label or "").strip().lstrip(".")
+    value = re.sub(r"\(.*\)$", "", value)
+    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+
+
+def _graph_node_id(node: dict) -> str:
+    return str(node.get("id") or node.get("key") or "")
+
+
+def _edge_endpoint(edge: dict, primary: str) -> str | None:
+    if primary == "source":
+        value = edge.get("source") or edge.get("from") or edge.get("source_id")
+    else:
+        value = edge.get("target") or edge.get("to") or edge.get("target_id")
+    return str(value) if value is not None else None
+
+
+def _visual_member(node: dict) -> dict:
+    label = display_label_for_graph_node(
+        node.get("label") or _graph_node_id(node),
+        node.get("source_file"),
+    )
+    return {
+        "id": _graph_node_id(node),
+        "label": label,
+        "source_file": node.get("source_file") or "",
+        "source_location": node.get("source_location") or "",
+        "file_type": node.get("file_type") or "",
+    }
+
+
+def _csharp_owner_index(nodes: list[dict]) -> dict[str, str]:
+    owners: dict[str, str] = {}
+    for node in nodes:
+        source_file = node.get("source_file")
+        if _path_suffix(source_file) not in _CS_SUFFIXES:
+            continue
+        label = str(node.get("label") or "")
+        if label.startswith("."):
+            continue
+        node_id = _graph_node_id(node)
+        if not node_id:
+            continue
+        owners[node_id] = display_label_for_graph_node(label, source_file)
+    return owners
+
+
+def _csharp_visual_leaf(node: dict, owner_labels: dict[str, str]) -> tuple[str, str]:
+    node_id = _graph_node_id(node)
+    source_file = _path_key(node.get("source_file"))
+    label = str(node.get("label") or node_id)
+    owner_id = node_id
+    owner_label = display_label_for_graph_node(label, source_file)
+
+    if label.startswith("."):
+        method_key = _symbol_key(label)
+        prefix = f"{node_id[: -(len(method_key) + 1)]}" if method_key else ""
+        if method_key and node_id.endswith(f"_{method_key}") and prefix in owner_labels:
+            owner_id = prefix
+            owner_label = owner_labels[prefix]
+        else:
+            owner_id = f"file:{source_file or node_id}"
+            owner_label = _file_stem(source_file) or owner_label
+    elif node_id in owner_labels:
+        owner_label = owner_labels[node_id]
+
+    return f"type::{source_file or 'unknown'}::{owner_id}", owner_label
+
+
+def _visual_leaf_for_node(node: dict, owner_labels: dict[str, str]) -> tuple[str, str, str]:
+    source_file = _path_key(node.get("source_file"))
+    suffix = _path_suffix(source_file)
+    node_id = _graph_node_id(node)
+    if suffix in _CS_SUFFIXES:
+        visual_id, label = _csharp_visual_leaf(node, owner_labels)
+        return visual_id, label, "type"
+    if suffix in _TS_JS_SUFFIXES or node.get("file_type") == "unresolved_call":
+        label = _file_stem(source_file) or display_label_for_graph_node(
+            node.get("label") or node_id,
+            source_file,
+        )
+        return f"file::{source_file or node_id}", label, "file"
+    label = display_label_for_graph_node(node.get("label") or node_id, source_file)
+    return node_id, label, "symbol"
+
+
+def _most_common_value(counter: Counter) -> object | None:
+    for value, _count in counter.most_common():
+        if value is not None and value != "":
+            return value
+    return None
+
+
+def _visual_file_type(node: dict, visual_kind: str) -> str:
+    if visual_kind in {"type", "file"}:
+        return visual_kind
+    return str(node.get("file_type") or visual_kind)
+
+
+def _collapse_visual_graph(
+    raw_nodes: list[dict],
+    raw_edges: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    """Collapse graphify symbol leaves into product-level visual leaves.
+
+    C# visual leaves represent owning types. TypeScript/JavaScript visual
+    leaves represent files. The original methods/functions stay available
+    as an outline in the inspector and search index, but they no longer
+    dominate the graph layout.
+    """
+    owner_labels = _csharp_owner_index(raw_nodes)
+    groups: dict[str, dict] = {}
+    raw_to_visual: dict[str, str] = {}
+
+    for node in raw_nodes:
+        node_id = _graph_node_id(node)
+        if not node_id:
+            continue
+        visual_id, visual_label, visual_kind = _visual_leaf_for_node(node, owner_labels)
+        raw_to_visual[node_id] = visual_id
+        group = groups.setdefault(
+            visual_id,
+            {
+                "id": visual_id,
+                "label": visual_label,
+                "visual_kind": visual_kind,
+                "source_file": _path_key(node.get("source_file")),
+                "source_location": node.get("source_location") or "",
+                "file_type": _visual_file_type(node, visual_kind),
+                "members": [],
+                "communities": Counter(),
+                "layers": Counter(),
+            },
+        )
+        if visual_kind != "symbol" and group["visual_kind"] == "symbol":
+            group["visual_kind"] = visual_kind
+            group["file_type"] = visual_kind
+        if not group.get("source_file") and node.get("source_file"):
+            group["source_file"] = _path_key(node.get("source_file"))
+        if not group.get("source_location") and node.get("source_location"):
+            group["source_location"] = node.get("source_location")
+        group["members"].append(_visual_member(node))
+        group["communities"][node.get("community")] += 1
+        layer = infer_architectural_layer(
+            node.get("source_file"),
+            file_type=node.get("file_type"),
+            label=node.get("label") or node_id,
+        )
+        group["layers"][layer] += 1
+
+    out_nodes: list[dict] = []
+    for group in groups.values():
+        community = _most_common_value(group["communities"])
+        layer = _most_common_value(group["layers"]) or infer_architectural_layer(
+            group.get("source_file"),
+            file_type=group.get("file_type"),
+            label=group.get("label"),
+        )
+        hierarchy = compute_node_hierarchy(
+            group.get("source_file"),
+            fallback_community=community,
+        )
+        members = group["members"]
+        out_nodes.append({
+            "id": group["id"],
+            "label": group["label"],
+            "visual_kind": group["visual_kind"],
+            "file_type": group["file_type"],
+            "source_file": group.get("source_file") or "",
+            "source_location": group.get("source_location") or "",
+            "level": 3,
+            "layer": layer,
+            "community": community,
+            "member_count": len(members),
+            "symbol_count": len(members),
+            "symbols": members[:_VISUAL_MEMBER_LIMIT],
+            **hierarchy,
+        })
+
+    edge_groups: dict[tuple[str, str, str], dict] = {}
+    for edge in raw_edges:
+        source = _edge_endpoint(edge, "source")
+        target = _edge_endpoint(edge, "target")
+        visual_source = raw_to_visual.get(source or "")
+        visual_target = raw_to_visual.get(target or "")
+        if not visual_source or not visual_target or visual_source == visual_target:
+            continue
+        relation = str(edge.get("relation") or edge.get("kind") or edge.get("type") or "related")
+        key = (visual_source, visual_target, relation)
+        aggregate = edge_groups.setdefault(
+            key,
+            {
+                **edge,
+                "source": visual_source,
+                "target": visual_target,
+                "relation": relation,
+                "aggregate_count": 0,
+            },
+        )
+        aggregate["aggregate_count"] += 1
+        aggregate["weight"] = aggregate["aggregate_count"]
+
+    return out_nodes, list(edge_groups.values())
 
 
 @app.get("/graphify-visual/{project_id}/communities.json")
@@ -2048,31 +2320,7 @@ def _graphify_hierarchy(project_id: str):
         if n.get("file_type") != "rationale"
     ]
     raw_edges = data.get("links") or data.get("edges") or []
-
-    out_nodes = []
-    for n in raw_nodes:
-        h = compute_node_hierarchy(
-            n.get("source_file"),
-            fallback_community=n.get("community"),
-        )
-        layer = infer_architectural_layer(
-            n.get("source_file"),
-            file_type=n.get("file_type"),
-            label=n.get("label") or n.get("id"),
-        )
-        # Mark leaves as level 3 so the client doesn't have to special-case
-        # them after super-nodes are added with level 0/1/2.
-        display_label = display_label_for_graph_node(
-            n.get("label") or n.get("id"),
-            n.get("source_file"),
-        )
-        out_nodes.append({
-            **n,
-            "label": display_label,
-            "level": 3,
-            "layer": layer,
-            **h,
-        })
+    out_nodes, out_edges = _collapse_visual_graph(raw_nodes, raw_edges)
 
     # Pull DB-derived community labels so super-nodes that fall back to
     # comm:<id> at L0 (flat repos) get a human label instead of the raw id.
@@ -2113,7 +2361,7 @@ def _graphify_hierarchy(project_id: str):
 
     return JSONResponse({
         "nodes": out_nodes,
-        "edges": raw_edges,
+        "edges": out_edges,
         "community_labels": comm_labels,
         "community_meta": comm_meta,
     })

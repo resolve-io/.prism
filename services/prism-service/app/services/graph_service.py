@@ -410,7 +410,8 @@ def compute_node_hierarchy(
     if fallback_community is not None:
         root = f"comm:{fallback_community}"
         if not segs:
-            return {"l0": root, "l1": root, "l2": root}
+            l1 = f"external/{root}"
+            return {"l0": "external", "l1": l1, "l2": l1}
         l1 = f"{root}/{segs[0]}"
         l2 = f"{root}/{'/'.join(segs[:2])}" if len(segs) >= 2 else l1
         return {"l0": root, "l1": l1, "l2": l2}
