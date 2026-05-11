@@ -39,6 +39,30 @@ def test_node_hierarchy_preserves_path_fallback_without_community():
     }
 
 
+def test_node_hierarchy_collapses_orphan_communities_under_external():
+    from app.services.graph_service import compute_node_hierarchy
+
+    hierarchy = compute_node_hierarchy(None, fallback_community=1530)
+
+    assert hierarchy == {
+        "l0": "external",
+        "l1": "external/comm:1530",
+        "l2": "external/comm:1530",
+    }
+
+
+def test_node_hierarchy_treats_bcl_like_symbols_as_external():
+    from app.services.graph_service import compute_node_hierarchy
+
+    hierarchy = compute_node_hierarchy("System.String", fallback_community=629)
+
+    assert hierarchy == {
+        "l0": "external",
+        "l1": "external/comm:629",
+        "l2": "external/comm:629",
+    }
+
+
 def test_architectural_layer_inference_prefers_semantic_roles():
     from app.services.graph_service import infer_architectural_layer
 
