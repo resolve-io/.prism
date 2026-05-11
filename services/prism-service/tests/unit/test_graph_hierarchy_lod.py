@@ -63,6 +63,18 @@ def test_node_hierarchy_treats_bcl_like_symbols_as_external():
     }
 
 
+def test_node_hierarchy_uses_external_without_source_or_community():
+    from app.services.graph_service import compute_node_hierarchy
+
+    hierarchy = compute_node_hierarchy(None, fallback_community=None)
+
+    assert hierarchy == {
+        "l0": "external",
+        "l1": "external",
+        "l2": "external",
+    }
+
+
 def test_architectural_layer_inference_prefers_semantic_roles():
     from app.services.graph_service import infer_architectural_layer
 
@@ -191,6 +203,25 @@ def test_graph_viewer_aggregates_edges_between_visual_leaves():
     assert edges[0]["aggregate_count"] == 2
     assert edges[0]["source"].startswith("type::")
     assert edges[0]["target"].startswith("file::")
+
+
+def test_graph_viewer_keeps_orphan_nodes_visible_at_l0():
+    from app.ui.graph_page import _collapse_visual_graph
+
+    raw_nodes = [
+        {
+            "id": "system_string_length",
+            "label": "Length",
+            "file_type": "property",
+        },
+    ]
+
+    nodes, _edges = _collapse_visual_graph(raw_nodes, [])
+
+    assert len(nodes) == 1
+    assert nodes[0]["l0"] == "external"
+    assert nodes[0]["l1"] == "external"
+    assert nodes[0]["l2"] == "external"
 
 
 def test_node_hierarchy_skips_unity_wrapper_dirs():

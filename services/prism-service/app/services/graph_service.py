@@ -416,7 +416,7 @@ def compute_node_hierarchy(
         l2 = f"{root}/{'/'.join(segs[:2])}" if len(segs) >= 2 else l1
         return {"l0": root, "l1": l1, "l2": l2}
     if not segs:
-        return {"l0": None, "l1": None, "l2": None}
+        return {"l0": "external", "l1": "external", "l2": "external"}
     l0 = segs[0]
     l1 = "/".join(segs[:2]) if len(segs) >= 2 else l0
     l2 = "/".join(segs[:3]) if len(segs) >= 3 else l1
