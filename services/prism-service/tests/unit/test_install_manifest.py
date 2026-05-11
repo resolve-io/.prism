@@ -288,6 +288,9 @@ def test_session_start_emits_additional_context_field():
     assert "janitor_check" in content
     assert "hookSpecificOutput" in content
     assert "additionalContext" in content
+    assert "--background" in content
+    assert "DETACHED_PROCESS" in content
+    assert "start_new_session" in content
 
 
 def test_session_start_no_tag_when_not_ready():
@@ -295,6 +298,21 @@ def test_session_start_no_tag_when_not_ready():
     files = _files_by_path(_manifest())
     content = files[".claude/hooks/prism-sync.py"]["content"]
     assert 'payload.get("ready")' in content or "payload.get('ready')" in content
+
+
+def test_heavy_stop_hooks_detach_before_mcp_work():
+    files = _files_by_path(_manifest())
+    for path in (
+        ".claude/hooks/prism-idle-rebuild.py",
+        ".claude/hooks/prism-verifier.py",
+    ):
+        content = files[path]["content"]
+        assert "def _detach_or_continue()" in content
+        assert "_detach_or_continue()" in content
+        assert "--detached" in content
+        assert "subprocess.Popen" in content
+        assert "DETACHED_PROCESS" in content
+        assert "start_new_session" in content
 
 
 def test_mark_stale_idempotent_snippet():
