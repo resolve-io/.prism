@@ -68,6 +68,107 @@ def test_csharp_viewer_labels_strip_ast_member_dot():
     assert display_label_for_graph_node(".Bar()", "src/widget.ts") == ".Bar()"
 
 
+def test_graph_viewer_rolls_csharp_methods_up_to_owner_type():
+    from app.ui.graph_page import _collapse_visual_graph
+
+    raw_nodes = [
+        {
+            "id": "basenode_basenode",
+            "label": "BaseNode",
+            "source_file": "src/Core/BaseNode.cs",
+            "file_type": "class",
+            "community": 7,
+        },
+        {
+            "id": "basenode_basenode_tostring",
+            "label": ".ToString()",
+            "source_file": "src/Core/BaseNode.cs",
+            "file_type": "method",
+            "community": 7,
+        },
+    ]
+
+    nodes, edges = _collapse_visual_graph(raw_nodes, [])
+
+    assert edges == []
+    assert len(nodes) == 1
+    assert nodes[0]["label"] == "BaseNode"
+    assert nodes[0]["visual_kind"] == "type"
+    assert nodes[0]["member_count"] == 2
+    assert {symbol["label"] for symbol in nodes[0]["symbols"]} == {
+        "BaseNode",
+        "ToString()",
+    }
+
+
+def test_graph_viewer_rolls_typescript_symbols_up_to_file():
+    from app.ui.graph_page import _collapse_visual_graph
+
+    raw_nodes = [
+        {
+            "id": "dynamic_form_service_notifybeforesave",
+            "label": ".notifyBeforeSave()",
+            "source_file": "src/app/dynamic-form-service.ts",
+            "file_type": "method",
+            "community": 3,
+        },
+        {
+            "id": "dynamic_form_service_validate",
+            "label": "validate()",
+            "source_file": "src/app/dynamic-form-service.ts",
+            "file_type": "function",
+            "community": 3,
+        },
+    ]
+
+    nodes, _edges = _collapse_visual_graph(raw_nodes, [])
+
+    assert len(nodes) == 1
+    assert nodes[0]["label"] == "dynamic-form-service"
+    assert nodes[0]["visual_kind"] == "file"
+    assert nodes[0]["member_count"] == 2
+
+
+def test_graph_viewer_aggregates_edges_between_visual_leaves():
+    from app.ui.graph_page import _collapse_visual_graph
+
+    raw_nodes = [
+        {
+            "id": "orderhandler_orderhandler",
+            "label": "OrderHandler",
+            "source_file": "src/App/OrderHandler.cs",
+            "file_type": "class",
+            "community": 1,
+        },
+        {
+            "id": "orderhandler_orderhandler_handle",
+            "label": ".Handle()",
+            "source_file": "src/App/OrderHandler.cs",
+            "file_type": "method",
+            "community": 1,
+        },
+        {
+            "id": "orders_component_save",
+            "label": "save()",
+            "source_file": "src/app/orders.component.ts",
+            "file_type": "method",
+            "community": 2,
+        },
+    ]
+    raw_edges = [
+        {"source": "orderhandler_orderhandler", "target": "orders_component_save", "relation": "calls"},
+        {"source": "orderhandler_orderhandler_handle", "target": "orders_component_save", "relation": "calls"},
+    ]
+
+    nodes, edges = _collapse_visual_graph(raw_nodes, raw_edges)
+
+    assert len(nodes) == 2
+    assert len(edges) == 1
+    assert edges[0]["aggregate_count"] == 2
+    assert edges[0]["source"].startswith("type::")
+    assert edges[0]["target"].startswith("file::")
+
+
 def test_node_hierarchy_skips_unity_wrapper_dirs():
     from app.services.graph_service import compute_node_hierarchy
 
