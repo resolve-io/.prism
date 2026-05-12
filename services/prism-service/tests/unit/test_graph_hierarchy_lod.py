@@ -9,7 +9,7 @@ if str(_SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(_SERVICE_ROOT))
 
 
-def test_node_hierarchy_uses_leiden_community_as_l0():
+def test_node_hierarchy_keeps_leiden_community_below_semantic_regions():
     from app.services.graph_service import compute_node_hierarchy
 
     hierarchy = compute_node_hierarchy(
@@ -18,9 +18,9 @@ def test_node_hierarchy_uses_leiden_community_as_l0():
     )
 
     assert hierarchy == {
-        "l0": "comm:42",
-        "l1": "comm:42/prism-service",
-        "l2": "comm:42/prism-service/ui",
+        "l0": "prism-service",
+        "l1": "prism-service/ui",
+        "l2": "prism-service/ui/comm:42",
     }
 
 
@@ -233,9 +233,9 @@ def test_node_hierarchy_skips_unity_wrapper_dirs():
     )
 
     assert hierarchy == {
-        "l0": "comm:7",
-        "l1": "comm:7/Gameplay",
-        "l2": "comm:7/Gameplay",
+        "l0": "Gameplay",
+        "l1": "Gameplay",
+        "l2": "Gameplay/comm:7",
     }
 
 
@@ -248,9 +248,9 @@ def test_node_hierarchy_prefers_dotnet_project_regions():
     )
 
     assert hierarchy == {
-        "l0": "comm:9",
-        "l1": "comm:9/Shop.Api",
-        "l2": "comm:9/Shop.Api/Controllers",
+        "l0": "Shop.Api",
+        "l1": "Shop.Api/Controllers",
+        "l2": "Shop.Api/Controllers/comm:9",
     }
 
 
@@ -263,10 +263,26 @@ def test_node_hierarchy_skips_dotnet_feature_wrapper():
     )
 
     assert hierarchy == {
-        "l0": "comm:9",
-        "l1": "comm:9/Shop.Application",
-        "l2": "comm:9/Shop.Application/Orders",
+        "l0": "Shop.Application",
+        "l1": "Shop.Application/Orders",
+        "l2": "Shop.Application/Orders/comm:9",
     }
+
+
+def test_node_hierarchy_does_not_make_every_large_repo_community_l0():
+    from app.services.graph_service import compute_node_hierarchy
+
+    hierarchies = [
+        compute_node_hierarchy(
+            f"repo/src/Commerce/Shop.Api/Controllers/Orders{i}Controller.cs",
+            fallback_community=i,
+        )
+        for i in range(1000)
+    ]
+
+    assert {h["l0"] for h in hierarchies} == {"Shop.Api"}
+    assert {h["l1"] for h in hierarchies} == {"Shop.Api/Controllers"}
+    assert len({h["l2"] for h in hierarchies}) == 1000
 
 
 def test_node_hierarchy_uses_dotnet_project_without_community():

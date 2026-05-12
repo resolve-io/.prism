@@ -219,6 +219,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
   const L0_HUGE_COUNT = 240;
   const RELAX_NODE_LIMIT = 80;
   const L0_SUPER_EDGE_LIMIT = 900;
+  const FULL_LAYOUT_NODE_LIMIT = 30000;
   // HSL round-trip utilities. Shading by degree modulates the L
   // channel while keeping H+S fixed, so every node in a layer shares
   // the base hue and saturation — only perceived lightness changes
@@ -274,7 +275,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
   }
   // hierarchy.json returns leaves tagged with l0/l1/l2 parent keys + the
   // DB-derived community labels for the legend. One fetch primes both
-  // the LOD super-node assembly (after FA2) and the legend.
+  // the LOD super-node assembly and the legend.
   async function loadGraph() {
       statusEl.textContent = "Fetching graph data...";
       const data = await fetch(`/graphify-visual/${PROJECT_ID}/hierarchy.json`)
@@ -437,7 +438,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
             symbols: Array.isArray(n.symbols) ? n.symbols : [],
             // L3 = leaf. Parent keys at L0/L1/L2 are emitted by the
             // server from the file path; the LOD pass below uses them
-            // to assemble super-nodes after FA2 settles.
+            // to assemble semantic super-nodes.
             level: 3,
             l0: n.l0 || null,
             l1: n.l1 || null,
@@ -491,43 +492,54 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
           `Loading edges ${i.toLocaleString()} / ${edges.length.toLocaleString()}...`;
         await yieldToBrowser();
       }
-      // ----- ForceAtlas2 in a Web Worker (fully invisible) ----------
-      // FA2 is mathematically chaotic during early iterations — watching
-      // it live looks like a spazz attack and even post-warmup the per-
-      // iteration jitter doesn't read as "smooth". The fix: compute the
-      // layout fully off-screen (worker keeps the main thread responsive),
-      // capture the converged positions, then play back a clean cluster-
-      // by-cluster reveal animation that doesn't depend on FA2's frame
-      // timing at all.
-      const settings = forceAtlas2.inferSettings(g);
-      settings.barnesHutOptimize = g.order > 2000;
-      settings.barnesHutTheta = 0.5;
-      settings.gravity = 1.2;
-      settings.scalingRatio = 2;
-      settings.slowDown = 1;
-      settings.adjustSizes = false;
-      settings.outboundAttractionDistribution = false;
-      const computeMs = g.order > 20000 ? 5000 : g.order > 5000 ? 4000 : 3000;
-      const layout = new FA2Layout(g, { settings });
       const t0 = performance.now();
-      layout.start();
-
-      // Click the (still-empty) canvas to skip straight to the result.
-      let skipped = false;
       const graphEl = document.getElementById("graph");
-      graphEl.style.cursor = "wait";
-      const skipHandler = () => { skipped = true; };
-      graphEl.addEventListener("click", skipHandler, { once: true });
-      statusEl.textContent =
-        `Computing layout (${(computeMs / 1000).toFixed(1)}s)...`;
-      const cStart = performance.now();
-      while (performance.now() - cStart < computeMs && !skipped) {
-        await new Promise(r => setTimeout(r, 50));
+      const skipFullLayout = g.order > FULL_LAYOUT_NODE_LIMIT;
+      const layoutMode = skipFullLayout ? "overview" : "FA2";
+      if (skipFullLayout) {
+        // Huge graphs should open at the semantic overview immediately.
+        // Running FA2 over every leaf before L0 exists keeps the canvas
+        // technically correct but makes the browser pay for detail the
+        // user cannot see yet. Cheap seeded positions still give the
+        // visible L0/L1 relaxation enough structure to produce a clean
+        // overview without the full-leaf warmup.
+        statusEl.textContent =
+          `Building overview from ${g.order.toLocaleString()} nodes...`;
+        await yieldToBrowser();
+      } else {
+        // ----- ForceAtlas2 in a Web Worker (fully invisible) ----------
+        // FA2 is mathematically chaotic during early iterations. The fix:
+        // compute the layout fully off-screen (worker keeps the main
+        // thread responsive), capture the converged positions, then play
+        // back a clean cluster-by-cluster reveal animation.
+        const settings = forceAtlas2.inferSettings(g);
+        settings.barnesHutOptimize = g.order > 2000;
+        settings.barnesHutTheta = 0.5;
+        settings.gravity = 1.2;
+        settings.scalingRatio = 2;
+        settings.slowDown = 1;
+        settings.adjustSizes = false;
+        settings.outboundAttractionDistribution = false;
+        const computeMs = g.order > 20000 ? 5000 : g.order > 5000 ? 4000 : 3000;
+        const layout = new FA2Layout(g, { settings });
+        layout.start();
+
+        // Click the (still-empty) canvas to skip straight to the result.
+        let skipped = false;
+        graphEl.style.cursor = "wait";
+        const skipHandler = () => { skipped = true; };
+        graphEl.addEventListener("click", skipHandler, { once: true });
+        statusEl.textContent =
+          `Computing layout (${(computeMs / 1000).toFixed(1)}s)...`;
+        const cStart = performance.now();
+        while (performance.now() - cStart < computeMs && !skipped) {
+          await new Promise(r => setTimeout(r, 50));
+        }
+        graphEl.removeEventListener("click", skipHandler);
+        graphEl.style.cursor = "";
+        layout.stop();
+        layout.kill();
       }
-      graphEl.removeEventListener("click", skipHandler);
-      graphEl.style.cursor = "";
-      layout.stop();
-      layout.kill();
 
       // ----- Super-node assembly (LOD hierarchy) ----------------------
       // For each abstraction level, group the L3 leaves by their l0/l1/l2
@@ -938,7 +950,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
       // closure picks up whatever value it holds when baseStatus() is
       // called, so click handlers reading the status get the right text.
       let layoutElapsed = "...";
-      const LEVEL_NAMES = ["communities", "regions", "modules", "leaves"];
+      const LEVEL_NAMES = ["regions", "modules", "clusters", "leaves"];
       // Counts items the LOD reducer would paint right now — i.e., at
       // currentLevel and inside the active focus subtree if any. So
       // status reads what the user actually sees, not raw level totals.
@@ -958,7 +970,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         const showing = visibleCount();
         if (wholeGraphMode) {
           return `Whole graph · ${showing.toLocaleString()} leaves · `
-            + `FA2 ${layoutElapsed}s · scroll in for communities`;
+            + `${layoutMode} ${layoutElapsed}s · scroll in for regions`;
         }
         const where = `${showing.toLocaleString()} ${LEVEL_NAMES[currentLevel]}`;
         // Breadcrumb of focused ancestors — rightmost is the deepest.
@@ -973,7 +985,7 @@ _SIGMA_VIEWER_HTML = r"""<!DOCTYPE html>
         const scaleHint = currentLevel === 0 && lodCount[0] >= L0_DENSE_COUNT
           ? " · high-scale overview"
           : "";
-        return `L${currentLevel}${trail} · ${where} · FA2 ${layoutElapsed}s${scaleHint}${hint}`;
+        return `L${currentLevel}${trail} · ${where} · ${layoutMode} ${layoutElapsed}s${scaleHint}${hint}`;
       };
       let inspectorPinned = false;
       function escapeHtml(value) {
