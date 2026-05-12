@@ -62,6 +62,7 @@ class ProjectContext:
             from app.services.task_service import TaskService
             self._task_svc = TaskService(
                 db_path=str(self._data_dir / "tasks.db"),
+                project_id=self.project_id,
             )
         return self._task_svc
 

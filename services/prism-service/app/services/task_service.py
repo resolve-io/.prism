@@ -65,7 +65,12 @@ _LL_TASK_COLUMNS: list[tuple[str, str]] = [
 class TaskService:
     """Manages the tasks.db lifecycle and CRUD operations."""
 
-    def __init__(self, db_path: str, embed_fn: Optional[EmbedFn] = None) -> None:
+    def __init__(
+        self,
+        db_path: str,
+        embed_fn: Optional[EmbedFn] = None,
+        project_id: Optional[str] = None,
+    ) -> None:
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
@@ -87,6 +92,32 @@ class TaskService:
         # (e.g. hook smoke tests); create/update still succeeds, the
         # row just lacks an embedding until re-indexed.
         self._embed_fn: Optional[EmbedFn] = embed_fn
+        # Used to fan out task_changed events on the shared bus so SSE
+        # consumers (Tasks board UI) can refresh on actual change rather
+        # than polling. Optional — tests and hook smoke scripts often
+        # construct TaskService without a project context; in that case
+        # mutations don't publish.
+        self._project_id: Optional[str] = project_id
+
+    def _publish_change(self, task_id: str, change: str) -> None:
+        """Notify the event bus that a task in this project changed.
+
+        Silent no-op when the service was constructed without a
+        project_id, or when the bus import fails (avoids leaking
+        infrastructure errors into the CRUD path).
+        """
+        if self._project_id is None:
+            return
+        try:
+            from app.events import bus as _bus
+            _bus.publish({
+                "project": self._project_id,
+                "type": "task_changed",
+                "task_id": task_id,
+                "change": change,
+            })
+        except Exception:
+            pass
 
     def _commit_and_checkpoint(self) -> None:
         """Commit + force a WAL checkpoint so writes survive a container
@@ -224,6 +255,7 @@ class TaskService:
         # has something to search over. Silent on embedder-offline —
         # the row still exists, just without a vector.
         self._store_embedding(task.id, task.title, task.description)
+        self._publish_change(task.id, "created")
         return task
 
     def get(self, task_id: str) -> Optional[Task]:
@@ -320,6 +352,7 @@ class TaskService:
         # Priority / status / tag-only updates don't move the vector.
         if "title" in kwargs or "description" in kwargs:
             self._store_embedding(task.id, task.title, task.description)
+        self._publish_change(task.id, "updated")
         return task
 
     # ------------------------------------------------------------------
