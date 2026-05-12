@@ -409,11 +409,12 @@ def compute_node_hierarchy(
 ) -> dict:
     """Return {l0, l1, l2} parent keys for a leaf's hierarchical rollup.
 
-    L0 is the graphify Leiden community when present. L1/L2 are path
-    prefixes nested under that community, so repos with repeated
-    ``src/app`` style layouts do not collapse unrelated communities
-    together as the user drills in. For graph.json files without
-    community metadata, the path-only hierarchy remains as a fallback.
+    L0/L1 are semantic file or .NET project regions, not raw graphify
+    communities. Large monorepos can produce thousands of tiny Leiden
+    communities, which makes the overview unusable if each community is
+    a top-level node. When community metadata is available, keep it at
+    the deepest rollup level so drilldown can still separate dense
+    topology without crushing the first screen.
     """
     sf = (source_file or "").replace("\\", "/").strip("/")
     parts = sf.split("/") if sf else []
@@ -423,13 +424,17 @@ def compute_node_hierarchy(
     if not segs:
         segs = [p for p in parts if p and p.lower() not in _PATH_PREFIX_DROP]
     if fallback_community is not None:
-        root = f"comm:{fallback_community}"
         if not segs:
-            l1 = f"external/{root}"
+            l1 = f"external/comm:{fallback_community}"
             return {"l0": "external", "l1": l1, "l2": l1}
-        l1 = f"{root}/{segs[0]}"
-        l2 = f"{root}/{'/'.join(segs[:2])}" if len(segs) >= 2 else l1
-        return {"l0": root, "l1": l1, "l2": l2}
+        l0 = segs[0]
+        l1 = "/".join(segs[:2]) if len(segs) >= 2 else l0
+        l2_base = "/".join(segs[:3]) if len(segs) >= 3 else l1
+        return {
+            "l0": l0,
+            "l1": l1,
+            "l2": f"{l2_base}/comm:{fallback_community}",
+        }
     if not segs:
         return {"l0": "external", "l1": "external", "l2": "external"}
     l0 = segs[0]
