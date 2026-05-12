@@ -546,3 +546,93 @@ def test_safe_graphify_call_resolution_preserves_unambiguous_calls():
         (edge["source"], edge["target"], edge["confidence"])
         for edge in merged["edges"]
     } == {("caller_do", "target_save", "INFERRED")}
+
+
+def test_prism_detect_code_files_supplements_graphify_python_only_detection(tmp_path):
+    from app.services.graph_service import _prism_detect_code_files
+
+    root = tmp_path / "graphify-src"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "OrderHandler.cs").write_text("class OrderHandler {}", encoding="utf-8")
+    (root / "web").mkdir()
+    (root / "web" / "orders.component.tsx").write_text("export class Orders {}", encoding="utf-8")
+    (root / "ai").mkdir()
+    py_file = root / "ai" / "otel.py"
+    py_file.write_text("def boot(): pass", encoding="utf-8")
+    (root / "graphify-out").mkdir()
+    (root / "graphify-out" / "stale.cs").write_text("class Stale {}", encoding="utf-8")
+
+    files = _prism_detect_code_files(root, [py_file])
+    rel = {p.relative_to(root).as_posix() for p in files}
+
+    assert rel == {
+        "ai/otel.py",
+        "src/OrderHandler.cs",
+        "web/orders.component.tsx",
+    }
+
+
+def test_prism_fallback_extracts_csharp_nodes_and_same_file_calls(tmp_path):
+    from app.services.graph_service import (
+        _extract_prism_fallback_graph,
+        _merge_graphify_extractions_with_safe_calls,
+    )
+
+    root = tmp_path / "graphify-src"
+    source = root / "src" / "OrderHandler.cs"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """
+namespace Shop;
+public class OrderHandler {
+    public void Handle() { Save(); }
+    public void Save() { }
+}
+""",
+        encoding="utf-8",
+    )
+
+    extracted = _extract_prism_fallback_graph(source, root)
+    labels = {node["label"] for node in extracted["nodes"]}
+
+    assert {"OrderHandler", ".Handle()", ".Save()"}.issubset(labels)
+    assert any(edge["relation"] == "contains" for edge in extracted["edges"])
+    assert any(call["callee"] == "Save" for call in extracted["raw_calls"])
+
+    merged = _merge_graphify_extractions_with_safe_calls([extracted], [source])
+    label_by_id = {node["id"]: node["label"] for node in merged["nodes"]}
+    assert (".Handle()", ".Save()", "INFERRED") in {
+        (
+            label_by_id[edge["source"]],
+            label_by_id[edge["target"]],
+            edge.get("confidence"),
+        )
+        for edge in merged["edges"]
+        if edge["relation"] == "calls"
+    }
+
+
+def test_prism_fallback_extracts_typescript_nodes(tmp_path):
+    from app.services.graph_service import _extract_prism_fallback_graph
+
+    root = tmp_path / "graphify-src"
+    source = root / "web" / "orders.component.ts"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """
+export class OrdersComponent {
+  load() { this.refresh(); }
+  refresh() {}
+}
+export function makeOrder() { return new OrdersComponent(); }
+""",
+        encoding="utf-8",
+    )
+
+    extracted = _extract_prism_fallback_graph(source, root)
+    labels = {node["label"] for node in extracted["nodes"]}
+
+    assert "OrdersComponent" in labels
+    assert "load()" in labels
+    assert "refresh()" in labels
+    assert any(call["callee"] == "refresh" for call in extracted["raw_calls"])
