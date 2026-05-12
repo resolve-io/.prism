@@ -43,6 +43,21 @@ GRAPHIFY_CODE_SUFFIXES = {
 _UNRESOLVED_CALL_MIN_FAN_IN = 50
 _UNRESOLVED_CALL_MEDIAN_MULTIPLIER = 5
 _UNRESOLVED_CALL_RELATIONS = {"calls"}
+_PRISM_DETECT_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".jsx", ".cs"}
+_PRISM_FALLBACK_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".cs"}
+_PRISM_CALL_SKIP = {
+    "if", "for", "foreach", "while", "switch", "catch", "using", "lock",
+    "return", "new", "typeof", "nameof", "sizeof", "default", "await",
+    "function", "class", "interface", "constructor",
+}
+_CS_FRAMEWORK_CALLS = {
+    "Build", "Configure", "ConfigureServices", "AddSingleton", "AddScoped",
+    "AddTransient", "AddDbContext", "AddControllers", "AddEndpointsApiExplorer",
+    "UseRouting", "UseAuthentication", "UseAuthorization", "UseSwagger",
+    "UseHttpsRedirection", "MapGet", "MapPost", "MapPut", "MapDelete",
+    "Select", "Where", "OrderBy", "ThenBy", "ToList", "ToArray",
+    "ToString", "GetHashCode", "Equals", "GetAwaiter",
+}
 
 
 def _graph_schema_migrations(conn: sqlite3.Connection) -> None:
@@ -530,6 +545,193 @@ def display_label_for_graph_node(label: str | None, source_file: str | None = No
     return text
 
 
+def _prism_rel_source_file(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except Exception:
+        return path.as_posix()
+
+
+def _prism_detect_code_files(root: Path, detected: list[Path]) -> list[Path]:
+    """Return graphify-detected files plus PRISM-known source suffixes."""
+    by_key: dict[str, Path] = {}
+    for path in detected:
+        if path.suffix.lower() in _PRISM_DETECT_SUFFIXES:
+            by_key[str(path.resolve())] = path
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if "graphify-out" in path.parts:
+            continue
+        if path.suffix.lower() in _PRISM_DETECT_SUFFIXES:
+            by_key[str(path.resolve())] = path
+    return sorted(by_key.values(), key=lambda p: p.as_posix().lower())
+
+
+def _prism_graph_id(source_file: str, label: str, kind: str, line: int) -> str:
+    stem = _derive_norm_label(Path(source_file).stem) or "file"
+    name = _derive_norm_label(label) or kind or "node"
+    digest = hashlib.sha1(
+        f"{source_file}|{label}|{kind}|{line}".encode("utf-8", errors="replace")
+    ).hexdigest()[:10]
+    return f"prism_{stem}_{name}_{digest}"
+
+
+def _prism_node(source_file: str, label: str, kind: str, line: int) -> dict:
+    return {
+        "id": _prism_graph_id(source_file, label, kind, line),
+        "label": label,
+        "file_type": kind,
+        "source_file": source_file,
+        "source_location": f"L{max(1, line)}",
+        "norm_label": _derive_norm_label(label),
+    }
+
+
+def _line_for_offset(content: str, offset: int) -> int:
+    return content.count("\n", 0, max(0, offset)) + 1
+
+
+def _find_matching_brace(content: str, open_idx: int) -> int:
+    depth = 0
+    for idx in range(open_idx, len(content)):
+        ch = content[idx]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth <= 0:
+                return idx
+    return len(content)
+
+
+def _iter_call_names(body: str) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for match in _re.finditer(r"(?:\.|->)?\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", body):
+        name = match.group(1)
+        if name in _PRISM_CALL_SKIP or name in _CS_FRAMEWORK_CALLS:
+            continue
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+    return names
+
+
+def _extract_prism_fallback_graph(path: Path, root: Path) -> dict:
+    """Small deterministic extractor for C#/TS/JS when graphify skips them."""
+    suffix = path.suffix.lower()
+    if suffix not in _PRISM_FALLBACK_SUFFIXES:
+        return {"nodes": [], "edges": [], "raw_calls": []}
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except Exception as exc:
+        return {"error": str(exc), "nodes": [], "edges": [], "raw_calls": []}
+
+    source_file = _prism_rel_source_file(path, root)
+    file_node = _prism_node(source_file, Path(source_file).name, "file", 1)
+    nodes: list[dict] = [file_node]
+    edges: list[dict] = []
+    raw_calls: list[dict] = []
+    node_by_key: dict[tuple[str, int], dict] = {(file_node["label"], 1): file_node}
+
+    def add_node(label: str, kind: str, line: int) -> dict:
+        key = (label, line)
+        if key in node_by_key:
+            return node_by_key[key]
+        node = _prism_node(source_file, label, kind, line)
+        node_by_key[key] = node
+        nodes.append(node)
+        return node
+
+    def add_contains(parent: dict, child: dict) -> None:
+        if parent["id"] == child["id"]:
+            return
+        edges.append({
+            "source": parent["id"],
+            "target": child["id"],
+            "relation": "contains",
+            "confidence": "EXTRACTED",
+            "confidence_score": 1.0,
+            "source_file": source_file,
+            "source_location": child.get("source_location", "L1"),
+            "weight": 0.4,
+        })
+
+    if suffix == ".cs":
+        type_matches = list(_re.finditer(
+            r"\b(class|interface|struct|record)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            content,
+        ))
+        method_re = _re.compile(
+            r"(?:^|[\r\n])\s*(?:"
+            r"(?:public|private|protected|internal|static|async|virtual|override|sealed|partial|extern)\s+"
+            r")+[\w<>\[\],.?]+\s+([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*(?:where[^{]+)?\{",
+            _re.MULTILINE,
+        )
+    else:
+        type_matches = list(_re.finditer(
+            r"\b(class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            content,
+        ))
+        method_re = _re.compile(
+            r"(?:^|[\r\n])\s*(?:export\s+)?(?:async\s+)?"
+            r"(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*(?::[^{]+)?\{",
+            _re.MULTILINE,
+        )
+
+    type_nodes: list[tuple[int, int, dict]] = []
+    for idx, match in enumerate(type_matches):
+        kind = match.group(1)
+        name = match.group(2)
+        line = _line_for_offset(content, match.start(2))
+        node = add_node(name, kind, line)
+        add_contains(file_node, node)
+        end = type_matches[idx + 1].start() if idx + 1 < len(type_matches) else len(content)
+        type_nodes.append((match.start(), end, node))
+
+    def owner_for(offset: int) -> dict:
+        for start, end, node in type_nodes:
+            if start <= offset < end:
+                return node
+        return file_node
+
+    for match in method_re.finditer(content):
+        name = match.group(1)
+        if name in _PRISM_CALL_SKIP:
+            continue
+        line = _line_for_offset(content, match.start(1))
+        label = f".{name}()" if suffix == ".cs" else f"{name}()"
+        node = add_node(label, "method", line)
+        add_contains(owner_for(match.start()), node)
+        open_idx = content.find("{", match.end() - 1)
+        if open_idx < 0:
+            continue
+        body = content[open_idx + 1:_find_matching_brace(content, open_idx)]
+        for callee in _iter_call_names(body):
+            if callee == name:
+                continue
+            raw_calls.append({
+                "caller_nid": node["id"],
+                "callee": callee,
+                "source_file": source_file,
+                "source_location": f"L{line}",
+            })
+
+    return {"nodes": nodes, "edges": edges, "raw_calls": raw_calls}
+
+
+def _needs_prism_fallback(path: Path, extracted: dict | None) -> bool:
+    if path.suffix.lower() not in _PRISM_FALLBACK_SUFFIXES:
+        return False
+    if not extracted or "error" in extracted:
+        return True
+    return not any(
+        node.get("file_type") not in {"rationale", "document", "markdown"}
+        for node in extracted.get("nodes", [])
+    )
+
+
 def _pick_hub_entity(entities_ranked: list[tuple[dict, int]]) -> str:
     """Pick a meaningful entity name from the highest-degree nodes.
 
@@ -947,6 +1149,9 @@ class GraphService:
         result["ambiguous_call_phantoms"] = rebuild_out.get(
             "ambiguous_call_phantoms", 0,
         )
+        result["fallback_extracted_files"] = rebuild_out.get(
+            "fallback_extracted_files", 0,
+        )
 
         graph_json_path = self._staging_dir / "graphify-out" / "graph.json"
         if not graph_json_path.exists():
@@ -989,31 +1194,42 @@ class GraphService:
 
         try:
             detected = detect(watch_path)
-            code_files = [Path(f) for f in detected["files"]["code"]]
+            detected_code_files = [Path(f) for f in detected["files"]["code"]]
+            code_files = _prism_detect_code_files(watch_path, detected_code_files)
             if not code_files:
                 return {"ok": False, "error": "no code files found"}
 
             per_file: list[dict] = []
+            per_file_paths: list[Path] = []
+            fallback_files = 0
             for path in code_files:
+                extracted: dict | None = None
                 if path.name.endswith(".blade.php"):
                     extractor = getattr(graphify_extract, "extract_blade", None)
                 else:
                     extractor = getattr(graphify_extract, "_DISPATCH", {}).get(
                         path.suffix
                     )
-                if extractor is None:
-                    continue
-                cached = load_cached(path, watch_path)
-                if cached is not None:
-                    per_file.append(cached)
-                    continue
-                extracted = extractor(path)
-                if "error" not in extracted:
-                    save_cached(path, extracted, watch_path)
-                per_file.append(extracted)
+                if extractor is not None:
+                    cached = load_cached(path, watch_path)
+                    if cached is not None:
+                        extracted = cached
+                    else:
+                        extracted = extractor(path)
+                        if "error" not in extracted:
+                            save_cached(path, extracted, watch_path)
+                    per_file.append(extracted)
+                    per_file_paths.append(path)
+
+                if _needs_prism_fallback(path, extracted):
+                    fallback = _extract_prism_fallback_graph(path, watch_path)
+                    if fallback.get("nodes") or fallback.get("edges"):
+                        per_file.append(fallback)
+                        per_file_paths.append(path)
+                        fallback_files += 1
 
             result = _merge_graphify_extractions_with_safe_calls(
-                per_file, code_files,
+                per_file, per_file_paths,
             )
             result = self._preserve_graphify_semantic_context(result)
 
@@ -1062,6 +1278,7 @@ class GraphService:
                 "ambiguous_call_phantoms": result.get(
                     "ambiguous_call_phantoms", 0,
                 ),
+                "fallback_extracted_files": fallback_files,
             }
         except Exception as exc:
             return {"ok": False, "error": exc}
