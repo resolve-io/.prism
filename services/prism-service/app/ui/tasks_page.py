@@ -1,8 +1,30 @@
 """Tasks board page -- kanban-style task management with What's Next."""
 
+import json
+
 from nicegui import ui, app
 
 from app.project_context import get_project
+
+
+# Module-level dialog-open counter shared across all callers in this module.
+# Used by ``refresh()`` to skip the destructive ``board_container.clear()``
+# rebuild while a detail or create dialog is open — without this guard, the
+# rebuild deletes the click handler that opened the dialog and NiceGUI's
+# garbage collector then sweeps the dialog itself. Counter (not bool) so
+# nested or stacked dialogs compose correctly.
+_DIALOG_OPEN_COUNT = 0
+
+
+def _on_dialog_open() -> None:
+    global _DIALOG_OPEN_COUNT
+    _DIALOG_OPEN_COUNT += 1
+
+
+def _on_dialog_close() -> None:
+    global _DIALOG_OPEN_COUNT
+    if _DIALOG_OPEN_COUNT > 0:
+        _DIALOG_OPEN_COUNT -= 1
 
 
 def _task_svc():
@@ -261,6 +283,12 @@ def _open_task_detail(task_id: str, on_change):
                 'text-gray-600'
             )
 
+    # Track open/close so the SSE-driven refresh skips rebuilds while
+    # this dialog is mounted. Without this, an SSE event for *any*
+    # task change in this project (including one the user just made
+    # from this dialog) would rebuild the board and GC the dialog.
+    dlg.on('show', lambda _e: _on_dialog_open())
+    dlg.on('hide', lambda _e: _on_dialog_close())
     dlg.open()
 
 
@@ -320,6 +348,8 @@ def _open_create_dialog(on_change):
                 'bg-indigo-600 text-white hover:bg-indigo-700'
             ).props('no-caps')
 
+    dlg.on('show', lambda _e: _on_dialog_open())
+    dlg.on('hide', lambda _e: _on_dialog_close())
     dlg.open()
 
 
@@ -471,6 +501,23 @@ def tasks_page():
     """Tasks kanban board with What's Next and create/detail dialogs."""
     create_nav()
 
+    # SSE push: refresh only when TaskService publishes a task_changed
+    # event for the active project. Replaces the prior 3-second polling
+    # timer that destroyed the board_container subtree (and any open
+    # detail/create dialog inside it) on every tick. See issue #N.
+    project_id = app.storage.user.get('project', 'default')
+    ui.add_head_html(
+        '<script>'
+        'document.addEventListener("DOMContentLoaded", () => {'
+        '  const p = ' + json.dumps(project_id) + ';'
+        '  const es = new EventSource('
+        '    "/sse/sessions?project=" + encodeURIComponent(p)'
+        '  );'
+        '  es.onmessage = (ev) => emitEvent("prism_data_changed", ev.data);'
+        '});'
+        '</script>'
+    )
+
     with page_container():
         # Header row
         with ui.row().classes('w-full items-center justify-between'):
@@ -494,10 +541,24 @@ def tasks_page():
         # Board columns
         board_container = ui.column().classes('w-full')
 
-        # Refresh logic
+        # Refresh logic — guarded against rebuilds while any task dialog
+        # is open. The SSE event fires for any task_changed in this
+        # project, including ones triggered by the open dialog itself
+        # (e.g. status transitions); without the guard, the dialog
+        # disappears the instant the user clicks one of its action
+        # buttons. The guarded refresh waits until the dialog closes,
+        # which is when the SSE event's payload is actually relevant
+        # to the user's next interaction.
         def refresh():
+            if _DIALOG_OPEN_COUNT > 0:
+                return
             _build_next_task_card(next_container)
             _build_board(board_container, refresh)
 
         refresh()
-        ui.timer(3.0, refresh)
+        ui.on('prism_data_changed', lambda _e: refresh())
+        # Catch-up refresh in case the user closes a dialog after one or
+        # more SSE events were dropped by the guard. The interval is
+        # deliberately long — only there to recover from the dialog-open
+        # gap, not to drive normal updates.
+        ui.timer(30.0, refresh)
