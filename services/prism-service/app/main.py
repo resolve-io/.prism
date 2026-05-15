@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """PRISM Service — Brain, Memory, Tasks, Workflow with web UI and MCP."""
 
+import os
 import threading
 
 from nicegui import ui, app
@@ -146,8 +147,57 @@ from app.ui import (
     sse,  # /sse/sessions endpoint
 )
 
-# Guard against double-start using file lock
+# Guard against double-start using a file lock.
+# Lock contents: "<pid>:<starttime_jiffies>". Recording the owning
+# process's PID *and* /proc/<pid>/stat starttime lets a fresh start
+# tell its own lock (we are the live owner) apart from a stale lock
+# left by a prior container instance — without the starttime, a new
+# container's PID 1 (always 1) would falsely match the lock from any
+# dead prior PID 1.
 _LOCK_FILE = DATA_DIR / ".mcp_started"
+
+
+def _process_starttime_jiffies(pid: int) -> int | None:
+    """Return /proc/<pid>/stat field 22 (starttime in jiffies since
+    boot) — uniquely identifies a process instance on Linux. ``None``
+    if the pid no longer exists or /proc isn't available.
+
+    Field parsing handles ``comm`` (field 2) containing spaces by
+    splitting after the rightmost ``)``.
+    """
+    try:
+        with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as f:
+            raw = f.read()
+        post = raw.rsplit(")", 1)[1].split()
+        # post[0] = state (field 3); starttime is field 22 overall,
+        # so post[22 - 3] == post[19].
+        return int(post[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _lock_is_stale() -> bool:
+    """``True`` iff ``_LOCK_FILE`` exists but its recorded owner is
+    not a live process. A stale lock means a prior container exited
+    without running the shutdown handler; the next startup must
+    treat the lock as absent or it silently skips the MCP server.
+    """
+    if not _LOCK_FILE.exists():
+        return False
+    try:
+        raw = _LOCK_FILE.read_text(encoding="utf-8").strip()
+        pid_s, _, starttime_s = raw.partition(":")
+        pid = int(pid_s)
+        recorded_starttime = int(starttime_s) if starttime_s else None
+    except (OSError, ValueError):
+        return True
+    live_starttime = _process_starttime_jiffies(pid)
+    if live_starttime is None:
+        return True
+    # Owner PID exists but is a different instance (PID was recycled).
+    if recorded_starttime is not None and live_starttime != recorded_starttime:
+        return True
+    return False
 
 
 def _install_stackdump_handler() -> None:
@@ -186,10 +236,22 @@ def _install_stackdump_handler() -> None:
 
 @app.on_startup
 async def startup():
+    # Treat a stale lock (recorded owner no longer alive) as absent.
+    # Without this, an ungraceful container exit leaves the lock in
+    # the bind-mounted /data volume and the next start short-circuits
+    # the MCP server thread — container appears healthy (NiceGUI on
+    # 7778) but port 7777 has nothing listening.
+    if _lock_is_stale():
+        try:
+            _LOCK_FILE.unlink()
+        except OSError:
+            pass
     if _LOCK_FILE.exists():
         return
     try:
-        _LOCK_FILE.write_text(str(threading.get_ident()))
+        my_pid = os.getpid()
+        my_starttime = _process_starttime_jiffies(my_pid) or 0
+        _LOCK_FILE.write_text(f"{my_pid}:{my_starttime}", encoding="utf-8")
         _install_stackdump_handler()
         threading.Thread(target=start_mcp_server, daemon=True).start()
         threading.Thread(target=start_governance_timer, daemon=True).start()
