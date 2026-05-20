@@ -1,0 +1,9 @@
+app/web/node_modules
+app/web/.vite
+app/web_dist
+data
+**/__pycache__
+**/*.pyc
+.git
+.pytest_cache
+tests

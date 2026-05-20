@@ -83,7 +83,7 @@ def _insert_candidate(scores_db, *, cid, status="pending",
 
 def test_learning_page_shows_merge_sha_and_scores(tmp_path):
     """get_learning_rows returns task_id + all three score columns."""
-    from app.ui.learning_page import get_learning_rows
+    from app.services.learning_data import get_learning_rows
     scores = str(tmp_path / "scores.db")
     _seed_schema(scores)
     _insert_rollup(scores, task_id="T-42", quality=0.9,
@@ -101,7 +101,7 @@ def test_learning_page_shows_merge_sha_and_scores(tmp_path):
 def test_ui_shows_correlation_banner_below_n20(tmp_path):
     """A variant with fewer than 20 observations must carry the
     correlational flag."""
-    from app.ui.learning_page import get_variant_performance
+    from app.services.learning_data import get_variant_performance
     scores = str(tmp_path / "scores.db")
     _seed_schema(scores)
     # 3 observations of variant_A — below threshold
@@ -125,7 +125,7 @@ def test_ui_shows_correlation_banner_below_n20(tmp_path):
 
 
 def test_consolidation_page_shows_queue_depth_by_status(tmp_path):
-    from app.ui.consolidation_page import get_queue_summary
+    from app.services.consolidation_data import get_queue_summary
     scores = str(tmp_path / "scores.db")
     _seed_schema(scores)
     _insert_candidate(scores, cid="c1", status="pending")
@@ -142,7 +142,7 @@ def test_consolidation_page_shows_queue_depth_by_status(tmp_path):
 
 
 def test_consolidation_page_surfaces_unreflected_briefs(tmp_path):
-    from app.ui.consolidation_page import get_unreflected_briefs
+    from app.services.consolidation_data import get_unreflected_briefs
     scores = str(tmp_path / "scores.db")
     _seed_schema(scores)
     now = datetime(2026, 4, 23, 12, 0, tzinfo=timezone.utc)
