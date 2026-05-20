@@ -1,8 +1,8 @@
 """SSE endpoint for server-push UI updates.
 
 Subscribes to the event bus and streams filtered events for a given
-project. UI pages open `new EventSource('/sse/sessions?project=X')`
-and rebuild only when a relevant event arrives.
+project. The new SPA opens `new EventSource('/sse/sessions?project=X')`
+and rebuilds only when a relevant event arrives.
 """
 
 from __future__ import annotations
@@ -10,35 +10,29 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import Request
-from nicegui import app
+from fastapi import APIRouter, Request
 from starlette.responses import StreamingResponse
 
 from app.events import bus
 
+router = APIRouter()
+
 _KEEPALIVE_SECONDS = 25.0
 
 
-@app.get("/sse/sessions")
+@router.get("/sessions")
 async def sse_sessions(request: Request, project: str = "default"):
-    """Stream session/skill events for one project as SSE.
-
-    Emits `data: {...}\\n\\n` on every matching event, and a comment
-    keepalive (`:\\n\\n`) every 25s so proxies don't idle us out.
-    """
+    """Stream session/skill events for one project as SSE."""
 
     async def gen():
         q = bus.subscribe()
         try:
-            # First message so the client transitions from "connecting" to "open".
             yield b": connected\n\n"
             while True:
                 if await request.is_disconnected():
                     break
                 try:
-                    event = await asyncio.wait_for(
-                        q.get(), timeout=_KEEPALIVE_SECONDS
-                    )
+                    event = await asyncio.wait_for(q.get(), timeout=_KEEPALIVE_SECONDS)
                 except asyncio.TimeoutError:
                     yield b": keepalive\n\n"
                     continue

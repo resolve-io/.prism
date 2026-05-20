@@ -1,0 +1,36 @@
+"""HTTP API surface for the React SPA.
+
+Mounted under /api. Each sub-router is a thin read-through to existing
+services (brain_svc, project_context, etc.) — no behavior changes.
+
+Today this is attached to NiceGUI's underlying FastAPI app from main.py.
+After the Task #6 cutover, the same router attaches to a plain FastAPI
+app; the import-time side effects stay in the per-module routers.
+"""
+
+from fastapi import APIRouter
+
+from app.api.brain import router as brain_router
+from app.api.consolidation import router as consolidation_router
+from app.api.conductor import router as conductor_router
+from app.api.dashboard import router as dashboard_router
+from app.api.graph import router as graph_router
+from app.api.learning import router as learning_router
+from app.api.memory import router as memory_router
+from app.api.projects import router as projects_router
+from app.api.retrievals import router as retrievals_router
+from app.api.sessions import router as sessions_router
+from app.api.tasks import router as tasks_router
+
+api_router = APIRouter(prefix="/api")
+api_router.include_router(brain_router, prefix="/brain", tags=["brain"])
+api_router.include_router(consolidation_router, prefix="/consolidation", tags=["consolidation"])
+api_router.include_router(conductor_router, prefix="/conductor", tags=["conductor"])
+api_router.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(graph_router, prefix="/graph", tags=["graph"])
+api_router.include_router(learning_router, prefix="/learning", tags=["learning"])
+api_router.include_router(memory_router, prefix="/memory", tags=["memory"])
+api_router.include_router(projects_router, prefix="/projects", tags=["projects"])
+api_router.include_router(retrievals_router, prefix="/retrievals", tags=["retrievals"])
+api_router.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
+api_router.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
