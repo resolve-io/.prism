@@ -9,6 +9,13 @@ from typing import Any
 
 from mcp.types import Tool, TextContent
 
+# v5.1 understand-anything tool surface (sidecar) — see T9.
+from app.mcp.understand_tools import (
+    UNDERSTAND_TOOLS,
+    UNDERSTAND_TOOL_NAMES,
+    dispatch as _understand_dispatch,
+)
+
 
 # ---------------------------------------------------------------------------
 # Tool definitions
@@ -1090,7 +1097,11 @@ INTERACTIVE_TOOL_NAMES: set[str] = {
     "workflow_state",
     "workflow_advance",
     "context_bundle",
-}
+} | UNDERSTAND_TOOL_NAMES
+
+# Splice the understand_* tools into the registration list so the
+# MCP server advertises them alongside the original surface.
+TOOLS.extend(UNDERSTAND_TOOLS)
 
 ADMIN_TOOL_NAMES: set[str] = {
     "project_list",
@@ -3010,6 +3021,13 @@ BEGIN NOW with Step 0. Do not ask the user for permission — execute the steps.
                 story_file=arguments.get("story_file"),
             )
             return [TextContent(type="text", text=_json(bundle))]
+
+        # ------------------------------------------------------------------
+        # v5.1 understand-anything surface (sidecar dispatcher)
+        # ------------------------------------------------------------------
+        _u = _understand_dispatch(name, arguments, project_id)
+        if _u is not None:
+            return _u
 
         # ------------------------------------------------------------------
         # Unknown tool

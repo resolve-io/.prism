@@ -1,6 +1,6 @@
 [project]
 name = "prism-devtools"
-version = "0.0.0"
+version = "5.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["plugins/prism-devtools/tools/prism-cli/tests"]

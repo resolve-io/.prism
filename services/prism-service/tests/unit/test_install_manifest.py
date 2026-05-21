@@ -240,6 +240,11 @@ def test_stop_hook_calls_mark_stale_no_subprocess():
     files = _files_by_path(_manifest())
     content = files[".claude/hooks/prism-stop.py"]["content"]
     assert "janitor_mark_stale" in content
+    # v5.1 T10: same hook must now also notify the understand layer
+    # so ref-advance can re-plan analyzers, and (opt-in) announce
+    # pending jobs. Both via MCP, no shellout.
+    assert "understand_refresh" in content
+    assert "_announce_understand_jobs" in content
     # No `claude -p` shellout — janitor reflection runs server-side via
     # MCP, never by spawning an LLM subprocess from the hook. (Issue #49
     # added a `git rev-parse HEAD` subprocess, which IS legitimate;
