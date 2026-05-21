@@ -254,121 +254,24 @@ def _resolve_source_dir(args, job: dict) -> Path:
     return Path.cwd()
 
 
-def _strip_frontmatter(text: str) -> str:
-    """Drop the leading YAML frontmatter block before sending to claude.
-
-    Claude's CLI arg parser treats a prompt that starts with `---` as an
-    unknown flag and exits 1. The frontmatter is metadata for our own
-    tooling (name, source attribution, budget, output_schema) — not
-    instructions for the model. Strip it cleanly.
-    """
-    if text.startswith("---\n"):
-        end = text.find("\n---\n", 4)
-        if end > 0:
-            return text[end + len("\n---\n"):].lstrip()
-    return text
-
-
 def _default_executor(job: dict, args) -> dict:
-    """Real claude_cli runner (T3). Loads the analyzer prompt template
-    and invokes claude -p with INV-1 env strip.
+    """Foreground CLI executor — delegates to the shared analyzer_runner.
 
-    The prompt template's `body` is concatenated with the runtime
-    context block (`project`, `target_sha`, `scope_files`). This is
-    deliberately minimal — orchestrators that need richer composition
-    should call understand_drain_queue + their own runner instead.
+    The shared module (`app.inference.analyzer_runner`) is also used by
+    the server-side auto-drainer (`app.services.understand_drainer`).
+    Behavior is identical; only the trigger differs.
     """
-    from pathlib import Path
-
-    from app.inference import claude_cli
-
-    prompts_dir = (
-        Path(__file__).resolve().parents[1] / "inference" / "prompts"
-    )
-    prompt_path = prompts_dir / f"{job['analyzer']}.md"
-    template = _strip_frontmatter(prompt_path.read_text(encoding="utf-8"))
+    from app.inference import analyzer_runner
 
     source_dir = _resolve_source_dir(args, job)
-    runtime = (
-        f"\n\n## Runtime context\n"
-        f"- project: {args.project}\n"
-        f"- target_sha: {job['target_sha']}\n"
-        f"- scope_hash: {job['scope_hash']}\n"
-        f"- source_dir: your cwd — the source tree at the pinned SHA "
-        f"is already checked out here; use Read/Glob/Grep to explore.\n"
-        f"- output: emit the schema's JSON (or markdown for "
-        f"onboarding_writer) as your final assistant message; do NOT "
-        f"write files.\n"
+    plugin_dir = args.plugin_dir or str(source_dir)
+    return analyzer_runner.run_analyzer(
+        args.project,
+        job["analyzer"],
+        job["target_sha"],
+        job.get("scope_hash") or "full",
+        plugin_dir=plugin_dir,
     )
-    res = claude_cli.invoke(
-        template + runtime,
-        source_dir,
-        plugin_dir=args.plugin_dir or str(source_dir),
-        # Analyzers walk the source tree (no Brain MCP available in the
-        # CLI execution context) so they need more turns than the harness
-        # default. Budget caps still bound aggregate spend.
-        max_turns=35,
-        parse_events=True,
-    )
-    payload = _extract_payload(res, job["analyzer"])
-    # Even when claude exits 1 (max_turns hit), persist whatever
-    # structured output it emitted before stopping — partial artifacts
-    # are more useful than a hard failure.
-    parseable = (
-        isinstance(payload, str) and payload.startswith("#")
-    ) or (
-        isinstance(payload, dict) and "error" not in payload
-        and ("schema" in payload or "steps" in payload or "layers" in payload
-             or "domains" in payload)
-    )
-    status = "complete" if (res.exit_code == 0 and parseable) else (
-        "partial" if parseable else "failed"
-    )
-    return {
-        "payload": payload,
-        "tokens_used": res.usage.get("output_tokens", 0)
-                       + res.usage.get("input_tokens", 0),
-        "wall_clock_s": 0.0,
-        "status": status,
-        "error": "" if status != "failed" else f"exit={res.exit_code}",
-    }
-
-
-def _extract_payload(res, analyzer: str):
-    """Pull the analyzer's JSON or markdown payload out of stream-json events.
-
-    Analyzers are instructed to emit a single JSON object (or, for
-    `onboarding_writer`, raw markdown). We look at the last assistant
-    text block and parse it.
-    """
-    text_blocks: list[str] = []
-    for evt in res.parsed_events:
-        msg = evt.get("message") or evt
-        if not isinstance(msg, dict):
-            continue
-        for block in msg.get("content") or []:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text_blocks.append(block.get("text", ""))
-    final = (text_blocks[-1] if text_blocks else "").strip()
-    if analyzer == "onboarding_writer":
-        # Strip code fences if claude wrapped the markdown.
-        return _strip_code_fence(final, "markdown")
-    cleaned = _strip_code_fence(final, "json")
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        return {"raw": final, "error": "not_valid_json"}
-
-
-def _strip_code_fence(text: str, kind: str) -> str:
-    """Pull content out of a ```kind … ``` fenced block, tolerating
-    leading prose. Returns the original text on no-match."""
-    import re
-    pattern = rf"```\s*{kind}?\s*\n(.*?)```"
-    m = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-    return text
 
 
 _CMD_TABLE = {

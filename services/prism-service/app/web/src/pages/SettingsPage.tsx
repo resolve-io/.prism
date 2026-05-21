@@ -5,13 +5,23 @@ import { useProject } from "@/lib/project";
 import { useVersion } from "@/lib/version";
 import { Card, Empty, ErrorBanner, Page, SectionLabel } from "@/components/ui";
 
+type QueueCounts = {
+  pending: number;
+  in_progress: number;
+  completed: number;
+  failed: number;
+};
+
 type ProjectInfo = {
   name: string;
   remote_url: string | null;
   tracked_ref: string | null;
   current_sha: string | null;
   last_analyzed_sha: string | null;
+  queue: QueueCounts;
 };
+
+const ZERO_QUEUE: QueueCounts = { pending: 0, in_progress: 0, completed: 0, failed: 0 };
 
 async function fetchInfo(name: string): Promise<ProjectInfo> {
   const s = await api.get<{
@@ -19,6 +29,7 @@ async function fetchInfo(name: string): Promise<ProjectInfo> {
     remote_url: string | null;
     current_sha: string | null;
     last_analyzed_sha: string | null;
+    queue: QueueCounts | null;
   }>(`/api/understand?project=${encodeURIComponent(name)}`);
   return {
     name,
@@ -26,7 +37,19 @@ async function fetchInfo(name: string): Promise<ProjectInfo> {
     tracked_ref: s.tracked_ref ?? null,
     current_sha: s.current_sha ?? null,
     last_analyzed_sha: s.last_analyzed_sha ?? null,
+    queue: s.queue ?? ZERO_QUEUE,
   };
+}
+
+function isDrifted(info: ProjectInfo | undefined): boolean {
+  if (!info?.current_sha) return false;
+  if (!info.last_analyzed_sha) return Boolean(info.remote_url);
+  return info.current_sha !== info.last_analyzed_sha;
+}
+
+function queueIsBusy(q: QueueCounts | undefined): boolean {
+  if (!q) return false;
+  return q.pending > 0 || q.in_progress > 0;
 }
 
 
@@ -186,6 +209,16 @@ function ProjectCard({
   onSaved: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const busy = queueIsBusy(info?.queue);
+  const drifted = isDrifted(info);
+
+  // Auto-poll info every 5s while the queue is busy so the user sees
+  // pending → in_progress → completed transitions without refreshing.
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => { onSaved(); }, 5000);
+    return () => clearInterval(t);
+  }, [busy, onSaved]);
 
   return (
     <li className="py-3">
@@ -200,13 +233,22 @@ function ProjectCard({
           <ChevronRight className="w-4 h-4 opacity-60" />
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-[color:var(--midground-base)]">
               {name}
             </span>
             {isActive && (
               <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-[color:var(--midground-base)]/15">
                 active
+              </span>
+            )}
+            <QueueBadge queue={info?.queue} />
+            {drifted && !busy && (
+              <span
+                className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-200"
+                title="The tracked ref has advanced past last_analyzed_sha — click to re-run analyzers."
+              >
+                drift
               </span>
             )}
           </div>
@@ -221,6 +263,11 @@ function ProjectCard({
             <span>
               sha: <span className="font-mono">
                 {info?.current_sha ? info.current_sha.slice(0, 10) : "—"}
+              </span>
+            </span>
+            <span>
+              analyzed: <span className="font-mono">
+                {info?.last_analyzed_sha ? info.last_analyzed_sha.slice(0, 10) : "—"}
               </span>
             </span>
           </div>
@@ -239,6 +286,34 @@ function ProjectCard({
 }
 
 
+function QueueBadge({ queue }: { queue: QueueCounts | undefined }) {
+  if (!queue) return null;
+  if (queue.in_progress > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-200">
+        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+        analyzing {queue.in_progress}
+      </span>
+    );
+  }
+  if (queue.pending > 0) {
+    return (
+      <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-200">
+        {queue.pending} queued
+      </span>
+    );
+  }
+  if (queue.failed > 0) {
+    return (
+      <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-200">
+        {queue.failed} failed
+      </span>
+    );
+  }
+  return null;
+}
+
+
 function ProjectEditor({
   name, info, onActivate, onSaved,
 }: {
@@ -250,6 +325,7 @@ function ProjectEditor({
   const [remote, setRemote] = useState(info?.remote_url ?? "");
   const [ref, setRef] = useState(info?.tracked_ref ?? "origin/main");
   const [submitting, setSubmitting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -277,6 +353,22 @@ function ProjectEditor({
       setSubmitting(false);
     }
   };
+
+  const sync = async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      await api.post(`/api/understand/refresh?project=${encodeURIComponent(name)}`, {});
+      onSaved();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const drifted = isDrifted(info);
+  const hasSource = Boolean(info?.remote_url);
 
   return (
     <form
@@ -317,7 +409,7 @@ function ProjectEditor({
           {error}
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <button
           type="button"
           onClick={onActivate}
@@ -325,14 +417,30 @@ function ProjectEditor({
         >
           Make active
         </button>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[color:var(--midground-base)] text-[color:var(--background-base)] text-xs uppercase tracking-wider disabled:opacity-40"
-        >
-          {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
-          {submitting ? "Saving…" : info?.remote_url ? "Update source" : "Set source"}
-        </button>
+        <div className="flex items-center gap-2">
+          {hasSource && (
+            <button
+              type="button"
+              onClick={sync}
+              disabled={syncing || submitting}
+              title={drifted
+                ? "Re-run analyzers against the latest commit"
+                : "Re-run analyzers (no drift detected)"}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--midground-base)]/30 text-xs uppercase tracking-wider disabled:opacity-40 hover:bg-[color:var(--midground-base)]/10"
+            >
+              {syncing && <Loader2 className="w-3 h-3 animate-spin" />}
+              {syncing ? "Syncing…" : "Sync now"}
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[color:var(--midground-base)] text-[color:var(--background-base)] text-xs uppercase tracking-wider disabled:opacity-40"
+          >
+            {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
+            {submitting ? "Saving…" : info?.remote_url ? "Update source" : "Set source"}
+          </button>
+        </div>
       </div>
     </form>
   );

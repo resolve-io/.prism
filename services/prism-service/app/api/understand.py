@@ -6,6 +6,7 @@ the same flow without speaking JSON-RPC. Lives at /api/understand.
 
 from __future__ import annotations
 
+from threading import Thread
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -45,14 +46,13 @@ def configure(body: ConfigureBody, project: str = Query("default")) -> dict:
     s["tracked_ref"] = body.tracked_ref
     ue._write_state(project, s)
 
-    # Auto-ingest the cloned source into Brain + Graph in a background
-    # thread so the configure call returns fast. The /api/graph/edges-between
-    # endpoint will start returning real edges once this completes.
-    import threading
-    threading.Thread(
-        target=ss.ingest_source_to_brain,
+    # Bootstrap: ingest source into Brain + Graph AND enqueue analyzer
+    # jobs in one background thread, so the configure call returns fast.
+    # The auto-drainer (started in main.py lifespan) picks up the queue
+    # and runs claude -p for each analyzer.
+    Thread(
+        target=ss.bootstrap_after_clone,
         args=(project,),
-        kwargs={"max_files": 2000},
         daemon=True,
     ).start()
 
@@ -63,6 +63,7 @@ def configure(body: ConfigureBody, project: str = Query("default")) -> dict:
         "head_sha": state.head_sha,
         "advanced": state.advanced,
         "ingest": "started",
+        "bootstrap": "started",
     }
 
 

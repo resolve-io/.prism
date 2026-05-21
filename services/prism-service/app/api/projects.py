@@ -7,6 +7,7 @@ seed a github-tracked project in one shot (v5.1 source-pinning).
 from __future__ import annotations
 
 import re
+from threading import Thread
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -47,6 +48,7 @@ def create_project(body: CreateBody) -> dict:
 
     pdir = project_data_dir(name)  # seeds source/, graph/, state.json
     head_sha: Optional[str] = None
+    bootstrap = "skipped"
 
     remote_url = (body.remote_url or "").strip()
     if remote_url:
@@ -59,6 +61,15 @@ def create_project(body: CreateBody) -> dict:
         s["remote_url"] = remote_url
         s["tracked_ref"] = body.tracked_ref
         ue._write_state(name, s)
+        # Same bootstrap as /api/understand/configure: ingest source into
+        # Brain + Graph, then enqueue analyzer jobs. Runs in background so
+        # the API call returns fast; the auto-drainer picks up the queue.
+        Thread(
+            target=ss.bootstrap_after_clone,
+            args=(name,),
+            daemon=True,
+        ).start()
+        bootstrap = "started"
 
     return {
         "created": True,
@@ -67,4 +78,5 @@ def create_project(body: CreateBody) -> dict:
         "remote_url": remote_url or None,
         "tracked_ref": body.tracked_ref if remote_url else None,
         "head_sha": head_sha,
+        "bootstrap": bootstrap,
     }
