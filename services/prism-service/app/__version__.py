@@ -9,9 +9,11 @@ PRISM_VERSION = "5.1.4"
 
 # Changelog-ish notes (free-form; keep short)
 PRISM_VERSION_NOTES = (
-    "v5.1.4: Second proof bump — verifying auto-reload is repeatable. "
-    "If the sidebar flipped from 5.1.3 to 5.1.4 without you touching "
-    "the page, every future update lands the same way. v5.1.3: First "
-    "auto-reload proof. v5.1.2: SPA auto-reload via /sse/live. "
-    "v5.1.1: First Watchtower auto-update via GHCR CI."
+    "v5.1.4: GHCR publish pipeline + SPA auto-reload. New release "
+    "workflow builds ghcr.io/<owner>/prism-service on every v* tag "
+    "(no main-push trigger). The SPA opens /sse/live and reloads "
+    "itself when the backend reports a new version after a container "
+    "swap (e.g. Watchtower auto-update), so users no longer need to "
+    "hard-refresh. v5.1: Understand-Anything. v5.0: Hermes-native "
+    "React/Vite SPA, Slate Blue theme."
 )
