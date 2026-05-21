@@ -234,6 +234,37 @@ _PATH_PREFIX_DROP = {
 }
 
 
+def compute_node_hierarchy(
+    source_file: str | None,
+    fallback_community: int | None = None,
+) -> dict:
+    """Return {l0, l1, l2} parent keys for a leaf's hierarchical rollup.
+
+    Strips known container directories from the path, then uses the
+    first 1, 2, 3 surviving segments as the L0, L1, L2 parents. Falls
+    back to ``comm:<id>`` when the path is too shallow to produce a
+    meaningful root segment, so a flat repo without a service layout
+    still gets a usable hierarchy from Leiden community detection.
+
+    Restored from `fix/graph-l0-cap-bucket` after the Hermes commit
+    dropped the L0→L3 hierarchical viewer.
+    """
+    sf = (source_file or "").replace("\\", "/").strip("/")
+    parts = sf.split("/") if sf else []
+    if parts and "." in parts[-1]:
+        parts = parts[:-1]
+    segs = [p for p in parts if p and p.lower() not in _PATH_PREFIX_DROP]
+    if not segs:
+        if fallback_community is not None:
+            key = f"comm:{fallback_community}"
+            return {"l0": key, "l1": key, "l2": key}
+        return {"l0": None, "l1": None, "l2": None}
+    l0 = segs[0]
+    l1 = "/".join(segs[:2]) if len(segs) >= 2 else l0
+    l2 = "/".join(segs[:3]) if len(segs) >= 3 else l1
+    return {"l0": l0, "l1": l1, "l2": l2}
+
+
 def _pick_hub_entity(entities_ranked: list[tuple[dict, int]]) -> str:
     """Pick a meaningful entity name from the highest-degree nodes.
 
@@ -905,6 +936,160 @@ class GraphService:
             except OSError:
                 pass
         self._staging_dir.mkdir(parents=True, exist_ok=True)
+
+    # ------------------------------------------------------------------
+    # File-level edge queries (consumed by the v5.1 Understand drill)
+    # ------------------------------------------------------------------
+
+    def communities(self) -> list[dict]:
+        """Return one row per community with label, summary, size, and
+        top files. Powers the top-level node graph on /graph."""
+        try:
+            conn = sqlite3.connect(self._graph_db, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+        except sqlite3.Error:
+            return []
+        try:
+            rows = conn.execute(
+                "SELECT id, label, size, top_files, top_entities, summary "
+                "FROM communities ORDER BY size DESC"
+            ).fetchall()
+        except sqlite3.Error:
+            conn.close()
+            return []
+        out = []
+        for r in rows:
+            try:
+                top_files = json.loads(r["top_files"] or "[]")
+            except json.JSONDecodeError:
+                top_files = []
+            try:
+                top_entities = json.loads(r["top_entities"] or "[]")
+            except json.JSONDecodeError:
+                top_entities = []
+            out.append({
+                "id": int(r["id"]),
+                "label": r["label"] or f"#{r['id']}",
+                "size": int(r["size"] or 0),
+                "summary": r["summary"] or "",
+                "top_files": top_files,
+                "top_entities": top_entities,
+            })
+        conn.close()
+        return out
+
+    def community_files(self, community_id: int) -> list[str]:
+        """Distinct file paths whose entities belong to the given community."""
+        try:
+            conn = sqlite3.connect(self._graph_db, timeout=5.0)
+        except sqlite3.Error:
+            return []
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT file FROM entities "
+                "WHERE community = ? AND file IS NOT NULL "
+                "ORDER BY file",
+                (community_id,),
+            ).fetchall()
+        except sqlite3.Error:
+            conn.close()
+            return []
+        conn.close()
+        return [r[0] for r in rows if r[0]]
+
+    def file_detail(self, path: str) -> dict:
+        """Per-file detail for the layer drill's right-panel.
+
+        Returns:
+          entities: [{name, kind, line}, …] — symbols Brain extracted
+                    from this file
+          inbound:  [{from, weight}] — files calling INTO this file
+          outbound: [{to,   weight}] — files this file calls OUT to
+        """
+        out: dict = {"path": path, "entities": [],
+                     "inbound": [], "outbound": []}
+        try:
+            conn = sqlite3.connect(self._graph_db, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+        except sqlite3.Error:
+            return out
+        try:
+            ent_rows = conn.execute(
+                "SELECT name, kind, line FROM entities "
+                "WHERE file = ? ORDER BY COALESCE(line, 0), name",
+                (path,),
+            ).fetchall()
+            out["entities"] = [
+                {"name": r["name"], "kind": r["kind"], "line": r["line"]}
+                for r in ent_rows
+            ]
+            inbound = conn.execute(
+                "SELECT s.file AS src, COUNT(*) AS weight FROM relationships r "
+                "JOIN entities s ON s.id = r.source_id "
+                "JOIN entities t ON t.id = r.target_id "
+                "WHERE t.file = ? AND s.file IS NOT NULL AND s.file != t.file "
+                "GROUP BY s.file ORDER BY weight DESC LIMIT 20",
+                (path,),
+            ).fetchall()
+            out["inbound"] = [
+                {"from": r["src"], "weight": int(r["weight"])} for r in inbound
+            ]
+            outbound = conn.execute(
+                "SELECT t.file AS tgt, COUNT(*) AS weight FROM relationships r "
+                "JOIN entities s ON s.id = r.source_id "
+                "JOIN entities t ON t.id = r.target_id "
+                "WHERE s.file = ? AND t.file IS NOT NULL AND s.file != t.file "
+                "GROUP BY t.file ORDER BY weight DESC LIMIT 20",
+                (path,),
+            ).fetchall()
+            out["outbound"] = [
+                {"to": r["tgt"], "weight": int(r["weight"])} for r in outbound
+            ]
+        except sqlite3.Error:
+            pass
+        conn.close()
+        return out
+
+    def edges_between_files(self, paths: list[str]) -> list[dict]:
+        """Aggregate entity-level relationships into file-to-file edges.
+
+        For every relationship in graph.db where both endpoint entities
+        belong to files in `paths`, group by (src_file, tgt_file) and
+        sum the count as `weight`. Self-loops (src_file == tgt_file)
+        are excluded. Result powers the inside-a-layer view in the
+        Understand dashboard.
+
+        Returns: [{"from": str, "to": str, "weight": int}]
+        Empty when graph.db has no entries for these files yet.
+        """
+        if not paths:
+            return []
+        try:
+            conn = sqlite3.connect(self._graph_db, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+        except sqlite3.Error:
+            return []
+        placeholders = ",".join("?" for _ in paths)
+        try:
+            rows = conn.execute(
+                f"SELECT s.file AS src, t.file AS tgt, COUNT(*) AS weight "
+                f"FROM relationships r "
+                f"JOIN entities s ON s.id = r.source_id "
+                f"JOIN entities t ON t.id = r.target_id "
+                f"WHERE s.file IN ({placeholders}) "
+                f"  AND t.file IN ({placeholders}) "
+                f"  AND s.file != t.file "
+                f"GROUP BY s.file, t.file",
+                paths + paths,
+            ).fetchall()
+        except sqlite3.Error:
+            conn.close()
+            return []
+        conn.close()
+        return [
+            {"from": r["src"], "to": r["tgt"], "weight": int(r["weight"])}
+            for r in rows
+        ]
 
 
 def _extract_line(source_location: str) -> Optional[int]:

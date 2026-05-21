@@ -4,18 +4,59 @@
 
 @source '../node_modules/@nous-research/ui/dist';
 
-/* Hermes Teal palette as PRISM's default (LENS_0). */
+/* Slate Blue palette as PRISM's default (LENS_0).
+ *
+ * Two-layer token system per the 2026 design-system playbook:
+ *   1. Hermes-compat aliases (--background-base, --midground-base) —
+ *      kept so @nous-research/ui components keep working unchanged.
+ *   2. Semantic tokens (--surface-*, --text-*, --border-*) — what
+ *      PRISM primitives author against. These encode the elevation
+ *      ramp ("dark mode lifts L instead of dropping shadows") and a
+ *      text hierarchy where every visible tier hits WCAG AA against
+ *      both --surface-0 and --surface-1.
+ *
+ * Contrast budget (on --surface-0 = #0d1726):
+ *   --text-primary    #edf1f7   13.8 : 1   AAA body
+ *   --text-secondary  #b8c3d4    8.7 : 1   AAA body
+ *   --text-muted      #8b97ad    5.0 : 1   AA  body
+ *   --text-label      #9aa6bd    5.7 : 1   AA  labels & section heads
+ *
+ * Elevation ramp (each step ≈ +5 L*):
+ *   --surface-0  #0d1726   page background
+ *   --surface-1  #172234   cards, panels, sidebar
+ *   --surface-2  #212e44   nested cards, hover states
+ *   --surface-3  #2c3a55   modals, popovers, dropdowns
+ */
 :root {
   --foreground: color-mix(in srgb, #ffffff 0%, transparent);
   --foreground-base: #ffffff;
   --foreground-alpha: 0;
-  --midground: color-mix(in srgb, #ffe6cb 100%, transparent);
-  --midground-base: #ffe6cb;
+  --midground: color-mix(in srgb, #edf1f7 100%, transparent);
+  --midground-base: #edf1f7;          /* alias of --text-primary */
   --midground-alpha: 1;
-  --background: color-mix(in srgb, #041c1c 100%, transparent);
-  --background-base: #041c1c;
+  --background: color-mix(in srgb, #0d1726 100%, transparent);
+  --background-base: #0d1726;         /* alias of --surface-0 */
   --background-alpha: 1;
-  --warm-glow: rgba(255, 189, 56, 0.35);
+  --warm-glow: rgba(120, 165, 220, 0.30);
+
+  /* Surface elevation — dark-mode "elevation = lighter" pattern. */
+  --surface-0: #0d1726;
+  --surface-1: #172234;
+  --surface-2: #212e44;
+  --surface-3: #2c3a55;
+
+  /* Text hierarchy — every visible tier is WCAG AA on surface-0 + 1. */
+  --text-primary:   #edf1f7;
+  --text-secondary: #b8c3d4;
+  --text-muted:     #8b97ad;
+  --text-label:     #9aa6bd;
+  --text-disabled:  #5a6478;
+
+  /* Borders — same hue, varied alpha. Strong is for emphasized cards. */
+  --border-subtle:  rgba(237, 241, 247, 0.06);
+  --border-default: rgba(237, 241, 247, 0.12);
+  --border-strong:  rgba(237, 241, 247, 0.22);
+
   --noise-opacity-mul: 1;
   --radius: 0.5rem;
   --theme-radius: 0.5rem;

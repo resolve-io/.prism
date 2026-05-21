@@ -3751,6 +3751,27 @@ class Brain:
             (session_id, duration_s, tokens_used, files_read, files_modified, skills_invoked),
         )
         self._scores.commit()
+        # Bridge to /consolidation: every recorded session becomes a
+        # pending candidate (idempotent on session_id). Without this,
+        # the page only populates when the Stop hook on the host fires
+        # janitor_enqueue against an in_progress task — a path that
+        # misses isolated MCP instances and task-less sessions. Wrapped
+        # so a bridge failure can't break the metrics insert above.
+        try:
+            from app.services.consolidation_data import enqueue_for_session
+            db_path = getattr(self._scores, "path", None) or \
+                      getattr(self, "_scores_db_path", None)
+            if db_path:
+                enqueue_for_session(
+                    str(db_path), session_id,
+                    scope={
+                        "files_read": files_read,
+                        "files_modified": files_modified,
+                        "skills_invoked": skills_invoked,
+                    },
+                )
+        except Exception:
+            pass
 
     def record_skill_usage(
         self,

@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from app.project_context import get_project
 
@@ -46,3 +47,64 @@ def rebuild(project: str = Query("default")) -> dict:
     except Exception as exc:
         raise HTTPException(500, f"rebuild failed: {exc}")
     return {"ok": True}
+
+
+class EdgesBetweenBody(BaseModel):
+    paths: list[str]
+
+
+@router.get("/communities")
+def communities(project: str = Query("default")) -> dict:
+    """List communities for the project graph."""
+    try:
+        svc = get_project(project).graph_svc
+    except Exception as exc:
+        raise HTTPException(404, f"unknown project: {project}: {exc}")
+    return {"communities": svc.communities()}
+
+
+@router.get("/community-files")
+def community_files(
+    community_id: int = Query(..., ge=0),
+    project: str = Query("default"),
+) -> dict:
+    """Files in a single community."""
+    try:
+        svc = get_project(project).graph_svc
+    except Exception as exc:
+        raise HTTPException(404, f"unknown project: {project}: {exc}")
+    return {"files": svc.community_files(community_id)}
+
+
+@router.get("/file-detail")
+def file_detail(
+    path: str = Query(..., min_length=1),
+    project: str = Query("default"),
+) -> dict:
+    """Per-file detail (entities + in/out edges) for the drill-down's
+    node-level panel."""
+    try:
+        svc = get_project(project).graph_svc
+    except Exception as exc:
+        raise HTTPException(404, f"unknown project: {project}: {exc}")
+    return svc.file_detail(path)
+
+
+@router.post("/edges-between")
+def edges_between(
+    body: EdgesBetweenBody,
+    project: str = Query("default"),
+) -> dict:
+    """File-to-file edges (weighted) for the given fileset.
+
+    Powers the inside-a-layer drill view in /understand. Returns an
+    empty list when graph.db hasn't been built for this project yet
+    (call POST /api/graph/rebuild first, or push files via the Brain
+    refresh path).
+    """
+    try:
+        svc = get_project(project).graph_svc
+    except Exception as exc:
+        raise HTTPException(404, f"unknown project: {project}: {exc}")
+    edges = svc.edges_between_files(body.paths)
+    return {"edges": edges, "count": len(edges)}

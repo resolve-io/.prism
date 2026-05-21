@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -90,3 +91,85 @@ def get_recent_runs(scores_db: str, limit: int = 20) -> list[dict]:
             d["narrative_excerpt"] = ""
         out.append(d)
     return out
+
+
+# ---------------------------------------------------------------------------
+# session_outcomes → consolidation_candidates bridge
+# ---------------------------------------------------------------------------
+#
+# The Stop hook path (stop_record_hook.py → janitor_enqueue MCP) is the
+# canonical producer of candidates, but it only fires when (a) Claude
+# Code is configured against the project's MCP endpoint and (b) there's
+# an `in_progress` task tagged with a merge_sha. Two cases miss:
+#
+#   * Isolated/preview MCP instances (v51 on :8887) that the user never
+#     drives a full Claude session against — /consolidation stays empty
+#     even though session_outcomes has data.
+#   * Sessions that ran without an in_progress task linked.
+#
+# Bridge: one candidate per session_outcome.session_id. We own both
+# sides — the recorder (record_session_outcome) calls enqueue_for_session
+# on insert, and an on-demand backfill endpoint sweeps everything
+# historical. Idempotent on session_id, so calling twice is a no-op.
+
+def enqueue_for_session(
+    scores_db: str,
+    session_id: str,
+    scope: dict | None = None,
+    trigger: str = "session_completed",
+) -> str | None:
+    """Insert a pending consolidation_candidate for ``session_id`` if one
+    doesn't already exist. Returns the new candidate id, or None when
+    the session already had one (idempotent)."""
+    if not session_id or not Path(scores_db).exists():
+        return None
+    conn = sqlite3.connect(scores_db)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = conn.execute(
+            "SELECT id FROM consolidation_candidates WHERE session_id=? LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if existing:
+            return None
+        cid = str(uuid.uuid4())
+        conn.execute(
+            "INSERT INTO consolidation_candidates "
+            "(id, task_id, session_id, trigger, scope_json, status, queued_at) "
+            "VALUES (?, NULL, ?, ?, ?, 'pending', ?)",
+            (
+                cid, session_id, trigger,
+                json.dumps(scope or {}),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+        return cid
+    finally:
+        conn.close()
+
+
+def backfill_from_sessions(scores_db: str, limit: int = 500) -> dict:
+    """Sweep session_outcomes and enqueue a candidate for any session
+    that doesn't already have one. Returns {created, skipped, scanned}."""
+    if not Path(scores_db).exists():
+        return {"created": 0, "skipped": 0, "scanned": 0}
+    conn = sqlite3.connect(scores_db)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT session_id FROM session_outcomes "
+            "ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    finally:
+        conn.close()
+    created = 0
+    skipped = 0
+    for r in rows:
+        sid = r["session_id"]
+        if enqueue_for_session(scores_db, sid):
+            created += 1
+        else:
+            skipped += 1
+    return {"created": created, "skipped": skipped, "scanned": len(rows)}

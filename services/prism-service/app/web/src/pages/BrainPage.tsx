@@ -67,7 +67,7 @@ export default function BrainPage() {
   }, [project, loadStatus]);
 
   return (
-    <div className="p-8 space-y-6 max-w-[1400px]">
+    <div className="p-8 space-y-6 w-full min-w-[720px]">
       <section className="flex flex-wrap gap-3">
         <Kpi label="Documents" value={status?.doc_count ?? "—"} />
         <Kpi label="Entities" value={status?.entity_count ?? "—"} />
