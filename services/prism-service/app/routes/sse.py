@@ -52,3 +52,31 @@ async def sse_sessions(request: Request, project: str = "default"):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/live")
+async def sse_live(request: Request):
+    """Emit the running build's version so the SPA can detect a
+    container swap (e.g. Watchtower auto-update) and reload itself
+    without the user having to hard-refresh."""
+
+    from app.__version__ import PRISM_VERSION
+
+    async def gen():
+        payload = json.dumps({"version": PRISM_VERSION}, separators=(",", ":"))
+        yield f"data: {payload}\n\n".encode("utf-8")
+        while True:
+            if await request.is_disconnected():
+                break
+            await asyncio.sleep(_KEEPALIVE_SECONDS)
+            yield b": keepalive\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
