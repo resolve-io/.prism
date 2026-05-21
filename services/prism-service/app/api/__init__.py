@@ -21,6 +21,9 @@ from app.api.projects import router as projects_router
 from app.api.retrievals import router as retrievals_router
 from app.api.sessions import router as sessions_router
 from app.api.tasks import router as tasks_router
+from app.api.staleness import router as staleness_router
+from app.api.understand import router as understand_router
+from app.api.version import router as version_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(brain_router, prefix="/brain", tags=["brain"])
@@ -34,3 +37,6 @@ api_router.include_router(projects_router, prefix="/projects", tags=["projects"]
 api_router.include_router(retrievals_router, prefix="/retrievals", tags=["retrievals"])
 api_router.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
 api_router.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
+api_router.include_router(staleness_router, prefix="/staleness", tags=["staleness"])
+api_router.include_router(understand_router, prefix="/understand", tags=["understand"])
+api_router.include_router(version_router, prefix="/version", tags=["version"])

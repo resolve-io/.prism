@@ -12,6 +12,8 @@ import SessionsPage from "@/pages/SessionsPage";
 import RetrievalsPage from "@/pages/RetrievalsPage";
 import LearningPage from "@/pages/LearningPage";
 import ConsolidationPage from "@/pages/ConsolidationPage";
+import UnderstandPage from "@/pages/UnderstandPage";
+import SettingsPage from "@/pages/SettingsPage";
 
 export default function App() {
   return (
@@ -32,6 +34,8 @@ export default function App() {
             <Route path="/retrievals" element={<RetrievalsPage />} />
             <Route path="/learning" element={<LearningPage />} />
             <Route path="/consolidation" element={<ConsolidationPage />} />
+            <Route path="/understand" element={<UnderstandPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>
       </main>

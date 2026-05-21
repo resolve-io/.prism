@@ -182,6 +182,12 @@ def main() -> int:
     # that doesn't yet have a merge_sha with the current git HEAD, then
     # enqueue it for consolidation. Idempotent — once tagged, skipped.
     _tag_active_tasks_with_head(base, project, root)
+    # v5.1 T10: nudge understand_engine to check ref advance + announce
+    # any queued analyzer jobs (opt-in). Both calls are MCP-only — no
+    # LLM shellout from the hook (per the no-shellout invariant
+    # asserted by tests/unit/test_install_manifest.py).
+    _mcp_call(base, project, "understand_refresh", {})
+    _announce_understand_jobs(base, project)
     return 0
 
 
@@ -264,6 +270,53 @@ def _tag_active_tasks_with_head(
         _mcp_call(base, project, "janitor_enqueue", {
             "task_id": tid,
         })
+
+
+def _announce_understand_jobs(base: str, project: str) -> None:
+    """T10 opt-in: print a one-line note when `in_session_drain_enabled`
+    is true and the understand queue has pending work. Silent on the
+    common path so idle session end stays quiet."""
+    try:
+        url = f"{base}/?project={project}&tool_profile=automation"
+        payload = json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "understand_status", "arguments": {}},
+        }).encode()
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            raw = resp.read().decode()
+    except Exception:
+        return
+    payload_text = raw
+    if "text/event-stream" in raw[:200] or raw.startswith("event:"):
+        for line in raw.splitlines():
+            if line.startswith("data: "):
+                payload_text = line[6:]
+                break
+    try:
+        body = json.loads(payload_text)
+        content = (body.get("result") or {}).get("content") or []
+        env = json.loads(content[0].get("text", "{}")) if content else {}
+        data = env.get("data") or {}
+    except Exception:
+        return
+    if not data.get("in_session_drain_enabled"):
+        return
+    pending = int((data.get("queue") or {}).get("pending") or 0)
+    if pending <= 0:
+        return
+    sys.stdout.write(
+        f"PRISM: {pending} understand-anything refresh job(s) queued — "
+        f"run /understand drain to process now, or they'll run on the "
+        f"next session that opts in.\n"
+    )
 
 
 if __name__ == "__main__":

@@ -21,7 +21,9 @@ def _names(profile: str) -> set[str]:
 def test_interactive_profile_exposes_core_agent_tools_only():
     names = _names("interactive")
 
-    assert len(names) == 17
+    # 17 original core tools + 10 v5.1 understand_* tools
+    # (T9 nine + understand_configure follow-up).
+    assert len(names) == 27
     assert {
         "brain_search",
         "brain_call_chain",
@@ -30,6 +32,9 @@ def test_interactive_profile_exposes_core_agent_tools_only():
         "workflow_state",
         "context_bundle",
         "prism_status",
+        "understand_refresh",
+        "understand_status",
+        "understand_drain_queue",
     } <= names
     assert {
         "brain_index_doc",

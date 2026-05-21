@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -53,13 +54,39 @@ TASK_STALE_HOURS = 24
 DEFAULT_PROJECT = "default"
 
 
+_UNDERSTAND_STATE_FILENAME = "understand_state.json"
+_UNDERSTAND_STATE_DEFAULT: dict = {
+    "tracked_ref": "origin/main",
+    "last_analyzed_sha": None,
+    "analyzers": {},
+}
+
+
 def project_data_dir(project_id: str) -> Path:
-    """Return the data directory for a specific project, creating it if needed."""
+    """Return the data directory for a specific project, creating it if needed.
+
+    Also seeds the v5.1 Understand-Anything layout:
+      - source/                       (T5 fills with git clone)
+      - graph/                        (T6 CAS root, keyed by SHA)
+      - understand_state.json         (tracked ref + per-analyzer state)
+
+    Existing subdirs (mulch/, workflow/) are preserved. The state file
+    is written with a default skeleton only on first call; subsequent
+    calls do not overwrite operator edits.
+    """
     d = PROJECTS_DIR / project_id
     d.mkdir(parents=True, exist_ok=True)
     (d / "mulch").mkdir(exist_ok=True)
     (d / "mulch" / "expertise").mkdir(exist_ok=True)
     (d / "workflow").mkdir(exist_ok=True)
+    (d / "source").mkdir(exist_ok=True)
+    (d / "graph").mkdir(exist_ok=True)
+    state_path = d / _UNDERSTAND_STATE_FILENAME
+    if not state_path.exists():
+        state_path.write_text(
+            json.dumps(_UNDERSTAND_STATE_DEFAULT, indent=2),
+            encoding="utf-8",
+        )
     return d
 
 

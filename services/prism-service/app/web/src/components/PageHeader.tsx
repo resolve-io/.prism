@@ -9,6 +9,7 @@ const TITLES: Record<string, string> = {
   "/memory": "Memory", "/tasks": "Tasks", "/conductor": "Conductor",
   "/sessions": "Sessions", "/retrievals": "Retrievals",
   "/learning": "Learning", "/consolidation": "Consolidation",
+  "/understand": "Understand", "/settings": "Settings",
 };
 
 export default function PageHeader() {
