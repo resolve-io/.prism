@@ -155,6 +155,8 @@ async def lifespan(_app: FastAPI):
             threading.Thread(target=start_governance_timer, daemon=True).start()
             threading.Thread(target=start_drift_timer, daemon=True).start()
             threading.Thread(target=start_quality_timer, daemon=True).start()
+            from app.services.understand_drainer import start_understand_drainer
+            threading.Thread(target=start_understand_drainer, daemon=True).start()
         except Exception as e:
             print(f"Startup error: {e}")
     yield

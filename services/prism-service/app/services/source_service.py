@@ -246,6 +246,35 @@ def ingest_source_to_brain(project: str, max_files: int = 2000) -> dict:
     }
 
 
+def bootstrap_after_clone(project: str, max_files: int = 2000) -> dict:
+    """Post-clone bootstrap: ingest source into Brain + Graph, then enqueue
+    Understand-Anything analyzers. Called in a daemon thread from
+    /api/projects (one-shot create-with-source) and /api/understand/configure.
+
+    Returning a dict for tests; production callers fire-and-forget.
+    """
+    import sys
+    from app.engines import understand_engine as ue
+    ingest_result = ingest_source_to_brain(project, max_files=max_files)
+    refresh_status = "skipped"
+    queued: list = []
+    try:
+        result = ue.UnderstandEngine(project).refresh()
+        refresh_status = result.status
+        queued = list(result.queued)
+    except Exception as e:
+        print(
+            f"[bootstrap_after_clone] refresh failed for {project!r}: "
+            f"{type(e).__name__}: {e}",
+            file=sys.stderr, flush=True,
+        )
+    return {
+        "ingest": ingest_result,
+        "refresh_status": refresh_status,
+        "queued": queued,
+    }
+
+
 def checkout(project: str, sha: str) -> Path:
     """Pin the source tree to `sha` and return its absolute path.
 
