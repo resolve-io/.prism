@@ -5,10 +5,20 @@ updates, install-manifest changes. Served alongside the install manifest
 so users can tell which version is live and which one installed their hook.
 """
 
-PRISM_VERSION = "5.1.8"
+PRISM_VERSION = "5.1.9"
 
 # Changelog-ish notes (free-form; keep short)
 PRISM_VERSION_NOTES = (
+    "v5.1.9: Private-repo clone failures now surface as a clean HTTP "
+    "400 from /api/projects and /api/understand/configure instead of "
+    "silently creating an unscannable, head-less project. ensure_cloned() "
+    "checks the return code of `git clone` and `git fetch`, raises "
+    "SourceUnavailable with a credential-scrubbed message (PATs in the "
+    "URL are stripped before the error reaches API responses or logs), "
+    "and wipes the half-initialized source/ dir so a retry with corrected "
+    "credentials starts clean. Customers can pick any credential shape "
+    "they want — PAT-in-URL, SSH deploy key + git@ remote, or a "
+    "credential helper baked into the container. "
     "v5.1.8: Settings is now a sidebar mode, not a page. Clicking "
     "`Settings` in the footer replaces the left sidebar's Knowledge + "
     "Activity groups with the Settings categories (Projects, Claude "

@@ -15,6 +15,7 @@ issued.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import threading
 from dataclasses import dataclass
@@ -22,6 +23,34 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import project_data_dir
+
+
+# Strip `user[:password]@` userinfo from any URL we surface in errors so a
+# PAT-in-URL clone failure doesn't leak the token into API responses or logs.
+_URL_USERINFO_RE = re.compile(r"(\b[a-z][a-z0-9+.\-]*://)[^/@\s]+@")
+
+
+def _scrub_credentials(text: str) -> str:
+    return _URL_USERINFO_RE.sub(r"\1", text or "")
+
+
+def _clear_dir(path: Path) -> None:
+    """Remove everything inside `path` but leave `path` itself in place.
+
+    Used to wipe a half-initialized clone so a retry with corrected
+    credentials starts from a clean slate. Never traverses outside `path`.
+    """
+    import shutil
+    if not path.is_dir():
+        return
+    for child in path.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child, ignore_errors=True)
+        else:
+            try:
+                child.unlink()
+            except OSError:
+                pass
 
 
 # Per-project locks so concurrent threads can't race on the same clone.
@@ -107,13 +136,28 @@ def ensure_cloned(
                 )
             prior_sha = _rev_parse(src, tracked_ref) or ""
             if fetch:
-                _run_git(["fetch", "--prune", "origin"], src, timeout=180)
+                rc, _, err = _run_git(
+                    ["fetch", "--prune", "origin"], src, timeout=180,
+                )
+                if rc != 0:
+                    raise SourceUnavailable(
+                        f"git fetch failed for project {project!r}: "
+                        f"{_scrub_credentials(err.strip()) or f'exit {rc}'}"
+                    )
         else:
             src.mkdir(parents=True, exist_ok=True)
-            _run_git(
+            rc, _, err = _run_git(
                 ["clone", "--filter=blob:none", remote_url, "."],
                 src, timeout=300,
             )
+            if rc != 0:
+                # Leave the half-initialized source dir empty so a retry
+                # with corrected credentials starts from a clean slate.
+                _clear_dir(src)
+                raise SourceUnavailable(
+                    f"git clone failed for project {project!r}: "
+                    f"{_scrub_credentials(err.strip()) or f'exit {rc}'}"
+                )
         _run_git(["reset", "--hard", tracked_ref], src)
         state.head_sha = _rev_parse(src, "HEAD") or ""
         state.advanced = bool(prior_sha) and state.head_sha != prior_sha
