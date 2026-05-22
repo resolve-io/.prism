@@ -38,6 +38,7 @@ export default function App() {
             <Route path="/consolidation" element={<ConsolidationPage />} />
             <Route path="/understand" element={<UnderstandPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/:section" element={<SettingsPage />} />
           </Routes>
         </div>
       </main>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Brain, Network, BookOpen, ListChecks,
-  Workflow, MessageSquare, Search, Sparkles, Layers, Eye, Settings,
+  AppWindow, BookOpen, Brain, Eye, FolderTree, Info, KeyRound,
+  Layers, LayoutDashboard, ListChecks, MessageSquare, Network,
+  ScrollText, Search, Settings, Sparkles, Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -22,12 +23,17 @@ type Item = {
 
 type Section = { label?: string; items: Item[] };
 
-const SECTIONS: Section[] = [
-  {
-    items: [
-      { to: "/", label: "Dashboard", icon: LayoutDashboard },
-    ],
-  },
+// Always-visible top item. From inside Settings mode, clicking Dashboard
+// is also the way back out, so it never disappears.
+const TOP_SECTION: Section = {
+  items: [
+    { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  ],
+};
+
+// Default body: Knowledge + Activity, shown on every route that isn't
+// /settings/*.
+const MAIN_SECTIONS: Section[] = [
   {
     label: "Knowledge",
     items: [
@@ -46,6 +52,22 @@ const SECTIONS: Section[] = [
       { to: "/retrievals", label: "Retrievals", icon: Search },
       { to: "/learning", label: "Learning", icon: Sparkles },
       { to: "/consolidation", label: "Consolidation", icon: Layers },
+    ],
+  },
+];
+
+// Settings-mode body: when pathname starts with /settings, Knowledge +
+// Activity collapse and Settings categories take their place. Each
+// item routes to /settings/<id>; SettingsPage reads the URL param.
+const SETTINGS_SECTIONS: Section[] = [
+  {
+    label: "Settings",
+    items: [
+      { to: "/settings/projects", label: "Projects", icon: FolderTree },
+      { to: "/settings/auth", label: "Claude auth", icon: KeyRound },
+      { to: "/settings/jobs", label: "Jobs", icon: ListChecks },
+      { to: "/settings/logs", label: "Logs", icon: ScrollText },
+      { to: "/settings/service", label: "Service", icon: Info },
     ],
   },
 ];
@@ -78,6 +100,16 @@ export default function Sidebar() {
   const stale = useStaleness(project);
   const scan = useScanActivity();
   const version = useVersion();
+  const { pathname } = useLocation();
+  const inSettings = pathname.startsWith("/settings");
+
+  // Top item is always Dashboard. Below it: either Knowledge + Activity
+  // (default) or the Settings categories (when in /settings/*). The
+  // bottom Settings link stays in both modes — it's how you toggle in.
+  const sections: Section[] = [
+    TOP_SECTION,
+    ...(inSettings ? SETTINGS_SECTIONS : MAIN_SECTIONS),
+  ];
 
   return (
     <aside className="w-[240px] shrink-0 flex flex-col border-r border-[color:var(--border-default)] bg-[color:var(--surface-1)]">
@@ -86,7 +118,7 @@ export default function Sidebar() {
         <div className="font-serif text-xl leading-none tracking-tight text-[color:var(--text-secondary)] mt-1">SERVICE</div>
       </div>
       <nav className="flex-1 overflow-y-auto py-3">
-        {SECTIONS.map((section, i) => (
+        {sections.map((section, i) => (
           // Match the divider style used between Settings and the version
           // footer below — same border-default line + same py-3 spacing —
           // so all sidebar group breaks read as one consistent pattern.
@@ -154,19 +186,39 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="border-t border-[color:var(--border-default)]">
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            cn(
+        {/* Footer toggle. In default mode it's "Settings" and enters
+            the Settings sidebar mode. In Settings mode it flips to
+            "Application" with a different icon so the user has a
+            clear, single-click way back to the main app. We DON'T
+            use NavLink active styling here because the active route
+            is already reflected by the items in the Settings nav
+            above — keeping this neutral makes it read as a mode
+            toggle, not yet-another-link. */}
+        {inSettings ? (
+          <NavLink
+            to="/"
+            className={cn(
               "flex items-center gap-3 px-5 py-3 text-[13px] uppercase tracking-wider transition-colors",
               "text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] hover:bg-[color:var(--surface-2)]",
-              isActive && "text-[color:var(--text-primary)] bg-[color:var(--surface-2)] border-l-2 border-[color:var(--text-primary)]",
-            )
-          }
-        >
-          <Settings className="w-4 h-4" />
-          <span>Settings</span>
-        </NavLink>
+            )}
+            title="Return to the main application"
+          >
+            <AppWindow className="w-4 h-4" />
+            <span>Application</span>
+          </NavLink>
+        ) : (
+          <NavLink
+            to="/settings"
+            className={cn(
+              "flex items-center gap-3 px-5 py-3 text-[13px] uppercase tracking-wider transition-colors",
+              "text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] hover:bg-[color:var(--surface-2)]",
+            )}
+            title="Open application settings"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Settings</span>
+          </NavLink>
+        )}
         <div
           className="px-5 py-3 text-[10px] uppercase tracking-wider text-[color:var(--text-label)] border-t border-[color:var(--border-default)]"
           title={version?.notes ?? ""}

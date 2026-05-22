@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useParams } from "react-router-dom";
 import {
-  ChevronDown,
-  ChevronRight,
-  FolderTree,
-  GitBranch,
-  Info,
-  KeyRound,
-  ListChecks,
-  Loader2,
-  Plus,
-  ScrollText,
+  ChevronDown, ChevronRight, GitBranch, Loader2, Plus,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { notifyProjectsChanged, useProject } from "@/lib/project";
@@ -18,45 +10,34 @@ import { Card, Empty, ErrorBanner, Page, SectionLabel } from "@/components/ui";
 
 type SectionId = "projects" | "auth" | "jobs" | "logs" | "service";
 
-type SectionDef = {
-  id: SectionId;
-  title: string;
-  description: string;
-  icon: ComponentType<{ className?: string }>;
-};
-
-const SECTIONS: SectionDef[] = [
-  {
-    id: "projects",
+const SECTION_META: Record<SectionId, { title: string; description: string }> = {
+  projects: {
     title: "Projects",
     description: "Add, configure, sync, and delete tracked repos.",
-    icon: FolderTree,
   },
-  {
-    id: "auth",
+  auth: {
     title: "Claude auth",
     description: "OAuth subscription used by the in-container CLI.",
-    icon: KeyRound,
   },
-  {
-    id: "jobs",
+  jobs: {
     title: "Jobs",
     description: "Analyzer queue across every project — what's in flight, pending, or failed.",
-    icon: ListChecks,
   },
-  {
-    id: "logs",
+  logs: {
     title: "Logs",
     description: "Every PRISM-initiated claude -p call with timing, tokens, and assistant output.",
-    icon: ScrollText,
   },
-  {
-    id: "service",
+  service: {
     title: "Service",
     description: "Container name, version, intervals, MCP endpoint.",
-    icon: Info,
   },
-];
+};
+
+const KNOWN_SECTIONS: SectionId[] = ["projects", "auth", "jobs", "logs", "service"];
+
+function resolveSection(raw: string | undefined): SectionId {
+  return (raw && (KNOWN_SECTIONS as string[]).includes(raw)) ? (raw as SectionId) : "projects";
+}
 
 type QueueCounts = {
   pending: number;
@@ -147,117 +128,84 @@ export default function SettingsPage() {
   }, [projects, loadAllInfos]);
 
 
-  const [section, setSection] = useState<SectionId>("projects");
-  const active_section = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0];
+  const { section: sectionParam } = useParams<{ section?: string }>();
+  const section: SectionId = resolveSection(sectionParam);
+  const meta = SECTION_META[section];
 
   return (
     <Page>
       <div>
-        <h1 className="font-serif text-3xl tracking-tight">Settings</h1>
-        <p className="text-sm opacity-60 mt-1">
-          {active_section.description}
-        </p>
+        <h1 className="font-serif text-3xl tracking-tight">{meta.title}</h1>
+        <p className="text-sm opacity-60 mt-1">{meta.description}</p>
       </div>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
-      <div className="grid grid-cols-[240px_1fr] gap-6 items-start">
-        <nav className="space-y-1 sticky top-4">
-          {SECTIONS.map((s) => {
-            const Icon = s.icon;
-            const isActive = s.id === section;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setSection(s.id)}
-                className={
-                  "w-full flex items-start gap-3 p-3 rounded-md text-left transition-colors " +
-                  (isActive
-                    ? "bg-[color:var(--midground-base)]/10 text-[color:var(--midground-base)]"
-                    : "hover:bg-[color:var(--midground-base)]/[0.04] text-[color:var(--midground-base)]/80")
-                }
-              >
-                <Icon className="w-4 h-4 mt-0.5 shrink-0 opacity-70" />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{s.title}</div>
-                  <div className="text-[11px] opacity-50 leading-snug">
-                    {s.description}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="min-w-0">
-          {section === "projects" && (
-            <Card>
-              <SectionLabel>Projects</SectionLabel>
-              <NewProjectRow onCreated={async (name) => {
-                await loadProjects();
-                await reloadOne(name);
-                setActive(name);
-                notifyProjectsChanged();
-              }} />
-              {projects.length === 0 ? (
-                <Empty>No projects yet — create one above.</Empty>
-              ) : (
-                <ul className="divide-y divide-[color:var(--midground-base)]/10">
-                  {projects.map((p) => (
-                    <ProjectCard
-                      key={p}
-                      info={infos[p]}
-                      name={p}
-                      isActive={p === active}
-                      onActivate={() => setActive(p)}
-                      onSaved={() => reloadOne(p)}
-                      onDeleted={async () => {
-                        setInfos((prev) => {
-                          const next = { ...prev };
-                          delete next[p];
-                          return next;
-                        });
-                        if (p === active) setActive("default");
-                        await loadProjects();
-                        notifyProjectsChanged();
-                      }}
-                    />
-                  ))}
-                </ul>
-              )}
-            </Card>
+      {section === "projects" && (
+        <Card>
+          <SectionLabel>Projects</SectionLabel>
+          <NewProjectRow onCreated={async (name) => {
+            await loadProjects();
+            await reloadOne(name);
+            setActive(name);
+            notifyProjectsChanged();
+          }} />
+          {projects.length === 0 ? (
+            <Empty>No projects yet — create one above.</Empty>
+          ) : (
+            <ul className="divide-y divide-[color:var(--midground-base)]/10">
+              {projects.map((p) => (
+                <ProjectCard
+                  key={p}
+                  info={infos[p]}
+                  name={p}
+                  isActive={p === active}
+                  onActivate={() => setActive(p)}
+                  onSaved={() => reloadOne(p)}
+                  onDeleted={async () => {
+                    setInfos((prev) => {
+                      const next = { ...prev };
+                      delete next[p];
+                      return next;
+                    });
+                    if (p === active) setActive("default");
+                    await loadProjects();
+                    notifyProjectsChanged();
+                  }}
+                />
+              ))}
+            </ul>
           )}
+        </Card>
+      )}
 
-          {section === "auth" && (
-            <Card>
-              <SectionLabel>Claude authentication</SectionLabel>
-              <ClaudeAuthCard />
-            </Card>
-          )}
+      {section === "auth" && (
+        <Card>
+          <SectionLabel>Claude authentication</SectionLabel>
+          <ClaudeAuthCard />
+        </Card>
+      )}
 
-          {section === "jobs" && (
-            <Card>
-              <SectionLabel>Jobs</SectionLabel>
-              <JobsPanel />
-            </Card>
-          )}
+      {section === "jobs" && (
+        <Card>
+          <SectionLabel>Jobs</SectionLabel>
+          <JobsPanel />
+        </Card>
+      )}
 
-          {section === "logs" && (
-            <Card>
-              <SectionLabel>Logs</SectionLabel>
-              <ClaudeRunsPanel />
-            </Card>
-          )}
+      {section === "logs" && (
+        <Card>
+          <SectionLabel>Logs</SectionLabel>
+          <ClaudeRunsPanel />
+        </Card>
+      )}
 
-          {section === "service" && (
-            <Card>
-              <SectionLabel>Service</SectionLabel>
-              <ServiceInfoPanel />
-            </Card>
-          )}
-        </div>
-      </div>
+      {section === "service" && (
+        <Card>
+          <SectionLabel>Service</SectionLabel>
+          <ServiceInfoPanel />
+        </Card>
+      )}
     </Page>
   );
 }
