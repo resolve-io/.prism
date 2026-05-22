@@ -19,6 +19,7 @@ from app.config import (
     GOVERNANCE_INTERVAL_SECONDS,
     QUALITY_INTERVAL_SECONDS,
 )
+from app.services import github_auth as gh
 
 router = APIRouter()
 
@@ -51,6 +52,8 @@ def service_info() -> dict:
         "container": _container_name(),
         "claude_config_dir": str(cfg),
         "claude_authenticated": (cfg / ".credentials.json").is_file(),
+        "github_authenticated": gh.is_authenticated(),
+        "github_credentials_path": str(gh.credentials_path()),
         "understand_drain_interval_s": _drain_interval(),
         "drift_interval_s": DRIFT_INTERVAL_SECONDS,
         "governance_interval_s": GOVERNANCE_INTERVAL_SECONDS,

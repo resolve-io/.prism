@@ -16,6 +16,7 @@ from app.api.claude_runs import router as claude_runs_router
 from app.api.consolidation import router as consolidation_router
 from app.api.conductor import router as conductor_router
 from app.api.dashboard import router as dashboard_router
+from app.api.github_auth import router as github_auth_router
 from app.api.graph import router as graph_router
 from app.api.jobs import router as jobs_router
 from app.api.learning import router as learning_router
@@ -36,6 +37,7 @@ api_router.include_router(claude_runs_router, prefix="/claude-runs", tags=["clau
 api_router.include_router(consolidation_router, prefix="/consolidation", tags=["consolidation"])
 api_router.include_router(conductor_router, prefix="/conductor", tags=["conductor"])
 api_router.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(github_auth_router, prefix="/github-auth", tags=["github-auth"])
 api_router.include_router(graph_router, prefix="/graph", tags=["graph"])
 api_router.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(learning_router, prefix="/learning", tags=["learning"])

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  AppWindow, BookOpen, Brain, Eye, FolderTree, Info, KeyRound,
-  Layers, LayoutDashboard, ListChecks, MessageSquare, Network,
+  AppWindow, BookOpen, Brain, Eye, FolderTree, Info,
+  Layers, LayoutDashboard, ListChecks, MessageSquare, Network, Plug,
   ScrollText, Search, Settings, Sparkles, Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -64,7 +64,7 @@ const SETTINGS_SECTIONS: Section[] = [
     label: "Settings",
     items: [
       { to: "/settings/projects", label: "Projects", icon: FolderTree },
-      { to: "/settings/auth", label: "Claude auth", icon: KeyRound },
+      { to: "/settings/connections", label: "Connections", icon: Plug },
       { to: "/settings/jobs", label: "Jobs", icon: ListChecks },
       { to: "/settings/logs", label: "Logs", icon: ScrollText },
       { to: "/settings/service", label: "Service", icon: Info },

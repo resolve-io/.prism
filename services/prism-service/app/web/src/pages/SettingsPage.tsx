@@ -8,16 +8,16 @@ import { api } from "@/lib/api";
 import { notifyProjectsChanged, useProject } from "@/lib/project";
 import { Card, Empty, ErrorBanner, Page, SectionLabel } from "@/components/ui";
 
-type SectionId = "projects" | "auth" | "jobs" | "logs" | "service";
+type SectionId = "projects" | "connections" | "jobs" | "logs" | "service";
 
 const SECTION_META: Record<SectionId, { title: string; description: string }> = {
   projects: {
     title: "Projects",
     description: "Add, configure, sync, and delete tracked repos.",
   },
-  auth: {
-    title: "Claude auth",
-    description: "OAuth subscription used by the in-container CLI.",
+  connections: {
+    title: "Connections",
+    description: "Claude OAuth subscription and GitHub access for private-repo clones.",
   },
   jobs: {
     title: "Jobs",
@@ -33,9 +33,12 @@ const SECTION_META: Record<SectionId, { title: string; description: string }> = 
   },
 };
 
-const KNOWN_SECTIONS: SectionId[] = ["projects", "auth", "jobs", "logs", "service"];
+const KNOWN_SECTIONS: SectionId[] = ["projects", "connections", "jobs", "logs", "service"];
 
 function resolveSection(raw: string | undefined): SectionId {
+  // `/settings/auth` is the legacy v5.1.8 URL for what's now Connections.
+  // Keep it working so bookmarked links don't 404.
+  if (raw === "auth") return "connections";
   return (raw && (KNOWN_SECTIONS as string[]).includes(raw)) ? (raw as SectionId) : "projects";
 }
 
@@ -179,11 +182,17 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {section === "auth" && (
-        <Card>
-          <SectionLabel>Claude authentication</SectionLabel>
-          <ClaudeAuthCard />
-        </Card>
+      {section === "connections" && (
+        <div className="space-y-6">
+          <Card>
+            <SectionLabel>Claude</SectionLabel>
+            <ClaudeAuthCard />
+          </Card>
+          <Card>
+            <SectionLabel>GitHub</SectionLabel>
+            <GithubAuthCard />
+          </Card>
+        </div>
       )}
 
       {section === "jobs" && (
@@ -299,6 +308,160 @@ function ClaudeAuthCard() {
         soon as the OAuth flow completes.
       </p>
     </div>
+  );
+}
+
+
+type GithubAuthStatus = {
+  authenticated: boolean;
+  credentials_path: string;
+  fingerprint: string;
+  instructions: string;
+};
+
+function GithubAuthCard() {
+  const [status, setStatus] = useState<GithubAuthStatus | null>(null);
+  const [token, setToken] = useState("");
+  const [user, setUser] = useState("x-access-token");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.get<GithubAuthStatus>("/api/github-auth/status")
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const connect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const next = await api.post<GithubAuthStatus>("/api/github-auth/configure", {
+        token: token.trim(),
+        user: user.trim() || "x-access-token",
+      });
+      setStatus(next);
+      setToken("");
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const next = await api.post<GithubAuthStatus>("/api/github-auth/clear", {});
+      setStatus(next);
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!status) {
+    return <div className="text-sm opacity-60">Loading…</div>;
+  }
+
+  if (status.authenticated) {
+    return (
+      <div className="space-y-3">
+        <div className="inline-flex items-center gap-2 text-sm">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-200 text-[9px] uppercase tracking-wider">
+            connected
+          </span>
+          <span className="opacity-70">
+            PRISM can clone private GitHub repos for any project.
+          </span>
+        </div>
+        {status.fingerprint && (
+          <div className="text-[11px] opacity-60 font-mono">
+            using <span className="opacity-90">{status.fingerprint}</span>
+          </div>
+        )}
+        <div className="text-[11px] opacity-50 font-mono">
+          credentials → {status.credentials_path}
+        </div>
+        {error && (
+          <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
+            {error}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={disconnect}
+          disabled={submitting}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[color:var(--midground-base)]/30 text-[11px] uppercase tracking-wider hover:bg-[color:var(--midground-base)]/10 disabled:opacity-40"
+        >
+          {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
+          {submitting ? "Disconnecting…" : "Disconnect"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={connect} className="space-y-3">
+      <div className="inline-flex items-center gap-2 text-sm">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-200 text-[9px] uppercase tracking-wider">
+          not connected
+        </span>
+        <span className="opacity-70">
+          Paste a Personal Access Token to clone private repos:
+        </span>
+      </div>
+      <div className="grid grid-cols-[1fr_180px] gap-3">
+        <label className="flex flex-col gap-1 min-w-0">
+          <span className="text-[10px] uppercase tracking-wider opacity-60">
+            Token
+          </span>
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="ghp_… or github_pat_…"
+            autoComplete="off"
+            className="px-3 py-2 rounded-md bg-[color:var(--background-base)]/60 border border-[color:var(--midground-base)]/20 text-sm font-mono"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider opacity-60">
+            User <span className="opacity-50 normal-case">(optional)</span>
+          </span>
+          <input
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+            placeholder="x-access-token"
+            className="px-3 py-2 rounded-md bg-[color:var(--background-base)]/60 border border-[color:var(--midground-base)]/20 text-sm font-mono"
+          />
+        </label>
+      </div>
+      {error && (
+        <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
+          {error}
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="submit"
+          disabled={submitting || !token.trim()}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[color:var(--midground-base)] text-[color:var(--background-base)] text-xs uppercase tracking-wider disabled:opacity-30"
+        >
+          {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
+          {submitting ? "Connecting…" : "Connect"}
+        </button>
+      </div>
+      <p className="text-[11px] opacity-60 leading-snug">
+        {status.instructions}
+      </p>
+    </form>
   );
 }
 
@@ -474,6 +637,8 @@ type ServiceInfo = {
   container: string;
   claude_config_dir: string;
   claude_authenticated: boolean;
+  github_authenticated: boolean;
+  github_credentials_path: string;
   understand_drain_interval_s: number;
   drift_interval_s: number;
   governance_interval_s: number;
@@ -509,9 +674,19 @@ function ServiceInfoPanel() {
         <dd className="text-xs">
           {info.claude_authenticated
             ? <span className="text-emerald-200">logged in</span>
-            : <span className="text-amber-200">not logged in — see Claude auth tab</span>}
+            : <span className="text-amber-200">not logged in — see Connections tab</span>}
           <div className="opacity-60 font-mono mt-1">
             config dir → {info.claude_config_dir}
+          </div>
+        </dd>
+
+        <dt className="opacity-60">GitHub</dt>
+        <dd className="text-xs">
+          {info.github_authenticated
+            ? <span className="text-emerald-200">connected</span>
+            : <span className="text-amber-200">not connected — see Connections tab</span>}
+          <div className="opacity-60 font-mono mt-1">
+            credentials → {info.github_credentials_path}
           </div>
         </dd>
 

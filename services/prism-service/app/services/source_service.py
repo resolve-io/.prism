@@ -84,9 +84,17 @@ class SourceUnavailable(RuntimeError):
 
 
 def _run_git(args: list[str], cwd: Path, timeout: int = 60) -> tuple[int, str, str]:
-    """Run git with explicit cwd, no shell. Returns (rc, stdout, stderr)."""
+    """Run git with explicit cwd, no shell. Returns (rc, stdout, stderr).
+
+    Injects the github credential helper from app.services.github_auth
+    when a `/data/.git-credentials` file exists, so private-repo clones
+    Just Work after the operator pastes a PAT into the Connections
+    panel. Imported lazily to avoid a circular import on module load.
+    """
+    from app.services import github_auth
+    pre = github_auth.git_credential_helper_args()
     proc = subprocess.run(
-        ["git", *args],
+        ["git", *pre, *args],
         cwd=str(cwd),
         capture_output=True, text=True, timeout=timeout,
     )
