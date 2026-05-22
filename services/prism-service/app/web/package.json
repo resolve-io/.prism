@@ -1,7 +1,7 @@
 {
   "name": "prism-web",
   "private": true,
-  "version": "5.1.10",
+  "version": "5.1.11",
   "type": "module",
   "scripts": {
     "dev": "vite",

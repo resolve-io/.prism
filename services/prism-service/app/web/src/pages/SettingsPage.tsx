@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import {
-  ChevronDown, ChevronRight, GitBranch, Loader2, Plus,
+  ChevronDown, ChevronRight, ExternalLink, GitBranch,
+  Github, Loader2, Plus, Search, X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { notifyProjectsChanged, useProject } from "@/lib/project";
@@ -317,12 +318,50 @@ type GithubAuthStatus = {
   credentials_path: string;
   fingerprint: string;
   instructions: string;
+  // OAuth metadata — empty when the active token came from the PAT path.
+  login: string;
+  avatar_url: string;
+  scopes: string;
+  connected_at: number;
+  // Device-flow setup state — drives the first-time-setup vs Connect button choice.
+  client_id_configured: boolean;
+  client_id_preview: string;
+  register_url: string;
+};
+
+type DeviceCode = {
+  flow_id: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+};
+
+type DevicePoll =
+  | { status: "pending"; interval?: number }
+  | { status: "success"; login: string }
+  | { status: "expired" }
+  | { status: "denied" }
+  | { status: "error"; error: string };
+
+type GhRepo = {
+  full_name: string;
+  name: string;
+  owner: string;
+  private: boolean;
+  default_branch: string;
+  description: string;
+  clone_url: string;
+  html_url: string;
+  pushed_at: string;
+  stargazers_count: number;
 };
 
 function GithubAuthCard() {
   const [status, setStatus] = useState<GithubAuthStatus | null>(null);
-  const [token, setToken] = useState("");
-  const [user, setUser] = useState("x-access-token");
+  const [device, setDevice] = useState<DeviceCode | null>(null);
+  const [showPat, setShowPat] = useState(false);
+  const [showClientIdSetup, setShowClientIdSetup] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -334,18 +373,12 @@ function GithubAuthCard() {
 
   useEffect(() => { load(); }, [load]);
 
-  const connect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token.trim()) return;
+  const startDeviceFlow = async () => {
     setSubmitting(true);
     setError(null);
     try {
-      const next = await api.post<GithubAuthStatus>("/api/github-auth/configure", {
-        token: token.trim(),
-        user: user.trim() || "x-access-token",
-      });
-      setStatus(next);
-      setToken("");
+      const code = await api.post<DeviceCode>("/api/github-auth/device/start", {});
+      setDevice(code);
     } catch (e) {
       setError(String((e as Error).message ?? e));
     } finally {
@@ -373,21 +406,35 @@ function GithubAuthCard() {
   if (status.authenticated) {
     return (
       <div className="space-y-3">
-        <div className="inline-flex items-center gap-2 text-sm">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-200 text-[9px] uppercase tracking-wider">
-            connected
-          </span>
-          <span className="opacity-70">
-            PRISM can clone private GitHub repos for any project.
-          </span>
-        </div>
-        {status.fingerprint && (
-          <div className="text-[11px] opacity-60 font-mono">
-            using <span className="opacity-90">{status.fingerprint}</span>
+        <div className="flex items-center gap-3">
+          {status.avatar_url ? (
+            <img
+              src={status.avatar_url}
+              alt={status.login}
+              className="w-10 h-10 rounded-full border border-[color:var(--midground-base)]/20"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-[color:var(--midground-base)]/10 flex items-center justify-center">
+              <Github className="w-5 h-5 opacity-70" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-200 text-[9px] uppercase tracking-wider">
+                connected
+              </span>
+              <span className="text-sm font-semibold">
+                {status.login || status.fingerprint || "GitHub"}
+              </span>
+            </div>
+            <div className="text-[11px] opacity-60 mt-0.5">
+              {status.scopes
+                ? <>scopes: <span className="font-mono">{status.scopes}</span></>
+                : status.fingerprint
+                  ? <>using <span className="font-mono">{status.fingerprint}</span> (PAT)</>
+                  : "PRISM can clone private GitHub repos"}
+            </div>
           </div>
-        )}
-        <div className="text-[11px] opacity-50 font-mono">
-          credentials → {status.credentials_path}
         </div>
         {error && (
           <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
@@ -407,61 +454,500 @@ function GithubAuthCard() {
     );
   }
 
+  // Not connected — three sub-states drive the visual:
+  //   1. no client_id    → first-time setup card with deep link to register
+  //   2. client_id ok    → big "Connect with GitHub" button (device flow)
+  //   3. PAT fallback    → collapsed by default, expandable
   return (
-    <form onSubmit={connect} className="space-y-3">
+    <div className="space-y-3">
       <div className="inline-flex items-center gap-2 text-sm">
         <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-200 text-[9px] uppercase tracking-wider">
           not connected
         </span>
         <span className="opacity-70">
-          Paste a Personal Access Token to clone private repos:
+          Connect once — PRISM uses the token for every clone after that.
         </span>
       </div>
-      <div className="grid grid-cols-[1fr_180px] gap-3">
-        <label className="flex flex-col gap-1 min-w-0">
-          <span className="text-[10px] uppercase tracking-wider opacity-60">
-            Token
-          </span>
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="ghp_… or github_pat_…"
-            autoComplete="off"
-            className="px-3 py-2 rounded-md bg-[color:var(--background-base)]/60 border border-[color:var(--midground-base)]/20 text-sm font-mono"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider opacity-60">
-            User <span className="opacity-50 normal-case">(optional)</span>
-          </span>
-          <input
-            value={user}
-            onChange={(e) => setUser(e.target.value)}
-            placeholder="x-access-token"
-            className="px-3 py-2 rounded-md bg-[color:var(--background-base)]/60 border border-[color:var(--midground-base)]/20 text-sm font-mono"
-          />
-        </label>
+
+      {!status.client_id_configured || showClientIdSetup ? (
+        <ClientIdSetup
+          status={status}
+          onSaved={() => { setShowClientIdSetup(false); load(); }}
+          onCancel={status.client_id_configured ? () => setShowClientIdSetup(false) : undefined}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={startDeviceFlow}
+          disabled={submitting}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-[color:var(--midground-base)] text-[color:var(--background-base)] text-sm uppercase tracking-wider disabled:opacity-30 hover:opacity-90"
+        >
+          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
+          {submitting ? "Starting…" : "Connect with GitHub"}
+        </button>
+      )}
+
+      {status.client_id_configured && !showClientIdSetup && (
+        <div className="text-[11px] opacity-50 flex items-center gap-2">
+          <span>OAuth App ID: <span className="font-mono">{status.client_id_preview}</span></span>
+          <button
+            type="button"
+            onClick={() => setShowClientIdSetup(true)}
+            className="underline hover:no-underline opacity-70 hover:opacity-100"
+          >
+            change
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
+          {error}
+        </div>
+      )}
+
+      <details
+        open={showPat}
+        onToggle={(e) => setShowPat((e.target as HTMLDetailsElement).open)}
+        className="pt-2 border-t border-[color:var(--midground-base)]/10"
+      >
+        <summary className="text-[11px] uppercase tracking-wider opacity-60 cursor-pointer hover:opacity-100 list-none">
+          Or paste a Personal Access Token instead →
+        </summary>
+        <PatFallback onConnected={(next) => { setStatus(next); }} />
+      </details>
+
+      {device && (
+        <DeviceFlowModal
+          device={device}
+          onClose={() => setDevice(null)}
+          onSuccess={() => { setDevice(null); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+
+function ClientIdSetup({
+  status, onSaved, onCancel,
+}: {
+  status: GithubAuthStatus;
+  onSaved: () => void;
+  onCancel?: () => void;
+}) {
+  const [clientId, setClientId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientId.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.post("/api/github-auth/client-id", { client_id: clientId.trim() });
+      onSaved();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={save}
+      className="rounded-md border border-[color:var(--midground-base)]/15 bg-[color:var(--midground-base)]/[0.03] p-4 space-y-3"
+    >
+      <div className="text-[10px] uppercase tracking-[0.18em] opacity-60">
+        First-time setup
       </div>
+      <ol className="text-xs leading-relaxed opacity-85 list-decimal pl-5 space-y-1.5 marker:opacity-50">
+        <li>
+          <a
+            href={status.register_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 underline hover:no-underline"
+          >
+            Register a PRISM OAuth App on github.com
+            <ExternalLink className="w-3 h-3 opacity-70" />
+          </a>{" "}
+          (any callback URL is fine).
+        </li>
+        <li>
+          On the app's settings page, flip on <span className="font-mono">Enable Device Flow</span>.
+        </li>
+        <li>Copy the <span className="font-mono">Client ID</span> from the top of the app page and paste it below.</li>
+      </ol>
+      <input
+        value={clientId}
+        onChange={(e) => setClientId(e.target.value)}
+        placeholder="Ov23li…"
+        autoComplete="off"
+        spellCheck={false}
+        className="w-full px-3 py-2 rounded-md bg-[color:var(--background-base)]/60 border border-[color:var(--midground-base)]/20 text-sm font-mono"
+      />
       {error && (
         <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
           {error}
         </div>
       )}
       <div className="flex items-center justify-end gap-2">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            className="text-[11px] uppercase tracking-wider opacity-70 hover:opacity-100"
+          >
+            Cancel
+          </button>
+        )}
         <button
           type="submit"
-          disabled={submitting || !token.trim()}
+          disabled={submitting || !clientId.trim()}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[color:var(--midground-base)] text-[color:var(--background-base)] text-xs uppercase tracking-wider disabled:opacity-30"
         >
           {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
-          {submitting ? "Connecting…" : "Connect"}
+          {submitting ? "Saving…" : "Save Client ID"}
         </button>
       </div>
-      <p className="text-[11px] opacity-60 leading-snug">
-        {status.instructions}
+    </form>
+  );
+}
+
+
+function DeviceFlowModal({
+  device, onClose, onSuccess,
+}: {
+  device: DeviceCode;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [poll, setPoll] = useState<DevicePoll>({ status: "pending" });
+  const [copied, setCopied] = useState(false);
+  const [interval_, setInterval_] = useState(device.interval);
+
+  // Auto-open the GitHub device-confirmation page in a new tab so the
+  // user doesn't have to copy/paste a URL too — the code still has to
+  // be entered manually but the page is one click closer.
+  useEffect(() => {
+    try { window.open(device.verification_uri, "_blank", "noopener"); } catch { /* ignore */ }
+  }, [device.verification_uri]);
+
+  useEffect(() => {
+    if (poll.status !== "pending") return;
+    const t = setTimeout(async () => {
+      try {
+        const next = await api.post<DevicePoll>("/api/github-auth/device/poll", {
+          flow_id: device.flow_id,
+        });
+        setPoll(next);
+        if (next.status === "pending" && "interval" in next && next.interval) {
+          setInterval_(next.interval);
+        }
+        if (next.status === "success") onSuccess();
+      } catch (e) {
+        setPoll({ status: "error", error: String((e as Error).message ?? e) });
+      }
+    }, interval_ * 1000);
+    return () => clearTimeout(t);
+  }, [poll, interval_, device.flow_id, onSuccess]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(device.user_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-[460px] max-w-[90vw] rounded-lg border border-[color:var(--midground-base)]/20 bg-[color:var(--background-base)] p-6 space-y-4 relative shadow-2xl">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-3 right-3 opacity-60 hover:opacity-100"
+          aria-label="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <Github className="w-5 h-5" />
+          <h2 className="font-serif text-lg tracking-tight">Connect to GitHub</h2>
+        </div>
+        <p className="text-sm opacity-80">
+          Enter this code on the GitHub page that just opened:
+        </p>
+        <div className="flex items-center gap-2 justify-center">
+          <code className="px-4 py-3 rounded-md bg-[color:var(--midground-base)]/10 border border-[color:var(--midground-base)]/20 text-xl font-mono tracking-[0.3em] select-all">
+            {device.user_code}
+          </code>
+          <button
+            type="button"
+            onClick={copy}
+            className="px-3 py-3 rounded-md border border-[color:var(--midground-base)]/30 text-[10px] uppercase tracking-wider hover:bg-[color:var(--midground-base)]/10"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <a
+          href={device.verification_uri}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs underline hover:no-underline opacity-80 hover:opacity-100"
+        >
+          Re-open <span className="font-mono">{device.verification_uri}</span>
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        <DeviceFlowFooter poll={poll} onClose={onClose} />
+      </div>
+    </div>
+  );
+}
+
+function DeviceFlowFooter({ poll, onClose }: { poll: DevicePoll; onClose: () => void }) {
+  if (poll.status === "pending") {
+    return (
+      <div className="flex items-center gap-2 text-xs opacity-70">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        Waiting for confirmation… this panel will close automatically.
+      </div>
+    );
+  }
+  if (poll.status === "success") {
+    return (
+      <div className="text-xs text-emerald-200">
+        Connected as <span className="font-mono">{poll.login}</span>!
+      </div>
+    );
+  }
+  if (poll.status === "expired") {
+    return (
+      <div className="space-y-2">
+        <div className="text-xs text-amber-200">
+          Code expired — start a new connect attempt.
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-[11px] uppercase tracking-wider underline hover:no-underline"
+        >
+          Close
+        </button>
+      </div>
+    );
+  }
+  if (poll.status === "denied") {
+    return (
+      <div className="text-xs text-amber-200">
+        You declined the authorization. Close this dialog and try again if that was a mistake.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
+        {poll.error}
+      </div>
+    </div>
+  );
+}
+
+
+function PatFallback({ onConnected }: { onConnected: (s: GithubAuthStatus) => void }) {
+  const [token, setToken] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const next = await api.post<GithubAuthStatus>("/api/github-auth/configure", {
+        token: token.trim(),
+        user: "x-access-token",
+      });
+      onConnected(next);
+      setToken("");
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="password"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="ghp_… or github_pat_…"
+          autoComplete="off"
+          className="flex-1 px-3 py-2 rounded-md bg-[color:var(--background-base)]/60 border border-[color:var(--midground-base)]/20 text-sm font-mono"
+        />
+        <button
+          type="submit"
+          disabled={submitting || !token.trim()}
+          className="px-3 py-2 rounded-md border border-[color:var(--midground-base)]/30 text-[11px] uppercase tracking-wider hover:bg-[color:var(--midground-base)]/10 disabled:opacity-30"
+        >
+          {submitting && <Loader2 className="w-3 h-3 animate-spin inline mr-1" />}
+          {submitting ? "Connecting…" : "Use token"}
+        </button>
+      </div>
+      {error && (
+        <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
+          {error}
+        </div>
+      )}
+      <p className="text-[11px] opacity-50 leading-snug">
+        Create a fine-grained PAT at{" "}
+        <a
+          href="https://github.com/settings/personal-access-tokens/new"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:no-underline"
+        >
+          github.com/settings/personal-access-tokens/new
+        </a>{" "}
+        with <span className="font-mono">Contents: read</span> on the repos PRISM should clone.
       </p>
     </form>
+  );
+}
+
+
+function RepoPickerModal({
+  onPick, onClose,
+}: {
+  onPick: (url: string, defaultBranch: string) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [repos, setRepos] = useState<GhRepo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async (resetPage: boolean) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const nextPage = resetPage ? 1 : page;
+      const r = await api.get<{ repos: GhRepo[]; has_more: boolean }>(
+        `/api/github-auth/repos?q=${encodeURIComponent(q)}&page=${nextPage}`,
+      );
+      setRepos((prev) => resetPage ? r.repos : [...prev, ...r.repos]);
+      setHasMore(r.has_more);
+      if (resetPage) setPage(1);
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  }, [q, page]);
+
+  useEffect(() => { load(true); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [q]);
+
+  const loadMore = async () => {
+    setPage((p) => p + 1);
+    setLoading(true);
+    try {
+      const r = await api.get<{ repos: GhRepo[]; has_more: boolean }>(
+        `/api/github-auth/repos?q=${encodeURIComponent(q)}&page=${page + 1}`,
+      );
+      setRepos((prev) => [...prev, ...r.repos]);
+      setHasMore(r.has_more);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-[560px] max-w-[90vw] max-h-[80vh] rounded-lg border border-[color:var(--midground-base)]/20 bg-[color:var(--background-base)] p-5 flex flex-col gap-3 shadow-2xl">
+        <div className="flex items-center gap-2">
+          <Github className="w-5 h-5" />
+          <h2 className="font-serif text-lg tracking-tight flex-1">Pick a GitHub repo</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="opacity-60 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <label className="flex items-center gap-2 px-3 py-2 rounded-md bg-[color:var(--midground-base)]/[0.04] border border-[color:var(--midground-base)]/15">
+          <Search className="w-4 h-4 opacity-50" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="filter by name…"
+            className="flex-1 bg-transparent text-sm focus:outline-none"
+            autoFocus
+          />
+        </label>
+        {error && (
+          <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-200 px-3 py-2 text-xs">
+            {error}
+          </div>
+        )}
+        <ul className="flex-1 overflow-y-auto divide-y divide-[color:var(--midground-base)]/10 -mx-2">
+          {repos.map((r) => (
+            <li key={r.full_name}>
+              <button
+                type="button"
+                onClick={() => onPick(
+                  `https://github.com/${r.full_name}`,
+                  r.default_branch || "main",
+                )}
+                className="w-full text-left px-2 py-2 hover:bg-[color:var(--midground-base)]/[0.04]"
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-mono">{r.full_name}</span>
+                  {r.private && (
+                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[color:var(--midground-base)]/15 opacity-80">
+                      private
+                    </span>
+                  )}
+                  <span className="ml-auto text-[11px] opacity-50 font-mono">
+                    {r.default_branch}
+                  </span>
+                </div>
+                {r.description && (
+                  <div className="text-[11px] opacity-60 mt-0.5 truncate">{r.description}</div>
+                )}
+              </button>
+            </li>
+          ))}
+          {repos.length === 0 && !loading && (
+            <li className="px-2 py-6 text-center text-sm opacity-60">
+              {q ? `No repos match "${q}".` : "No repos found."}
+            </li>
+          )}
+        </ul>
+        <div className="flex items-center gap-2">
+          {hasMore && (
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={loading}
+              className="px-3 py-1.5 rounded-md border border-[color:var(--midground-base)]/20 text-[11px] uppercase tracking-wider hover:bg-[color:var(--midground-base)]/10 disabled:opacity-40"
+            >
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Load more"}
+            </button>
+          )}
+          <span className="text-[11px] opacity-50 ml-auto">
+            {repos.length} repo{repos.length === 1 ? "" : "s"}
+            {loading && <Loader2 className="w-3 h-3 animate-spin inline ml-2" />}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1145,12 +1631,22 @@ function ProjectEditor({
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ghAuthed, setGhAuthed] = useState(false);
+  const [picking, setPicking] = useState(false);
   const isProtected = name === "default";
 
   useEffect(() => {
     setRemote(info?.remote_url ?? "");
     setRef(info?.tracked_ref ?? "origin/main");
   }, [info?.remote_url, info?.tracked_ref]);
+
+  // Lazy-load github auth status so the Browse button only renders when
+  // a repo list call would actually succeed. Cheap — single GET.
+  useEffect(() => {
+    api.get<GithubAuthStatus>("/api/github-auth/status")
+      .then((s) => setGhAuthed(s.authenticated))
+      .catch(() => setGhAuthed(false));
+  }, []);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1212,8 +1708,17 @@ function ProjectEditor({
     >
       <div className="grid grid-cols-[1fr_180px] gap-3">
         <label className="flex flex-col gap-1 min-w-0">
-          <span className="text-[10px] uppercase tracking-wider opacity-60">
+          <span className="text-[10px] uppercase tracking-wider opacity-60 flex items-center gap-2">
             Git URL <span className="opacity-50 normal-case">(optional)</span>
+            {ghAuthed && (
+              <button
+                type="button"
+                onClick={() => setPicking(true)}
+                className="ml-auto inline-flex items-center gap-1 text-[10px] uppercase tracking-wider opacity-80 hover:opacity-100"
+              >
+                <Github className="w-3 h-3" /> Browse my repos
+              </button>
+            )}
           </span>
           <input
             value={remote}
@@ -1324,6 +1829,21 @@ function ProjectEditor({
             </div>
           )}
         </div>
+      )}
+      {picking && (
+        <RepoPickerModal
+          onClose={() => setPicking(false)}
+          onPick={(url, defaultBranch) => {
+            setRemote(url);
+            // Only auto-fill the tracked ref when the user hasn't
+            // customized it from the default — otherwise we'd clobber
+            // their choice on every pick.
+            if (!ref || ref === "origin/main") {
+              setRef(`origin/${defaultBranch}`);
+            }
+            setPicking(false);
+          }}
+        />
       )}
     </form>
   );

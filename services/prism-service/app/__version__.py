@@ -5,10 +5,25 @@ updates, install-manifest changes. Served alongside the install manifest
 so users can tell which version is live and which one installed their hook.
 """
 
-PRISM_VERSION = "5.1.10"
+PRISM_VERSION = "5.1.11"
 
 # Changelog-ish notes (free-form; keep short)
 PRISM_VERSION_NOTES = (
+    "v5.1.11: GitHub connect is now a one-click button, not a paste-a-PAT "
+    "form. The Connections panel walks you through registering a `PRISM` "
+    "OAuth App once (deep-link to `github.com/settings/applications/new` "
+    "pre-fills the name/URL; flip on `Enable Device Flow`), then `Connect "
+    "with GitHub` runs the standard OAuth Device Flow — PRISM hands you "
+    "a 6-char code, auto-opens `github.com/login/device`, polls until you "
+    "confirm, and stores the resulting access_token at `/data/.git-credentials` "
+    "the same way the v5.1.10 PAT path did. Connected state shows your "
+    "avatar, login, and scopes instead of a fingerprint. Project source "
+    "editor gained a `Browse my repos` button that opens a searchable "
+    "list of your GitHub repos and one-clicks the URL + tracked ref into "
+    "the form. PAT paste is still available under `Or paste a Personal "
+    "Access Token instead →` for anyone who can't register an OAuth app. "
+    "Client ID is stored at `/data/.github-client-id` (volume-backed, "
+    "chmod 600); env var `PRISM_GITHUB_CLIENT_ID` takes precedence if set. "
     "v5.1.10: GitHub connection lives next to Claude auth in the new "
     "`Connections` sidebar section (renamed from `Claude auth`). Paste "
     "a Personal Access Token, click `Connect`, and PRISM stores it at "
