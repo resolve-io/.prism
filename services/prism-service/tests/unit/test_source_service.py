@@ -160,6 +160,32 @@ def test_ensure_cloned_raises_without_remote(isolated_projects_root):
         ss.ensure_cloned("proj-a", remote_url="")
 
 
+def test_ensure_cloned_surfaces_clone_failure(isolated_projects_root, tmp_path):
+    """A clone against a nonexistent path must raise, not silently 'succeed'."""
+    nonexistent = tmp_path / "does-not-exist.git"
+    with pytest.raises(ss.SourceUnavailable) as excinfo:
+        ss.ensure_cloned("proj-a", str(nonexistent), "origin/main")
+    assert "clone failed" in str(excinfo.value)
+    # Source dir is left clean for retry: no leftover .git from the
+    # half-initialized clone.
+    assert not (ss.source_dir_for("proj-a") / ".git").exists()
+
+
+def test_ensure_cloned_scrubs_credentials_from_errors(
+    isolated_projects_root, tmp_path,
+):
+    """A PAT embedded in remote_url must not appear in surfaced errors."""
+    pat = "ghp_secrettoken1234567890"
+    bad_url = (
+        f"https://x-access-token:{pat}@127.0.0.1:1/resolve-io/private.git"
+    )
+    with pytest.raises(ss.SourceUnavailable) as excinfo:
+        ss.ensure_cloned("proj-a", bad_url, "origin/main")
+    msg = str(excinfo.value)
+    assert pat not in msg
+    assert "x-access-token" not in msg
+
+
 def test_threaded_ensure_cloned_does_not_corrupt(fake_remote, isolated_projects_root):
     """Two threads racing ensure_cloned must converge on one healthy clone."""
     errors: list[Exception] = []
