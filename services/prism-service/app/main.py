@@ -146,19 +146,37 @@ def _install_stackdump_handler() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Start MCP + governance/drift/quality timers on first boot per process."""
-    if not _LOCK_FILE.exists():
+    """Start MCP + governance/drift/quality/drainer timers on lifespan boot.
+
+    The lock file only exists to prevent double-start within one
+    process. A fresh process — including the container Watchtower just
+    swapped in — must always start its own threads. The old code
+    treated any pre-existing lock as "already running" and silently
+    skipped every background timer after a swap (drift, governance,
+    quality, and the v5.1.6 understand_drainer). v5.1.7 reclaims a
+    stale lock instead of bailing.
+    """
+    if _LOCK_FILE.exists():
         try:
-            _LOCK_FILE.write_text(str(threading.get_ident()))
-            _install_stackdump_handler()
-            threading.Thread(target=start_mcp_server, daemon=True).start()
-            threading.Thread(target=start_governance_timer, daemon=True).start()
-            threading.Thread(target=start_drift_timer, daemon=True).start()
-            threading.Thread(target=start_quality_timer, daemon=True).start()
-            from app.services.understand_drainer import start_understand_drainer
-            threading.Thread(target=start_understand_drainer, daemon=True).start()
-        except Exception as e:
-            print(f"Startup error: {e}")
+            stale_tid = _LOCK_FILE.read_text(encoding="utf-8").strip()
+        except OSError:
+            stale_tid = "?"
+        print(
+            f"[lifespan] stale lock detected (was tid={stale_tid}); "
+            f"reclaiming for tid={threading.get_ident()}",
+            file=_sys.stderr, flush=True,
+        )
+    try:
+        _LOCK_FILE.write_text(str(threading.get_ident()))
+        _install_stackdump_handler()
+        threading.Thread(target=start_mcp_server, daemon=True).start()
+        threading.Thread(target=start_governance_timer, daemon=True).start()
+        threading.Thread(target=start_drift_timer, daemon=True).start()
+        threading.Thread(target=start_quality_timer, daemon=True).start()
+        from app.services.understand_drainer import start_understand_drainer
+        threading.Thread(target=start_understand_drainer, daemon=True).start()
+    except Exception as e:
+        print(f"Startup error: {e}", file=_sys.stderr, flush=True)
     yield
     _LOCK_FILE.unlink(missing_ok=True)
 

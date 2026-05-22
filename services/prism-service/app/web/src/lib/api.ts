@@ -27,4 +27,6 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
+  delete: <T = unknown>(p: string) =>
+    fetchJSON<T>(p, { method: "DELETE" }),
 };

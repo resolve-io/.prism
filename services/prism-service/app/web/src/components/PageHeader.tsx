@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
-import { useProject } from "@/lib/project";
+import { useProject, useProjectsListChange } from "@/lib/project";
 
 const TITLES: Record<string, string> = {
   "/": "Dashboard", "/brain": "Brain", "/graph": "Graph",
@@ -18,11 +18,16 @@ export default function PageHeader() {
   const [project, setProject] = useProject();
   const [projects, setProjects] = useState<string[]>([]);
 
-  useEffect(() => {
+  const loadProjects = useCallback(() => {
     api.get<{ projects: string[] }>("/api/projects")
       .then((r) => setProjects(r.projects))
       .catch(() => setProjects([]));
   }, []);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
+  // Re-fetch when SettingsPage creates/deletes a project so the header
+  // picker doesn't lag a page reload behind.
+  useProjectsListChange(loadProjects);
 
   return (
     <header className="h-[80px] shrink-0 flex items-center justify-between px-8 border-b border-[color:var(--midground-base)]/10">

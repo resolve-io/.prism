@@ -125,7 +125,13 @@ def test_build_cmd_includes_required_flags():
     cmd = claude_cli._build_cmd(
         "hello", "/plugin/dir", model="", max_budget_usd=0.0, max_turns=3,
     )
-    assert "--dangerously-skip-permissions" in cmd
+    # v5.1.7: scoped permissions instead of --dangerously-skip-permissions.
+    # Analyzers only need read-only access to the source tree.
+    assert "--dangerously-skip-permissions" not in cmd
+    assert "--allowedTools" in cmd
+    allowed_idx = cmd.index("--allowedTools")
+    allowed = cmd[allowed_idx + 1 : allowed_idx + 4]
+    assert allowed == ["Read", "Glob", "Grep"]
     assert "--no-session-persistence" in cmd
     assert "--output-format" in cmd
     assert "stream-json" in cmd

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useProject } from "@/lib/project";
+import { useScanActivity } from "@/lib/scan-activity";
 import { useVersion } from "@/lib/version";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +76,7 @@ function useStaleness(project: string): Staleness {
 export default function Sidebar() {
   const [project] = useProject();
   const stale = useStaleness(project);
+  const scan = useScanActivity();
   const version = useVersion();
 
   return (
@@ -101,28 +103,50 @@ export default function Sidebar() {
             )}
             {section.items.map(({ to, label, icon: Icon, staleKey }) => {
               const isStale = staleKey ? stale[staleKey] : false;
+              // While the drainer has work in flight, the surfaces it
+              // populates (Brain, Graph, Understand — every item with a
+              // staleKey) glow slate-blue. Blue takes precedence over the
+              // amber stale dot because "actively scanning" implies
+              // "stale is being addressed right now."
+              const isScanning = staleKey ? scan.isActive : false;
               return (
                 <NavLink
                   key={to}
                   to={to}
                   end={to === "/"}
-                  title={isStale ? `${label} is stale for project '${project}' — re-index needed` : undefined}
+                  title={
+                    isScanning
+                      ? `${label} is being updated — drainer is running analyzers`
+                      : isStale
+                        ? `${label} is stale for project '${project}' — re-index needed`
+                        : undefined
+                  }
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-3 px-5 py-2 text-[13px] uppercase tracking-wider transition-colors",
+                      "flex items-center gap-3 px-5 py-2 text-[13px] uppercase tracking-wider transition-colors relative",
                       "text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] hover:bg-[color:var(--surface-2)]",
                       isActive && "text-[color:var(--text-primary)] bg-[color:var(--surface-2)] border-l-2 border-[color:var(--text-primary)]",
+                      // Soft slate-blue glow + animated pulse on the
+                      // row itself while scanning. Subtle enough to
+                      // not fight the active-route indicator, loud
+                      // enough that the user knows something is alive.
+                      isScanning && "text-sky-200 bg-sky-500/[0.06] animate-pulse",
                     )
                   }
                 >
                   <Icon className="w-4 h-4" />
                   <span className="flex-1">{label}</span>
-                  {isStale && (
+                  {isScanning ? (
+                    <span
+                      className="w-2 h-2 rounded-full bg-sky-300 shadow-[0_0_8px_3px_rgba(125,211,252,0.6)]"
+                      aria-label="scanning"
+                    />
+                  ) : isStale ? (
                     <span
                       className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_2px_rgba(251,191,36,0.5)]"
                       aria-label="stale"
                     />
-                  )}
+                  ) : null}
                 </NavLink>
               );
             })}

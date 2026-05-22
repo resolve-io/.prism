@@ -8,6 +8,24 @@ services:
       - ./data:/data
     environment:
       - PRISM_DATA_DIR=/data
+      # Claude CLI auth — borrowed from Auto-Claude's CLAUDE_CONFIG_DIR
+      # pattern (apps/desktop/src/main/claude-profile-manager.ts:541).
+      # Point Claude at a directory INSIDE the /data volume so its OAuth
+      # tokens (access + refresh) persist across container swaps and
+      # Watchtower upgrades. ONE-TIME setup:
+      #
+      #     docker exec -it prism-service claude login
+      #
+      # Then never again — the CLI auto-refreshes access tokens (8h
+      # expiry) against console.anthropic.com using the long-lived
+      # refresh token, both stored in /data/.claude-config. No host
+      # bind-mount, no host `claude` install required, INV-1 preserved
+      # (this is your subscription, not an API key).
+      - CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-/data/.claude-config}
+      # Surfaces the friendly container name in /api/claude-auth/status
+      # so the SPA can print `docker exec -it <name> claude /login`
+      # instead of the random short ID. Override per install.
+      - PRISM_CONTAINER_NAME=${PRISM_CONTAINER_NAME:-prism-service}
       # NiceGUI persists per-client storage under cwd/.nicegui by default.
       # If cwd ever lands on a read-only mount (common when callers bind
       # /project read-only and set working_dir there for `git diff`-style

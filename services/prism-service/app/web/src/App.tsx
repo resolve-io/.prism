@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import PageHeader from "@/components/PageHeader";
 import Backdrop from "@/components/Backdrop";
+import LiveStatusStrip from "@/components/LiveStatusStrip";
 import BrainPage from "@/pages/BrainPage";
 import DashboardPage from "@/pages/DashboardPage";
 import GraphPage from "@/pages/GraphPage";
@@ -21,6 +22,7 @@ export default function App() {
       <Backdrop />
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0">
+        <LiveStatusStrip />
         <PageHeader />
         <div className="flex-1 overflow-y-auto">
           <Routes>

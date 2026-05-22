@@ -1,9 +1,14 @@
-# Parallel preview of v5.1 (Understand-Anything) without disturbing
-# the operator's primary instance on 7777/7778.
+# Parallel preview of v5.1.7 (delete-projects + lock fix + claude CLI
+# in container + run-log observability) without disturbing the operator's
+# primary instance on 7777/7778.
 #
 # Run:
 #   docker compose -p prism-v51 \
 #     -f services/prism-service/docker-compose.v51.yml up -d --build
+#
+# One-time auth (v5.1.7 — claude CLI is bundled in the image):
+#   docker exec -it prism-service-v51 claude login
+#   # Tokens land in ./data-v51/.claude-config, survive container swaps.
 #
 # Then:
 #   UI  -> http://localhost:8888
@@ -23,11 +28,21 @@ services:
       - "8888:7778"   # UI
       - "8887:7777"   # MCP
     volumes:
-      # Isolated data dir so the v5.1 preview never writes into the
-      # primary instance's brain.db / graph.db / understand_state.
+      # Isolated data dir so the v5.1.7 preview never writes into the
+      # primary instance's brain.db / graph.db / understand_state /
+      # .claude-config (so `claude login` here doesn't touch your prod
+      # auth, and a `claude login` on prod doesn't bleed in here).
       - ./data-v51:/data
     environment:
       - PRISM_DATA_DIR=/data
+      # v5.1.7 — claude CLI uses this dir for OAuth tokens. Lives inside
+      # the data volume so `docker exec ... claude login` only has to
+      # run once per install.
+      - CLAUDE_CONFIG_DIR=/data/.claude-config
+      # Surfaces the friendly container name in /api/claude-auth/status
+      # so the SPA can print a clean `docker exec -it prism-service-v51
+      # claude /login` instead of the random short ID.
+      - PRISM_CONTAINER_NAME=prism-service-v51
       - NICEGUI_STORAGE_PATH=/data/.nicegui
       - PRISM_EMBEDDER=${PRISM_EMBEDDER:-minilm}
       - PRISM_SEARCH_MODE=${PRISM_SEARCH_MODE:-hybrid}
@@ -36,6 +51,8 @@ services:
       - PRISM_CONTEXT_PREFIX=${PRISM_CONTEXT_PREFIX:-on}
       - PRISM_FEEDBACK_WEIGHT=${PRISM_FEEDBACK_WEIGHT:-0.002}
       - PRISM_DRIFT_INTERVAL=${PRISM_DRIFT_INTERVAL:-1800}
+      # Faster polling on the preview so testing iteration is short.
+      - PRISM_UNDERSTAND_DRAIN_INTERVAL=${PRISM_UNDERSTAND_DRAIN_INTERVAL:-10}
       - TORCHINDUCTOR_CACHE_DIR=/data/torch-inductor-cache
       - TORCH_HOME=/data/torch-home
       - HF_HOME=/data/hf-home

@@ -133,6 +133,8 @@ def run_analyzer(
         max_turns=max_turns,
         max_budget_usd=max_budget_usd,
         parse_events=True,
+        project=project,
+        purpose=f"{analyzer}@{(target_sha or '')[:10]}",
     )
     payload = _extract_payload(res, analyzer)
     status = _classify(res, payload)

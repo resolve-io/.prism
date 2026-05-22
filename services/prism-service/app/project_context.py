@@ -155,3 +155,32 @@ def create_project(project_id: str) -> ProjectContext:
     """Create a new project (creates its data directory)."""
     project_data_dir(project_id)  # ensure dirs exist
     return get_project(project_id)
+
+
+def release_project(project_id: str) -> None:
+    """Drop the cached ProjectContext for `project_id`, closing any SQLite
+    connections owned by its services. Idempotent — safe to call for an
+    unknown id. Called by the DELETE /api/projects/{name} endpoint before
+    the on-disk dir is removed so future creates of the same name get a
+    fresh context bound to a freshly-seeded data directory.
+    """
+    with _lock:
+        ctx = _contexts.pop(project_id, None)
+    if ctx is None:
+        return
+    # Close any services that hold open SQLite handles. Each service
+    # exposes a best-effort .close() if it has connections; missing ones
+    # are silently ignored so we can free files on Windows.
+    for attr in ("_brain_svc", "_graph_svc", "_task_svc",
+                 "_memory_svc", "_workflow_svc"):
+        svc = getattr(ctx, attr, None)
+        if svc is None:
+            continue
+        for close_name in ("close", "shutdown"):
+            close = getattr(svc, close_name, None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
+                break
